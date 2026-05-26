@@ -370,6 +370,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg?.kind === "open-scripts-manager") {
+    openScriptsManager().then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
   // --- Userscript manager API ---
   if (msg?.kind === "scripts.list") {
     Promise.all([readScripts(), chrome.storage.local.get("userScripts.error")])

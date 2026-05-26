@@ -119,6 +119,17 @@
       box-shadow: 0 0 12px rgba(255, 42, 109, 0.35);
     }
     .hint { font-size: 9.5px; color: #3d4f6a; letter-spacing: 1.5px; white-space: nowrap; }
+    .hint-link {
+      color: #05d9e8;
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      cursor: pointer;
+    }
+    .hint-link:hover {
+      color: #ff2a6d;
+      border-bottom-color: #ff2a6d;
+      text-shadow: 0 0 6px rgba(255, 42, 109, 0.45);
+    }
     .body {
       display: grid; grid-template-columns: 240px 1fr;
       overflow: hidden;
@@ -278,7 +289,10 @@
           <div class="header">
             <div class="title">zpwrchrome // recent</div>
             <input class="search" type="search" placeholder="filter // url, title, host" autocomplete="off">
-            <div class="hint">${navigator.platform.includes("Mac") ? "⌘E" : "Ctrl+E"} cycle · Esc close</div>
+            <div class="hint">
+              <a class="hint-link" data-act="open-scripts" href="#">scripts ▸</a> ·
+              ${navigator.platform.includes("Mac") ? "⌘E" : "Ctrl+E"} cycle · Esc close
+            </div>
           </div>
           <div class="body">
             <div class="cats">
@@ -324,6 +338,16 @@
     shadow.querySelector(".overlay").addEventListener("mousedown", (e) => {
       if (e.target === e.currentTarget) closeModal();
     });
+
+    // "scripts" link in the header → open dashboard via background.
+    const scriptsLink = shadow.querySelector('[data-act="open-scripts"]');
+    if (scriptsLink) {
+      scriptsLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        chrome.runtime.sendMessage({ kind: "open-scripts-manager" });
+        closeModal();
+      });
+    }
 
     state.kd = (e) => handleKey(e);
     state.ku = (e) => handleKeyUp(e);

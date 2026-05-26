@@ -217,4 +217,11 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// Dashboard link in the header
+document.getElementById("open-scripts").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/manager.html") });
+  window.close();
+});
+
 refresh();

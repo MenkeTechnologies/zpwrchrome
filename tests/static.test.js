@@ -310,6 +310,27 @@ test("every JS source parses (node --check)", () => {
   }
 });
 
+test("popup and modal both have a discoverable link to the userscript dashboard", () => {
+  // Without a visible entry point, users have to right-click the extension
+  // icon → Options. That's not discoverable.
+  const html  = read("popup.html");
+  const popJs = read("popup.js");
+  const tmpl  = read("modal/content.template.js");
+
+  assert.match(html,  /id="open-scripts"/, "popup.html must declare #open-scripts link");
+  assert.match(popJs, /scripts-manager\/manager\.html/,
+    "popup.js must open scripts-manager/manager.html on click");
+
+  assert.match(tmpl, /data-act="open-scripts"/, "modal template must include open-scripts link");
+  assert.match(tmpl, /kind: "open-scripts-manager"/,
+    "modal must send open-scripts-manager message");
+
+  // Background must handle it (and ignore the standalone command).
+  const bg = read("background.js");
+  assert.match(bg, /msg\?\.kind === "open-scripts-manager"/,
+    "background.js must handle open-scripts-manager message");
+});
+
 test("userscript dashboard has Tampermonkey-style structure", () => {
   // 4 tabs (Installed / Settings / Utilities / Help), sortable Name column,
   // table view (not card view), filter input, banner.

@@ -103,6 +103,13 @@ html, body {
 }
 
 .hint { font-size: 9.5px; color: var(--text-muted); letter-spacing: 1.5px; white-space: nowrap; }
+.hint a {
+  color: var(--cyan);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all .12s;
+}
+.hint a:hover { color: var(--accent); border-bottom-color: var(--accent); text-shadow: 0 0 6px var(--accent-glow); }
 
 .body {
   display: grid; grid-template-columns: 200px 1fr;
