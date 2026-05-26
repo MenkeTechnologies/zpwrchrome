@@ -7,7 +7,7 @@
   "author": "MenkeTechnologies",
   "license": "MIT",
   "scripts": {
-    "test": "node --test --test-reporter=spec 'tests/**/*.test.js'"
+    "test": "node --test --test-reporter=spec tests/*.test.js"
   },
   "engines": {
     "node": ">=20"
