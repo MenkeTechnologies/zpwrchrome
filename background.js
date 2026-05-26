@@ -304,15 +304,15 @@ async function configureUserScriptsWorld() {
 async function syncUserScripts() {
   if (!chrome.userScripts) {
     await chrome.storage.local.set({
-      "userScripts.error": "chrome.userScripts API not available — Chrome 120+ + Developer mode + per-extension 'Allow User Scripts' toggle required",
-      "userScripts.mode":  "fallback"
+      "userScripts.error": "chrome.userScripts API not available — Chrome 120+ + Developer mode + per-extension 'Allow User Scripts' toggle required"
     });
     return { registered: 0, error: "API unavailable" };
   }
 
-  // Native mode is live. Clear any stale "fallback" mode + error key from
-  // a prior load when the API was unavailable.
-  await chrome.storage.local.set({ "userScripts.mode": "native" });
+  // Native mode is live. Clear the stale error key from a prior load when
+  // the API was unavailable. (We don't persist mode anymore — scripts.list
+  // derives it from `!!chrome.userScripts` live, so any stored value would
+  // be ignored anyway.)
   await chrome.storage.local.remove("userScripts.error");
 
   await configureUserScriptsWorld();

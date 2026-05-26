@@ -344,7 +344,11 @@
     if (scriptsLink) {
       scriptsLink.addEventListener("click", (e) => {
         e.preventDefault();
-        chrome.runtime.sendMessage({ kind: "open-scripts-manager" });
+        // Callback form swallows lastError if the SW is mid-restart.
+        chrome.runtime.sendMessage(
+          { kind: "open-scripts-manager" },
+          () => { void chrome.runtime.lastError; }
+        );
         closeModal();
       });
     }
@@ -497,10 +501,11 @@
     const items = currentList();
     const t = items[idx];
     if (!t) return;
+    const swallow = () => { void chrome.runtime.lastError; };
     if (t.kind === "closed") {
-      chrome.runtime.sendMessage({ kind: "restore", sessionId: t.sessionId });
+      chrome.runtime.sendMessage({ kind: "restore", sessionId: t.sessionId }, swallow);
     } else {
-      chrome.runtime.sendMessage({ kind: "activate", tabId: t.id });
+      chrome.runtime.sendMessage({ kind: "activate", tabId: t.id }, swallow);
     }
     closeModal();
   }

@@ -376,16 +376,18 @@ test("scripts.list trusts the live chrome.userScripts presence over stored mode"
   // first load (before Allow User Scripts was toggled on). After the user
   // enabled the toggle + reloaded, chrome.userScripts WAS defined but the
   // dashboard still rendered "fallback" because it read the stale storage.
+  // Fix: drop the persistence entirely; derive `native` from the live check.
   const bg = read("background.js");
   const sec = bg.match(/msg\?\.kind === "scripts\.list"[\s\S]*?return true;/);
   assert.ok(sec, "scripts.list handler not found");
   assert.match(sec[0], /const native = !!chrome\.userScripts/,
     "scripts.list must derive native from the LIVE API check");
-  // syncUserScripts on success must write "native" + clear stale error.
-  assert.match(bg, /chrome\.storage\.local\.set\(\{\s*"userScripts\.mode":\s*"native"\s*\}\)/,
-    "syncUserScripts must set mode to 'native' when chrome.userScripts is available");
+  // syncUserScripts on success must clear stale error (mode is no longer
+  // persisted to storage — that was the source of the stale-read bug).
   assert.match(bg, /chrome\.storage\.local\.remove\("userScripts\.error"\)/,
     "syncUserScripts must clear the stale error key on native-mode success");
+  assert.ok(!/chrome\.storage\.local\.set\(\s*\{\s*"userScripts\.mode"/.test(bg),
+    "userScripts.mode must NOT be persisted (live API check is the source of truth)");
 });
 
 test("background.js logs fires from handleNav (not via the unreliable userscript beacon)", () => {
