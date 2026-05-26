@@ -15,7 +15,8 @@ import {
   validateUserscript,
   userscriptId,
   includeToMatchPattern,
-  matchUrl
+  matchUrl,
+  expandMatchPatterns
 } from "./lib/userscript.js";
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 
@@ -340,10 +341,14 @@ async function syncUserScripts() {
     const errs = validateUserscript(meta);
     if (errs.length) { skipped.push({ id: s.id, reason: errs.join(", ") }); continue; }
 
-    const matches = meta.matches.length
+    const baseMatches = meta.matches.length
       ? meta.matches
       : meta.includes.map(includeToMatchPattern).filter(Boolean);
-    if (!matches.length) { skipped.push({ id: s.id, reason: "no usable @match" }); continue; }
+    if (!baseMatches.length) { skipped.push({ id: s.id, reason: "no usable @match" }); continue; }
+    // Auto-expand bare-host patterns to also include *.host — catches the
+    // common Tampermonkey-user error of writing `https://amazon.com/*`
+    // when they actually want www.amazon.com etc.
+    const matches = expandMatchPatterns(baseMatches);
 
     const id = userscriptId(meta);
     const info = {
@@ -468,9 +473,10 @@ async function handleNav({ tabId, frameId, url }, phase) {
     if (!meta) continue;
     if (meta.runAt !== phase) continue;
 
-    const patterns = meta.matches.length
+    const basePatterns = meta.matches.length
       ? meta.matches
       : meta.includes.map(includeToMatchPattern).filter(Boolean);
+    const patterns = expandMatchPatterns(basePatterns);
     if (!matchUrl(patterns, url)) continue;
     if (meta.excludes.length && matchUrl(meta.excludes, url)) continue;
 
@@ -603,7 +609,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       incoming.id = incoming.id || userscriptId(meta);
       incoming.name = meta.name;
       incoming.updatedAt = Date.now();
+
+      // Duplicate-name guard. Two scripts with the same @name + namespace
+      // produce the same id, which would silently overwrite the older one.
+      // Tampermonkey lets users have duplicates by appending a counter to
+      // the name; we just refuse and tell the user to rename.
       const idx = all.findIndex((s) => s.id === incoming.id);
+      const dupe = all.find((s) =>
+        s.id !== incoming.id &&
+        (s.name || "").toLowerCase() === (incoming.name || "").toLowerCase()
+      );
+      if (dupe) {
+        sendResponse({
+          ok: false,
+          errors: [`a script with @name "${incoming.name}" already exists (id ${dupe.id}). Rename it or delete the existing one.`]
+        });
+        return;
+      }
+
       if (idx >= 0) all[idx] = { ...all[idx], ...incoming };
       else { incoming.enabled = incoming.enabled !== false; all.push(incoming); }
       await writeScripts(all);

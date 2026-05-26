@@ -390,6 +390,18 @@ test("scripts.list trusts the live chrome.userScripts presence over stored mode"
     "userScripts.mode must NOT be persisted (live API check is the source of truth)");
 });
 
+test("scripts.save refuses duplicate @name (case-insensitive)", () => {
+  // Two scripts with the same @name + namespace produce the same userscript
+  // id, which would silently overwrite the older script. Reject upfront.
+  const bg = read("background.js");
+  const sec = bg.match(/msg\?\.kind === "scripts\.save"[\s\S]*?return true;/);
+  assert.ok(sec, "scripts.save handler not found");
+  assert.match(sec[0], /already exists/,
+    "scripts.save must reject duplicate @name with a useful error message");
+  assert.match(sec[0], /toLowerCase\(\)/,
+    "duplicate-name check must be case-insensitive");
+});
+
 test("background.js logs fires from handleNav (not via the unreliable userscript beacon)", () => {
   // The SW knows what's about to fire — log directly from background
   // rather than depending on the userscript's chrome.runtime.sendMessage

@@ -7,6 +7,7 @@ import {
   includeToMatchPattern,
   matchPatternToRegex,
   matchUrl,
+  expandMatchPatterns,
   userscriptId,
   RUN_AT_VALUES
 } from "../lib/userscript.js";
@@ -181,6 +182,42 @@ test("matchPatternToRegex handles canonical Chrome patterns", () => {
   // Malformed
   assert.equal(matchPatternToRegex("nope"), null);
   assert.equal(matchPatternToRegex("https://example.com"), null, "no path = invalid match pattern");
+});
+
+test("expandMatchPatterns adds *.host for bare apex domains", () => {
+  // User error catch: `https://amazon.com/*` only matches apex per Chrome
+  // spec; they probably want www.amazon.com too. Auto-expand.
+  const out = expandMatchPatterns(["https://amazon.com/*"]);
+  assert.ok(out.includes("https://amazon.com/*"), "original kept");
+  assert.ok(out.includes("https://*.amazon.com/*"), "subdomain variant added");
+});
+
+test("expandMatchPatterns leaves already-wildcarded hosts alone", () => {
+  const out = expandMatchPatterns(["https://*.amazon.com/*"]);
+  assert.deepEqual(out, ["https://*.amazon.com/*"]);
+});
+
+test("expandMatchPatterns leaves <all_urls> alone", () => {
+  assert.deepEqual(expandMatchPatterns(["<all_urls>"]), ["<all_urls>"]);
+});
+
+test("expandMatchPatterns leaves single-label hosts (localhost) alone", () => {
+  const out = expandMatchPatterns(["http://localhost/*"]);
+  assert.deepEqual(out, ["http://localhost/*"]);
+});
+
+test("expandMatchPatterns leaves raw IP addresses alone", () => {
+  const out = expandMatchPatterns(["http://127.0.0.1/*"]);
+  assert.deepEqual(out, ["http://127.0.0.1/*"]);
+});
+
+test("expandMatchPatterns dedupes when the same pattern appears twice", () => {
+  const out = expandMatchPatterns([
+    "https://amazon.com/*",
+    "https://*.amazon.com/*"
+  ]);
+  // Both inputs kept; no extra expansion added for the already-wildcarded one.
+  assert.equal(out.length, 2);
 });
 
 test("matchUrl returns true on any-pattern match", () => {
