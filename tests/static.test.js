@@ -310,6 +310,24 @@ test("every JS source parses (node --check)", () => {
   }
 });
 
+test("userscript dashboard has Tampermonkey-style structure", () => {
+  // 4 tabs (Installed / Settings / Utilities / Help), sortable Name column,
+  // table view (not card view), filter input, banner.
+  const html = read("scripts-manager/manager.html");
+  for (const tab of ["installed", "settings", "utilities", "help"]) {
+    const re = new RegExp(`data-tab="${tab}"`);
+    assert.match(html, re, `dashboard missing tab: ${tab}`);
+    const paneRe = new RegExp(`id="pane-${tab}"`);
+    assert.match(html, paneRe, `dashboard missing pane: ${tab}`);
+  }
+  assert.match(html, /class="scripts"/, "dashboard must use table layout (.scripts)");
+  assert.match(html, /class="name sortable"/,    "Name column must be sortable");
+  assert.match(html, /class="size sortable"/,    "Size column must be sortable");
+  assert.match(html, /class="upd sortable"/,     "Last-updated column must be sortable");
+  assert.match(html, /id="filter"/, "dashboard must have a filter input");
+  assert.match(html, /class="banner"/, "dashboard must have a banner header");
+});
+
 test("modal content script embeds fonts inline (CSP-safe data: URIs, no network fetch)", () => {
   // Pre-v0.2.3 we used FontFace API + chrome.runtime.getURL, but that path
   // is subject to the host page's font-src CSP and silently failed on

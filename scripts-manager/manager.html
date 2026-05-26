@@ -3,56 +3,188 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>zpwrchrome — userscript manager</title>
+  <title>zpwrchrome // userscripts</title>
   <link rel="stylesheet" href="manager.css">
 </head>
 <body>
-  <header class="hero">
-    <h1>zpwrchrome // userscripts</h1>
-    <p class="tag">Tampermonkey-equivalent userscript manager. <code>chrome.userScripts</code> API.</p>
-    <div class="actions">
-      <button class="btn btn-primary"   id="new-script">+ new script</button>
-      <button class="btn btn-secondary" id="import-script">import…</button>
-      <input type="file" id="file-input" accept=".user.js,.js" hidden>
-    </div>
-    <div id="error" class="error hidden">
-      <strong>chrome.userScripts unavailable.</strong>
-      Enable <em>Developer mode</em> at <code>chrome://extensions</code> (top-right toggle) and reload this page.
-      <div class="error-detail" id="error-detail"></div>
+  <header class="banner">
+    <div class="banner-inner">
+      <div class="brand">
+        <div class="logo">⚡</div>
+        <div class="brand-text">
+          <h1>zpwrchrome<sup>®</sup></h1>
+          <p class="sub">userscripts engine · <span id="ver">v?</span> · by <a href="https://github.com/MenkeTechnologies" target="_blank">MenkeTechnologies</a></p>
+        </div>
+      </div>
+      <div class="banner-actions">
+        <a class="link" href="https://github.com/MenkeTechnologies/zpwrchrome" target="_blank" title="GitHub">⌥</a>
+        <a class="link" href="https://menketechnologies.github.io/zpwrchrome/" target="_blank" title="Docs">⌘</a>
+      </div>
     </div>
   </header>
 
+  <nav class="tabs">
+    <button class="tab-add" id="new-script" title="add new userscript">＋</button>
+    <button class="tab active"  data-tab="installed">Installed Userscripts</button>
+    <button class="tab"         data-tab="settings">Settings</button>
+    <button class="tab"         data-tab="utilities">Utilities</button>
+    <button class="tab"         data-tab="help">Help</button>
+  </nav>
+
+  <div id="error" class="error hidden">
+    <strong>chrome.userScripts unavailable.</strong>
+    Enable <em>Developer mode</em> at <code>chrome://extensions</code> (top-right toggle) and reload this page.
+    <div class="error-detail" id="error-detail"></div>
+  </div>
+
   <main>
-    <section class="card">
-      <h2>installed</h2>
-      <div id="list" class="script-list">
-        <div class="empty">no scripts installed — click <strong>+ new script</strong></div>
+    <!-- ===== Installed pane ===== -->
+    <section class="pane active" id="pane-installed">
+      <div class="filterbar">
+        <input type="search" id="filter" class="filter" placeholder="filter // name, match, namespace" autocomplete="off">
+        <span class="count" id="count">0 scripts</span>
+      </div>
+      <div class="table-wrap">
+        <table class="scripts">
+          <thead>
+            <tr>
+              <th class="cb"></th>
+              <th class="num">#</th>
+              <th class="en">Enabled</th>
+              <th class="name sortable" data-sort="name">Name <span class="arr">▲</span></th>
+              <th class="ver">Version</th>
+              <th class="size sortable" data-sort="size">Size</th>
+              <th class="sites">Sites</th>
+              <th class="feat">Features</th>
+              <th class="home">Homepage</th>
+              <th class="upd sortable" data-sort="updatedAt">Last updated</th>
+              <th class="act">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="list">
+            <tr class="empty-row"><td colspan="11" class="empty">no scripts installed — click <strong>＋</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== Settings pane ===== -->
+    <section class="pane" id="pane-settings">
+      <div class="card">
+        <h2>storage</h2>
+        <div class="row-meta"><span class="k">scripts saved</span> <span class="v" id="stat-count">0</span></div>
+        <div class="row-meta"><span class="k">total source bytes</span> <span class="v" id="stat-bytes">0</span></div>
+        <div class="row-meta"><span class="k">chrome.userScripts API</span> <span class="v" id="stat-api">checking…</span></div>
+      </div>
+      <div class="card">
+        <h2>defaults for new scripts</h2>
+        <div class="row-input">
+          <label for="def-runat">default @run-at</label>
+          <select id="def-runat">
+            <option value="document-start">document-start</option>
+            <option value="document-end">document-end</option>
+            <option value="document-idle" selected>document-idle</option>
+          </select>
+        </div>
+      </div>
+      <div class="card danger">
+        <h2>danger zone</h2>
+        <div class="row-input">
+          <button class="btn btn-danger" id="wipe-all">erase all scripts + GM storage</button>
+          <span class="hint">this cannot be undone</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Utilities pane ===== -->
+    <section class="pane" id="pane-utilities">
+      <div class="card">
+        <h2>import</h2>
+        <div class="row-input">
+          <button class="btn btn-secondary" id="util-import-file">import .user.js file…</button>
+          <input type="file" id="file-input" accept=".user.js,.js" hidden>
+        </div>
+        <div class="row-input">
+          <input type="url" id="util-import-url" placeholder="https://example.com/script.user.js" class="url-input">
+          <button class="btn btn-secondary" id="util-import-url-btn">fetch + install</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>export</h2>
+        <div class="row-input">
+          <button class="btn btn-secondary" id="util-export-all">download all scripts as .json</button>
+        </div>
+        <div class="row-input">
+          <button class="btn btn-secondary" id="util-export-bundle">download all scripts as a single .user.js</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>diagnostics</h2>
+        <div class="row-meta"><span class="k">last registration error</span> <span class="v" id="diag-err">(none)</span></div>
+        <div class="row-input">
+          <button class="btn btn-secondary" id="util-resync">re-register all enabled scripts</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Help pane ===== -->
+    <section class="pane" id="pane-help">
+      <div class="card">
+        <h2>quick start</h2>
+        <ol class="help-list">
+          <li>Open <code>chrome://extensions</code> and turn on <strong>Developer mode</strong> (top-right toggle).</li>
+          <li>Click <strong>＋</strong> on this dashboard to create a new userscript.</li>
+          <li>Paste a <code>==UserScript==</code> block with at least <code>@name</code> and <code>@match</code>.</li>
+          <li>Click <strong>save</strong>. The script registers immediately on every page that matches.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h2>supported metadata directives</h2>
+        <ul class="kbd-list">
+          <li><kbd>@name</kbd> <kbd>@namespace</kbd> <kbd>@version</kbd> <kbd>@description</kbd> <kbd>@author</kbd> <kbd>@icon</kbd></li>
+          <li><kbd>@match</kbd> <kbd>@include</kbd> <kbd>@exclude</kbd></li>
+          <li><kbd>@run-at</kbd> · values: <code>document-start</code>, <code>document-end</code>, <code>document-idle</code></li>
+          <li><kbd>@grant</kbd> · listed for reference; the shim exposes the standard GM.* API regardless</li>
+          <li><kbd>@require</kbd> <kbd>@resource</kbd> · parsed, not yet loaded (Phase 2)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>GM.* API exposed</h2>
+        <ul class="kbd-list">
+          <li><kbd>GM.getValue(key, fallback)</kbd> → Promise</li>
+          <li><kbd>GM.setValue(key, value)</kbd> → Promise</li>
+          <li><kbd>GM.deleteValue(key)</kbd> · <kbd>GM.listValues()</kbd></li>
+          <li><kbd>GM.setClipboard(text)</kbd></li>
+          <li><kbd>GM.openInTab(url, opts)</kbd></li>
+          <li><kbd>GM.addStyle(css)</kbd> · <kbd>GM.addElement(parent?, tag, attrs)</kbd></li>
+          <li><kbd>GM.notification({ text, title })</kbd></li>
+          <li><kbd>unsafeWindow</kbd> alias to <code>window</code> (USER_SCRIPT world)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>limits (vs Tampermonkey)</h2>
+        <ul class="kbd-list">
+          <li>No <kbd>GM_xmlhttpRequest</kbd> / cross-origin proxy yet (Phase 2).</li>
+          <li>No <kbd>@require</kbd> external library fetch (Phase 2).</li>
+          <li>No <kbd>@resource</kbd> blob fetch (Phase 2).</li>
+          <li>No sync GM_ cache (all GM.* return Promises).</li>
+          <li>Chrome's match-pattern spec applies — wildcards in path, scheme is one of <code>*|http|https|file|ftp|urn</code>.</li>
+        </ul>
       </div>
     </section>
   </main>
 
+  <!-- ===== Editor modal ===== -->
   <div id="editor-modal" class="modal-backdrop hidden">
     <div class="modal">
       <header class="modal-head">
         <h3 id="editor-title">edit script</h3>
         <div class="modal-actions">
           <button class="btn btn-secondary" id="editor-cancel">cancel</button>
-          <button class="btn btn-primary"   id="editor-save">save</button>
+          <button class="btn btn-primary"   id="editor-save">save  <span class="kbd-hint">⌘S</span></button>
         </div>
       </header>
-      <textarea id="editor" spellcheck="false" wrap="off" placeholder="// ==UserScript==
-// @name        my script
-// @namespace   https://github.com/MenkeTechnologies
-// @version     1.0
-// @match       https://*.example.com/*
-// @run-at      document-idle
-// @grant       GM.setValue
-// @description short description
-// ==/UserScript==
-
-(function () {
-  console.log('hello from my userscript');
-})();"></textarea>
+      <textarea id="editor" spellcheck="false" wrap="off"></textarea>
       <div class="editor-meta" id="editor-meta"></div>
     </div>
   </div>
