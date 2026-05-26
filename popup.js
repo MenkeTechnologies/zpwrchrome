@@ -20,7 +20,10 @@ const state = {
   filter: "",
   mru: [],
   closed: [],
-  currentWindowId: null
+  currentWindowId: null,
+  // JetBrains-style: on first render, select the row right after the
+  // active tab so a single Enter switches back to the previous tab.
+  firstRender: true
 };
 
 function host(u) { try { return new URL(u).hostname; } catch { return ""; } }
@@ -149,6 +152,12 @@ function refresh() {
     state.currentWindowId = state.mru.find((t) => t.active)?.windowId
                           ?? state.mru[0]?.windowId
                           ?? null;
+    if (state.firstRender) {
+      const items = currentList();
+      const i = items.findIndex((t) => t.active);
+      state.rowIdx = i >= 0 && i + 1 < items.length ? i + 1 : 0;
+      state.firstRender = false;
+    }
     render();
   });
 }
@@ -171,7 +180,12 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown")  { e.preventDefault(); cycle(+1); return; }
   if (e.key === "ArrowUp")    { e.preventDefault(); cycle(-1); return; }
   if (e.key === "Enter")      { e.preventDefault(); activate(state.rowIdx); return; }
-  if (e.key === "Delete" || (e.key === "Backspace" && e.shiftKey)) {
+  if (e.key === "Delete" || e.key === "Backspace") {
+    // Plain Backspace closes the highlighted tab — unless the search input
+    // is focused and non-empty (then it deletes a char as expected).
+    if (e.key === "Backspace" && document.activeElement === $q && $q.value) {
+      return;
+    }
     const items = currentList();
     const t = items[state.rowIdx];
     if (t?.kind === "open") {

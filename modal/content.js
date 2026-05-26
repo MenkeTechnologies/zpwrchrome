@@ -213,10 +213,14 @@
     shadow.innerHTML = `<style>${CSS}</style>` + html();
     state = {
       host, shadow,
-      catIdx: 0, rowIdx: 1,
+      catIdx: 0, rowIdx: 0,
       filter: "",
       mru: [], closed: [],
-      currentWindowId: null
+      currentWindowId: null,
+      // JetBrains-style: pre-select the row right after the active tab on
+      // first render, so a single Enter switches back. Once user nav
+      // happens (arrows / Cmd+E cycle / click / filter input), respect it.
+      firstRender: true
     };
     wire();
     refresh();
@@ -253,7 +257,7 @@
             <span><kbd>↑↓</kbd>nav</span>
             <span><kbd>Enter</kbd>switch</span>
             <span><kbd>⌘1–6</kbd>category</span>
-            <span><kbd>Del</kbd>close tab</span>
+            <span><kbd>⌫</kbd>close tab</span>
             <span><kbd>Esc</kbd>cancel</span>
           </div>
         </div>
@@ -300,6 +304,12 @@
       state.currentWindowId = state.mru.find((t) => t.active)?.windowId
                             ?? state.mru[0]?.windowId
                             ?? null;
+      if (state.firstRender) {
+        const items = currentList();
+        const i = items.findIndex((t) => t.active);
+        state.rowIdx = i >= 0 && i + 1 < items.length ? i + 1 : 0;
+        state.firstRender = false;
+      }
       render();
     });
   }
@@ -437,7 +447,16 @@
     if (e.key === "ArrowDown")  { e.preventDefault(); e.stopPropagation(); cycle(+1); return; }
     if (e.key === "ArrowUp")    { e.preventDefault(); e.stopPropagation(); cycle(-1); return; }
     if (e.key === "Enter")      { e.preventDefault(); e.stopPropagation(); activate(state.rowIdx); return; }
-    if (e.key === "Delete" || (e.key === "Backspace" && e.shiftKey)) {
+    if (e.key === "Delete" || e.key === "Backspace") {
+      // Mac laptops don't have a real Del key (Fn+Backspace is awkward).
+      // Plain Backspace closes the highlighted tab — UNLESS the search
+      // input is focused and non-empty, in which case it deletes a char
+      // (default browser behavior).
+      const search = state.shadow.querySelector(".search");
+      const searchFocused = state.shadow.activeElement === search;
+      if (e.key === "Backspace" && searchFocused && search.value) {
+        return; // let the browser delete a character
+      }
       const items = currentList();
       const t = items[state.rowIdx];
       if (t?.kind === "open") {

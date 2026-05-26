@@ -56,6 +56,38 @@ test("content script attaches a closed shadow root (style isolation)", () => {
     "modal must use closed shadow root to keep host CSS out");
 });
 
+test("initial open pre-selects the previous-MRU row (JetBrains UX)", () => {
+  // Single Enter should switch back to the tab the user came from. To do
+  // that, on first render rowIdx must be set to active_index + 1 (with
+  // wrap). Once user nav happens, leave rowIdx alone.
+  const tmpl = readFileSync(join(ROOT, "modal/content.template.js"), "utf8");
+  assert.match(tmpl, /firstRender:\s*true/, "state.firstRender flag missing");
+  assert.match(tmpl, /findIndex\(\(t\) => t\.active\)/,
+    "must locate the active tab to compute next-row selection");
+  // Same in the popup so both surfaces match.
+  const popup = readFileSync(join(ROOT, "popup.js"), "utf8");
+  assert.match(popup, /firstRender:\s*true/, "popup must have firstRender flag");
+  assert.match(popup, /findIndex\(\(t\) => t\.active\)/,
+    "popup must locate the active tab to compute next-row selection");
+});
+
+test("plain Backspace closes the highlighted tab (Mac-laptop friendly)", () => {
+  // Mac laptops don't have a Del key; Fn+Backspace is awkward. Backspace
+  // alone must close the tab — but only when the search input isn't busy
+  // editing (focused + non-empty value defers to the browser).
+  const tmpl = readFileSync(join(ROOT, "modal/content.template.js"), "utf8");
+  assert.match(tmpl, /e\.key === "Delete" \|\| e\.key === "Backspace"/,
+    "modal must accept either Del or plain Backspace");
+  assert.match(tmpl, /searchFocused && search\.value/,
+    "Backspace must defer to the search input when it has content");
+  assert.ok(!/Backspace.*e\.shiftKey/.test(tmpl),
+    "Shift+Backspace requirement removed — Backspace alone now works");
+  // Popup parity.
+  const popup = readFileSync(join(ROOT, "popup.js"), "utf8");
+  assert.match(popup, /e\.key === "Delete" \|\| e\.key === "Backspace"/);
+  assert.match(popup, /document\.activeElement === \$q && \$q\.value/);
+});
+
 test(":host font-family carries !important so all:initial doesn't reset it", () => {
   // Regression for v0.2.3: `all: initial !important` expanded to
   // `font-family: initial !important`, and the unprefixed
