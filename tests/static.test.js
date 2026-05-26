@@ -134,6 +134,29 @@ test("manifest icons are PNG and match their declared size", () => {
   }
 });
 
+test("popup mirrors the modal: same 6 categories declared in both popup.js and modal/content.js", () => {
+  // The popup is the fallback UI when the modal can't inject (chrome://,
+  // view-source://, web store). Both surfaces must show the same category
+  // list so the user sees the same UX everywhere.
+  const popup = read("popup.js");
+  const modal = read("modal/content.js");
+  for (const id of ["all", "current", "pinned", "audible", "muted", "closed"]) {
+    const re = new RegExp(`id:\\s*"${id}"`);
+    assert.match(popup, re, `popup.js missing category "${id}"`);
+    assert.match(modal, re, `modal/content.js missing category "${id}"`);
+  }
+});
+
+test("popup uses the same 2-column layout structure as the modal", () => {
+  // Both render: .header (title/search/hint), .body (.cats + .list), .footer.
+  const html = read("popup.html");
+  const modal = read("modal/content.js");
+  for (const sel of ["class=\"header\"", "class=\"body\"", "class=\"cats\"", "class=\"list\"", "class=\"footer\""]) {
+    assert.ok(html.includes(sel),  `popup.html missing ${sel}`);
+    assert.ok(modal.includes(sel), `modal/content.js missing ${sel}`);
+  }
+});
+
 test("popup.html references popup.css and popup.js and contains no inline JS handlers", () => {
   const html = read("popup.html");
   assert.match(html, /href=["']popup\.css["']/);

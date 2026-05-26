@@ -6,29 +6,23 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="app">
-    <div class="crt-scanline"></div>
-    <div class="crt-scanline-v"></div>
-
-    <header class="docs-header">
-      <div class="docs-title-block">
-        <h1>zpwrchrome // recent tabs</h1>
-        <div class="docs-sub" id="hint">Alt+Z back · Alt+Shift+T restore · ⌘E modal · ↑↓ nav · Enter switch · Del close</div>
-      </div>
-      <input id="q" class="search" type="search" placeholder="filter // url, title, host" autofocus>
-    </header>
-
-    <main class="docs-main">
-      <section class="doc-card">
-        <h2>open // mru</h2>
-        <ul class="tab-list" id="mru"></ul>
-      </section>
-
-      <section class="doc-card">
-        <h2>recently closed</h2>
-        <ul class="tab-list" id="closed"></ul>
-      </section>
-    </main>
+  <div class="modal">
+    <div class="header">
+      <div class="title">zpwrchrome // recent</div>
+      <input class="search" type="search" placeholder="filter // url, title, host" autocomplete="off" autofocus>
+      <div class="hint">Esc close</div>
+    </div>
+    <div class="body">
+      <div class="cats" id="cats"></div>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="footer">
+      <span><kbd>↑↓</kbd>nav</span>
+      <span><kbd>Enter</kbd>switch</span>
+      <span><kbd>⌘1–6</kbd>category</span>
+      <span><kbd>Del</kbd>close tab</span>
+      <span><kbd>Esc</kbd>cancel</span>
+    </div>
   </div>
   <script src="popup.js" type="module"></script>
 </body>

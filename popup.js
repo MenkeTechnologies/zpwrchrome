@@ -1,140 +1,187 @@
-// zpwrchrome — popup
-const $q       = document.getElementById("q");
-const $mru     = document.getElementById("mru");
-const $closed  = document.getElementById("closed");
+// zpwrchrome — popup. Mirrors modal/content.js but runs in extension
+// context, so we can use chrome.* directly without WAR + relative font URLs.
 
-let state = { mru: [], closed: [], filter: "", sel: 0, flat: [] };
+const $q    = document.querySelector(".search");
+const $cats = document.getElementById("cats");
+const $list = document.getElementById("list");
+
+const CATEGORIES = [
+  { id: "all",     label: "All Tabs",          key: "⌘1" },
+  { id: "current", label: "Current Window",    key: "⌘2" },
+  { id: "pinned",  label: "Pinned",            key: "⌘3" },
+  { id: "audible", label: "Audible",           key: "⌘4" },
+  { id: "muted",   label: "Muted",             key: "⌘5" },
+  { id: "closed",  label: "Recently Closed",   key: "⌘6" }
+];
+
+const state = {
+  catIdx: 0,
+  rowIdx: 0,
+  filter: "",
+  mru: [],
+  closed: [],
+  currentWindowId: null
+};
 
 function host(u) { try { return new URL(u).hostname; } catch { return ""; } }
 
-function matches(filter, t) {
-  if (!filter) return true;
-  const f = filter.toLowerCase();
-  return (t.title || "").toLowerCase().includes(f)
-      || (t.url   || "").toLowerCase().includes(f)
-      || host(t.url || "").toLowerCase().includes(f);
+function matches(t, f) {
+  if (!f) return true;
+  const lo = f.toLowerCase();
+  return (t.title || "").toLowerCase().includes(lo)
+      || (t.url   || "").toLowerCase().includes(lo)
+      || host(t.url || "").toLowerCase().includes(lo);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function renderCats() {
+  $cats.innerHTML = CATEGORIES.map((c, i) => `
+    <div class="cat${i === state.catIdx ? " sel" : ""}" data-idx="${i}">
+      <span>${c.label}</span><span class="key">${c.key}</span>
+    </div>
+  `).join("");
+  $cats.querySelectorAll(".cat").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.catIdx = Number(el.dataset.idx);
+      state.rowIdx = 0;
+      render();
+    });
+  });
+}
+
+function currentList() {
+  const cat = CATEGORIES[state.catIdx];
+  if (cat.id === "closed") {
+    return state.closed
+      .map((s) => {
+        const t = s.tab || s.window?.tabs?.[0];
+        return t && { ...t, kind: "closed", sessionId: s.tab?.sessionId || s.window?.sessionId };
+      })
+      .filter((t) => t && matches(t, state.filter));
+  }
+  let tabs = state.mru.filter((t) => matches(t, state.filter));
+  if      (cat.id === "current") tabs = tabs.filter((t) => t.windowId === state.currentWindowId);
+  else if (cat.id === "pinned")  tabs = tabs.filter((t) => t.pinned);
+  else if (cat.id === "audible") tabs = tabs.filter((t) => t.audible);
+  else if (cat.id === "muted")   tabs = tabs.filter((t) => t.mutedInfo?.muted);
+  return tabs.map((t) => ({ ...t, kind: "open" }));
+}
+
+function renderList() {
+  const items = currentList();
+  if (!items.length) {
+    $list.innerHTML = `<div class="empty">no matches</div>`;
+    return;
+  }
+  if (state.rowIdx >= items.length) state.rowIdx = items.length - 1;
+  if (state.rowIdx < 0) state.rowIdx = 0;
+
+  $list.innerHTML = items.map((t, i) => {
+    const h = host(t.url || "");
+    const badges = [];
+    if (t.pinned)            badges.push(`<span class="badge pinned">pin</span>`);
+    if (t.audible)           badges.push(`<span class="badge audible">audio</span>`);
+    if (t.mutedInfo?.muted)  badges.push(`<span class="badge muted">muted</span>`);
+    const fav = t.favIconUrl ? `<img class="favicon" src="${escapeHtml(t.favIconUrl)}" referrerpolicy="no-referrer">` : `<span class="favicon"></span>`;
+    return `
+      <div class="row${i === state.rowIdx ? " sel" : ""}${t.active ? " active-tab" : ""}"
+           data-idx="${i}" data-kind="${t.kind}"
+           data-tab-id="${t.id ?? ""}"
+           data-session-id="${t.sessionId ?? ""}">
+        ${fav}
+        <div class="title-col">
+          <span class="name">${escapeHtml(t.title || t.url || "(untitled)")}</span>
+          <span class="path">${escapeHtml(h)}</span>
+        </div>
+        <div class="badges">${badges.join("")}</div>
+      </div>
+    `;
+  }).join("");
+
+  $list.querySelectorAll(".row img.favicon").forEach((img) => {
+    img.addEventListener("error", () => { img.style.visibility = "hidden"; });
+  });
+  $list.querySelectorAll(".row").forEach((el) => {
+    el.addEventListener("click", () => activate(Number(el.dataset.idx)));
+    el.addEventListener("mouseenter", () => {
+      state.rowIdx = Number(el.dataset.idx);
+      $list.querySelectorAll(".row").forEach((r) =>
+        r.classList.toggle("sel", Number(r.dataset.idx) === state.rowIdx));
+    });
+  });
+  const sel = $list.querySelector(".row.sel");
+  if (sel) sel.scrollIntoView({ block: "nearest" });
 }
 
 function render() {
-  const f = state.filter.trim();
-  const mru    = state.mru.filter((t) => matches(f, t));
-  const closed = state.closed
-    .map((s) => s.tab || s.window?.tabs?.[0])
-    .filter(Boolean)
-    .filter((t) => matches(f, t));
-
-  state.flat = [
-    ...mru.map((t) => ({ kind: "open", tab: t })),
-    ...closed.map((t, i) => ({ kind: "closed", tab: t, sessionId: state.closed[i].tab?.sessionId || state.closed[i].window?.sessionId }))
-  ];
-
-  $mru.innerHTML    = mru.length    ? "" : `<li class="empty">no matches</li>`;
-  $closed.innerHTML = closed.length ? "" : `<li class="empty">no recently closed tabs</li>`;
-
-  let flatIdx = 0;
-  for (const t of mru) {
-    $mru.appendChild(makeRow(t, flatIdx++, "open"));
-  }
-  for (let i = 0; i < closed.length; i++) {
-    const sessionId = state.closed[i].tab?.sessionId || state.closed[i].window?.sessionId;
-    $closed.appendChild(makeRow(closed[i], flatIdx++, "closed", sessionId));
-  }
-
-  if (state.sel >= state.flat.length) state.sel = Math.max(0, state.flat.length - 1);
-  updateSel();
-}
-
-function makeRow(t, idx, kind, sessionId) {
-  const li = document.createElement("li");
-  li.dataset.idx = String(idx);
-  li.dataset.kind = kind;
-  if (kind === "open")   li.dataset.tabId = String(t.id);
-  if (kind === "closed") li.dataset.sessionId = sessionId;
-  if (t.active) li.classList.add("active-tab");
-
-  const img = document.createElement("img");
-  img.className = "favicon";
-  img.src = t.favIconUrl || "";
-  img.onerror = () => { img.style.visibility = "hidden"; };
-  if (!img.src) img.style.visibility = "hidden";
-
-  const meta = document.createElement("div");
-  meta.className = "meta-col";
-  const title = document.createElement("span");
-  title.className = "title";
-  title.textContent = t.title || t.url || "(untitled)";
-  const url = document.createElement("span");
-  url.className = "url";
-  url.textContent = host(t.url || "") || t.url || "";
-  meta.append(title, url);
-
-  const x = document.createElement("span");
-  x.className = "x";
-  x.textContent = "×";
-  x.title = kind === "open" ? "close tab" : "forget";
-  x.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (kind === "open") chrome.runtime.sendMessage({ kind: "close-tab", tabId: t.id }, refresh);
-    else { state.closed = state.closed.filter((s) => (s.tab?.sessionId || s.window?.sessionId) !== sessionId); render(); }
-  });
-
-  li.append(img, meta, x);
-  li.addEventListener("click", () => activate(idx));
-  return li;
-}
-
-function updateSel() {
-  const rows = document.querySelectorAll(".tab-list li");
-  rows.forEach((r) => r.classList.remove("sel"));
-  const row = document.querySelector(`.tab-list li[data-idx="${state.sel}"]`);
-  if (row) {
-    row.classList.add("sel");
-    row.scrollIntoView({ block: "nearest" });
-  }
+  renderCats();
+  renderList();
 }
 
 function activate(idx) {
-  const e = state.flat[idx];
-  if (!e) return;
-  if (e.kind === "open")   chrome.runtime.sendMessage({ kind: "activate", tabId: e.tab.id }, () => window.close());
-  if (e.kind === "closed") chrome.runtime.sendMessage({ kind: "restore",  sessionId: e.sessionId }, () => window.close());
+  const items = currentList();
+  const t = items[idx];
+  if (!t) return;
+  if (t.kind === "closed") {
+    chrome.runtime.sendMessage({ kind: "restore", sessionId: t.sessionId }, () => window.close());
+  } else {
+    chrome.runtime.sendMessage({ kind: "activate", tabId: t.id }, () => window.close());
+  }
+}
+
+function cycle(delta) {
+  const items = currentList();
+  if (!items.length) return;
+  state.rowIdx = (state.rowIdx + delta + items.length) % items.length;
+  renderList();
 }
 
 function refresh() {
-  chrome.runtime.sendMessage({ kind: "list" }, (resp) => {
-    if (!resp) return;
-    state.mru = resp.mru || [];
-    state.closed = resp.closed || [];
+  chrome.runtime.sendMessage({ kind: "list" }, (data) => {
+    if (!data) return;
+    state.mru = data.mru || [];
+    state.closed = data.closed || [];
+    state.currentWindowId = state.mru.find((t) => t.active)?.windowId
+                          ?? state.mru[0]?.windowId
+                          ?? null;
     render();
   });
 }
 
 $q.addEventListener("input", (e) => {
   state.filter = e.target.value;
-  state.sel = 0;
-  render();
+  state.rowIdx = 0;
+  renderList();
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "ArrowDown") {
+  // Cmd/Ctrl+1..6 → category jump.
+  if ((e.metaKey || e.ctrlKey) && /^[1-6]$/.test(e.key)) {
     e.preventDefault();
-    state.sel = Math.min(state.flat.length - 1, state.sel + 1);
-    updateSel();
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    state.sel = Math.max(0, state.sel - 1);
-    updateSel();
-  } else if (e.key === "Enter") {
-    e.preventDefault();
-    activate(state.sel);
-  } else if (e.key === "Delete" || (e.key === "Backspace" && e.shiftKey)) {
-    const entry = state.flat[state.sel];
-    if (entry?.kind === "open") {
+    state.catIdx = parseInt(e.key, 10) - 1;
+    state.rowIdx = 0;
+    render();
+    return;
+  }
+  if (e.key === "ArrowDown")  { e.preventDefault(); cycle(+1); return; }
+  if (e.key === "ArrowUp")    { e.preventDefault(); cycle(-1); return; }
+  if (e.key === "Enter")      { e.preventDefault(); activate(state.rowIdx); return; }
+  if (e.key === "Delete" || (e.key === "Backspace" && e.shiftKey)) {
+    const items = currentList();
+    const t = items[state.rowIdx];
+    if (t?.kind === "open") {
       e.preventDefault();
-      chrome.runtime.sendMessage({ kind: "close-tab", tabId: entry.tab.id }, refresh);
+      chrome.runtime.sendMessage({ kind: "close-tab", tabId: t.id }, refresh);
     }
-  } else if (e.key === "Escape") {
-    if ($q.value) { $q.value = ""; state.filter = ""; state.sel = 0; render(); }
+    return;
+  }
+  if (e.key === "Escape") {
+    if ($q.value) { $q.value = ""; state.filter = ""; state.rowIdx = 0; renderList(); }
     else window.close();
   }
 });
