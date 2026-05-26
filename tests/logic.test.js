@@ -9,6 +9,9 @@ import {
   resolveJumpIndex,
   MRU_CAP_DEFAULT
 } from "../lib/util.js";
+import { fzfMatch, highlightWithIndices } from "../lib/fzf.js";
+
+const escape = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 test("mruPush prepends a new id", () => {
   assert.deepEqual(mruPush([2, 3], 1), [1, 2, 3]);
@@ -107,4 +110,78 @@ test("resolveJumpIndex returns -1 for empty window", () => {
 test("resolveJumpIndex returns -1 for non-jump commands", () => {
   assert.equal(resolveJumpIndex("duplicate-tab", 5), -1);
   assert.equal(resolveJumpIndex("jump-to-x", 5), -1);
+});
+
+// ===== fzf =====
+
+test("fzfMatch returns { score: 0, indices: [] } for empty needle", () => {
+  const m = fzfMatch("", "anything");
+  assert.deepEqual(m, { score: 0, indices: [] });
+});
+
+test("fzfMatch returns null when chars aren't present in order", () => {
+  assert.equal(fzfMatch("xyz", "abc"),         null);
+  assert.equal(fzfMatch("abcd", "abc"),        null);  // needle longer than haystack
+  assert.equal(fzfMatch("bac", "abc"),         null);  // wrong order
+});
+
+test("fzfMatch is case-insensitive", () => {
+  // Greedy forward match picks the FIRST matching lowercased char, not the
+  // optimal one. "RTM" in "Recent Tabs Modal": R at 0, first t at 5 (Recen[t]),
+  // first m at 12 (Modal).
+  const m = fzfMatch("RTM", "Recent Tabs Modal");
+  assert.ok(m, "expected a match for case-insensitive RTM");
+  assert.deepEqual(m.indices, [0, 5, 12]);
+});
+
+test("fzfMatch picks the highest-scoring start position", () => {
+  // For "ab" in "a_ab": start at 0 → [0,3], start at 2 → [2,3].
+  // [2,3] has consecutive bonus AND boundary bonus on a (prev='_').
+  const m = fzfMatch("ab", "a_ab");
+  assert.deepEqual(m.indices, [2, 3]);
+});
+
+test("fzfMatch rewards word-boundary matches more than consecutive matches", () => {
+  // fzf-canonical: boundary bonus (9) on a char in "t-a-b-bar" outweighs
+  // the consecutive bonus (4) on the same char in "tab-bar".
+  const a = fzfMatch("tab", "t-a-b-bar");   // boundary on each char
+  const b = fzfMatch("tab", "tab-bar");     // consecutive
+  assert.ok(a.score > b.score, `boundary should beat consecutive: ${a.score} vs ${b.score}`);
+});
+
+test("fzfMatch rewards prefix-boundary first-char match", () => {
+  // First char at position 0 gets BONUS_BOUNDARY * BONUS_FIRST_CHAR_MULT (9*2=18).
+  // A match mid-word (preceded by another letter, no boundary) gets 0.
+  const start = fzfMatch("zpwr", "zpwrchrome");
+  const mid   = fzfMatch("zpwr", "axxxzpwrchrome");  // 'x' before 'z' = no boundary
+  assert.ok(start.score > mid.score,
+    `prefix match should outscore mid-word match: ${start.score} vs ${mid.score}`);
+});
+
+test("fzfMatch indices are strictly increasing positions in haystack", () => {
+  const m = fzfMatch("github", "github.com/MenkeTechnologies/zpwrchrome");
+  assert.ok(m);
+  for (let i = 1; i < m.indices.length; i++) {
+    assert.ok(m.indices[i] > m.indices[i - 1],
+      `non-monotonic at ${i}: ${m.indices}`);
+  }
+});
+
+test("highlightWithIndices wraps matched chars in <mark class=\"fzf-hl\">", () => {
+  const out = highlightWithIndices("abc", [1], escape);
+  assert.equal(out, 'a<mark class="fzf-hl">b</mark>c');
+});
+
+test("highlightWithIndices coalesces adjacent matches into one <mark>", () => {
+  const out = highlightWithIndices("abcdef", [1, 2, 3], escape);
+  assert.equal(out, 'a<mark class="fzf-hl">bcd</mark>ef');
+});
+
+test("highlightWithIndices escapes HTML in unmatched and matched chars", () => {
+  const out = highlightWithIndices("<a>&b", [0, 3], escape);
+  assert.equal(out, '<mark class="fzf-hl">&lt;</mark>a&gt;<mark class="fzf-hl">&amp;</mark>b');
+});
+
+test("highlightWithIndices returns empty escaped text when no indices", () => {
+  assert.equal(highlightWithIndices("<b>", [], escape), "&lt;b&gt;");
 });

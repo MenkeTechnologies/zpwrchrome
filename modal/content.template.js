@@ -20,6 +20,11 @@
   const FONT_STM = "%%STM%%";
   const FONT_ORB = "%%ORB%%";
 
+  // FZF fuzzy-match algorithm inlined from lib/fzf.js — content scripts
+  // can't ES-import, so build-modal.sh substitutes the marker on the next
+  // line with lib/fzf.js's FZF_INLINE_START/END block, `export ` stripped.
+%%FZF%%
+
   const CATEGORIES = [
     { id: "all",     label: "All Tabs",          key: "⌘1" },
     { id: "current", label: "Current Window",    key: "⌘2" },
@@ -45,10 +50,12 @@
       font-style: normal; font-weight: 900; font-display: swap;
       src: url(data:font/woff2;base64,${FONT_ORB}) format('woff2');
     }
-    /* `all: initial !important` expands to `font-family: initial !important`
+    /* "all: initial !important" expands to "font-family: initial !important"
        and every other longhand. Without !important on font-family below,
        the !important initial wins the cascade and the body text falls back
-       to the user-agent default (Times New Roman). Mark both !important. */
+       to the user-agent default (Times New Roman). Mark both !important.
+       (Bare backticks in comments terminate this template literal — see
+       v0.2.4 regression — keep quotes inside template-literal CSS.) */
     :host {
       all: initial !important;
       font-family: 'Share Tech Mono', 'SF Mono', monospace !important;
@@ -167,6 +174,15 @@
     .badge.audible { color: #39ff14; border-color: #39ff14; }
     .badge.muted   { color: #7a8ba8; border-color: #7a8ba8; }
     .empty { padding: 24px; color: #3d4f6a; font-style: italic; text-align: center; font-size: 12px; }
+    /* fzf match highlight — same selector as audio-haxor for visual parity */
+    mark.fzf-hl {
+      background: rgba(5, 217, 232, 0.18);
+      color: #05d9e8;
+      border-bottom: 1px solid #05d9e8;
+      padding: 0;
+      border-radius: 0;
+      font-weight: inherit;
+    }
     .footer {
       display: flex; gap: 16px;
       padding: 6px 16px;
@@ -309,36 +325,48 @@
     });
   }
 
+  function hostOf(url) { try { return new URL(url).hostname; } catch { return ""; } }
+
   function currentList() {
     const cat = CATEGORIES[state.catIdx];
-    const f = state.filter.toLowerCase();
-    const match = (t) => {
-      if (!f) return true;
-      const u = (t.url || "").toLowerCase();
-      const ti = (t.title || "").toLowerCase();
-      let host = "";
-      try { host = new URL(t.url).hostname.toLowerCase(); } catch {}
-      return u.includes(f) || ti.includes(f) || host.includes(f);
-    };
 
+    // 1) Get tabs for the category (no filter yet).
+    let items;
     if (cat.id === "closed") {
-      return state.closed
-        .map((s) => s.tab || s.window?.tabs?.[0])
-        .filter(Boolean)
-        .filter(match)
-        .map((t, i) => ({
-          ...t,
-          kind: "closed",
-          sessionId: state.closed[i].tab?.sessionId || state.closed[i].window?.sessionId
-        }));
+      items = state.closed.map((s) => {
+        const t = s.tab || s.window?.tabs?.[0];
+        return t && { ...t, kind: "closed", sessionId: s.tab?.sessionId || s.window?.sessionId };
+      }).filter(Boolean);
+    } else {
+      items = state.mru.map((t) => ({ ...t, kind: "open" }));
+      if      (cat.id === "current") items = items.filter((t) => t.windowId === state.currentWindowId);
+      else if (cat.id === "pinned")  items = items.filter((t) => t.pinned);
+      else if (cat.id === "audible") items = items.filter((t) => t.audible);
+      else if (cat.id === "muted")   items = items.filter((t) => t.mutedInfo?.muted);
     }
 
-    let tabs = state.mru.filter(match);
-    if      (cat.id === "current") tabs = tabs.filter((t) => t.windowId === state.currentWindowId);
-    else if (cat.id === "pinned")  tabs = tabs.filter((t) => t.pinned);
-    else if (cat.id === "audible") tabs = tabs.filter((t) => t.audible);
-    else if (cat.id === "muted")   tabs = tabs.filter((t) => t.mutedInfo?.muted);
-    return tabs.map((t) => ({ ...t, kind: "open" }));
+    // 2) No filter → return in MRU order.
+    if (!state.filter) return items;
+
+    // 3) Filter + score via fzf. Match against title and host separately;
+    //    keep the higher score. Both index sets are stashed on the row for
+    //    the renderer to highlight matched characters.
+    const scored = [];
+    for (const t of items) {
+      const titleText = t.title || t.url || "";
+      const hostText  = hostOf(t.url || "");
+      const tm = fzfMatch(state.filter, titleText);
+      const hm = fzfMatch(state.filter, hostText);
+      if (!tm && !hm) continue;
+      scored.push({
+        ...t,
+        _score:   Math.max(tm?.score ?? -Infinity, hm?.score ?? -Infinity),
+        _titleHl: tm?.indices || [],
+        _hostHl:  hm?.indices || []
+      });
+    }
+    scored.sort((a, b) => b._score - a._score);
+    return scored;
   }
 
   function render() {
@@ -378,8 +406,10 @@
   }
 
   function row(t, idx, selected) {
-    let host = "";
-    try { host = new URL(t.url).hostname; } catch {}
+    const host = hostOf(t.url || "");
+    const titleText = t.title || t.url || "(untitled)";
+    const titleHtml = t._titleHl?.length ? highlightWithIndices(titleText, t._titleHl, escapeHtml) : escapeHtml(titleText);
+    const hostHtml  = t._hostHl?.length  ? highlightWithIndices(host,      t._hostHl,  escapeHtml) : escapeHtml(host);
     const badges = [];
     if (t.pinned)            badges.push(`<span class="badge pinned">pin</span>`);
     if (t.audible)           badges.push(`<span class="badge audible">audio</span>`);
@@ -393,8 +423,8 @@
            data-session-id="${t.sessionId ?? ""}">
         ${fav}
         <div class="title-col">
-          <span class="name">${escapeHtml(t.title || t.url || "(untitled)")}</span>
-          <span class="path">${escapeHtml(host)}</span>
+          <span class="name">${titleHtml}</span>
+          <span class="path">${hostHtml}</span>
         </div>
         <div class="badges">${badges.join("")}</div>
       </div>

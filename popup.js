@@ -1,6 +1,8 @@
 // zpwrchrome — popup. Mirrors modal/content.js but runs in extension
 // context, so we can use chrome.* directly without WAR + relative font URLs.
 
+import { fzfMatch, highlightWithIndices } from "./lib/fzf.js";
+
 const $q    = document.querySelector(".search");
 const $cats = document.getElementById("cats");
 const $list = document.getElementById("list");
@@ -28,14 +30,6 @@ const state = {
 
 function host(u) { try { return new URL(u).hostname; } catch { return ""; } }
 
-function matches(t, f) {
-  if (!f) return true;
-  const lo = f.toLowerCase();
-  return (t.title || "").toLowerCase().includes(lo)
-      || (t.url   || "").toLowerCase().includes(lo)
-      || host(t.url || "").toLowerCase().includes(lo);
-}
-
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -59,20 +53,40 @@ function renderCats() {
 
 function currentList() {
   const cat = CATEGORIES[state.catIdx];
+
+  let items;
   if (cat.id === "closed") {
-    return state.closed
-      .map((s) => {
-        const t = s.tab || s.window?.tabs?.[0];
-        return t && { ...t, kind: "closed", sessionId: s.tab?.sessionId || s.window?.sessionId };
-      })
-      .filter((t) => t && matches(t, state.filter));
+    items = state.closed.map((s) => {
+      const t = s.tab || s.window?.tabs?.[0];
+      return t && { ...t, kind: "closed", sessionId: s.tab?.sessionId || s.window?.sessionId };
+    }).filter(Boolean);
+  } else {
+    items = state.mru.map((t) => ({ ...t, kind: "open" }));
+    if      (cat.id === "current") items = items.filter((t) => t.windowId === state.currentWindowId);
+    else if (cat.id === "pinned")  items = items.filter((t) => t.pinned);
+    else if (cat.id === "audible") items = items.filter((t) => t.audible);
+    else if (cat.id === "muted")   items = items.filter((t) => t.mutedInfo?.muted);
   }
-  let tabs = state.mru.filter((t) => matches(t, state.filter));
-  if      (cat.id === "current") tabs = tabs.filter((t) => t.windowId === state.currentWindowId);
-  else if (cat.id === "pinned")  tabs = tabs.filter((t) => t.pinned);
-  else if (cat.id === "audible") tabs = tabs.filter((t) => t.audible);
-  else if (cat.id === "muted")   tabs = tabs.filter((t) => t.mutedInfo?.muted);
-  return tabs.map((t) => ({ ...t, kind: "open" }));
+
+  if (!state.filter) return items;
+
+  // fzf score against title and host; keep the better one. Sort desc.
+  const scored = [];
+  for (const t of items) {
+    const titleText = t.title || t.url || "";
+    const hostText  = host(t.url || "");
+    const tm = fzfMatch(state.filter, titleText);
+    const hm = fzfMatch(state.filter, hostText);
+    if (!tm && !hm) continue;
+    scored.push({
+      ...t,
+      _score:   Math.max(tm?.score ?? -Infinity, hm?.score ?? -Infinity),
+      _titleHl: tm?.indices || [],
+      _hostHl:  hm?.indices || []
+    });
+  }
+  scored.sort((a, b) => b._score - a._score);
+  return scored;
 }
 
 function renderList() {
@@ -86,6 +100,9 @@ function renderList() {
 
   $list.innerHTML = items.map((t, i) => {
     const h = host(t.url || "");
+    const titleText = t.title || t.url || "(untitled)";
+    const titleHtml = t._titleHl?.length ? highlightWithIndices(titleText, t._titleHl, escapeHtml) : escapeHtml(titleText);
+    const hostHtml  = t._hostHl?.length  ? highlightWithIndices(h,         t._hostHl,  escapeHtml) : escapeHtml(h);
     const badges = [];
     if (t.pinned)            badges.push(`<span class="badge pinned">pin</span>`);
     if (t.audible)           badges.push(`<span class="badge audible">audio</span>`);
@@ -98,8 +115,8 @@ function renderList() {
            data-session-id="${t.sessionId ?? ""}">
         ${fav}
         <div class="title-col">
-          <span class="name">${escapeHtml(t.title || t.url || "(untitled)")}</span>
-          <span class="path">${escapeHtml(h)}</span>
+          <span class="name">${titleHtml}</span>
+          <span class="path">${hostHtml}</span>
         </div>
         <div class="badges">${badges.join("")}</div>
       </div>

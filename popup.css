@@ -163,6 +163,15 @@ html, body {
 
 .empty { padding: 24px; color: var(--text-muted); font-style: italic; text-align: center; font-size: 12px; }
 
+mark.fzf-hl {
+  background: rgba(5, 217, 232, 0.18);
+  color: var(--cyan);
+  border-bottom: 1px solid var(--cyan);
+  padding: 0;
+  border-radius: 0;
+  font-weight: inherit;
+}
+
 .footer {
   display: flex; gap: 14px;
   padding: 6px 14px;

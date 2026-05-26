@@ -285,6 +285,31 @@ test("popup.css declares @font-face for the bundled fonts", () => {
   assert.match(css, /@font-face[\s\S]*'Orbitron'[\s\S]*Orbitron\.woff2/);
 });
 
+test("every JS source parses (node --check)", () => {
+  // v0.2.4 shipped a syntactically broken modal/content.js (bare backticks
+  // in a comment closed the CSS template literal). Tests passed because
+  // CI never ran `node --check modal/content.js`. This catches it.
+  // Note: modal/content.template.js is intentionally excluded — it carries
+  // %%STM%% / %%ORB%% / %%FZF%% markers and only parses after substitution.
+  const files = [
+    "background.js",
+    "popup.js",
+    "lib/util.js",
+    "lib/fzf.js",
+    "modal/content.js",
+    "scripts/gen.mjs",
+    "scripts/build-modal.mjs"
+  ];
+  for (const f of files) {
+    try {
+      execFileSync("node", ["--check", join(ROOT, f)], { stdio: "pipe" });
+    } catch (e) {
+      const stderr = (e.stderr && e.stderr.toString()) || e.message;
+      assert.fail(`node --check ${f} failed:\n${stderr.split("\n").slice(0, 5).join("\n")}`);
+    }
+  }
+});
+
 test("modal content script embeds fonts inline (CSP-safe data: URIs, no network fetch)", () => {
   // Pre-v0.2.3 we used FontFace API + chrome.runtime.getURL, but that path
   // is subject to the host page's font-src CSP and silently failed on

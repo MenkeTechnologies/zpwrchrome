@@ -49,7 +49,10 @@ jobs:
           node --check background.js
           node --check popup.js
           node --check lib/util.js
+          node --check lib/fzf.js
+          node --check modal/content.js
           node --check scripts/gen.mjs
+          node --check scripts/build-modal.mjs
 
       - name: Run tests
         run: npm test
