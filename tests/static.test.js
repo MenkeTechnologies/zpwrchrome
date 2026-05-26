@@ -230,6 +230,61 @@ test("README banner block contains the ZPWRCHROME letters", () => {
   assert.match(banner[1], /\\/, "banner does not look like figlet output (no backslash glyphs)");
 });
 
+test("manifest.json, theme/manifest.json, and package.json share the same version", () => {
+  // Avoids the failure mode where the extension ships v0.2.0 but the theme
+  // and npm test harness still claim v0.1.0.
+  const ext   = JSON.parse(read("manifest.json")).version;
+  const theme = JSON.parse(read("theme/manifest.json")).version;
+  const pkg   = JSON.parse(read("package.json")).version;
+  assert.equal(theme, ext, `theme version ${theme} ≠ extension version ${ext}`);
+  assert.equal(pkg,   ext, `package.json version ${pkg} ≠ extension version ${ext}`);
+});
+
+test("cyberpunk fonts are bundled locally as woff2", () => {
+  // The popup and modal both reference 'Share Tech Mono' and 'Orbitron'.
+  // Google Fonts is not loaded over the network (CSP), so the woff2 files
+  // must be on disk and declared in web_accessible_resources for the modal.
+  const expected = ["fonts/ShareTechMono-Regular.woff2", "fonts/Orbitron.woff2"];
+  for (const rel of expected) {
+    const abs = join(ROOT, rel);
+    assert.ok(existsSync(abs), `missing bundled font: ${rel}`);
+    const buf = readFileSync(abs);
+    // woff2 magic: "wOF2"
+    assert.equal(buf.toString("ascii", 0, 4), "wOF2", `${rel} is not a valid woff2 file`);
+  }
+});
+
+test("popup.css declares @font-face for the bundled fonts", () => {
+  const css = read("popup.css");
+  assert.match(css, /@font-face[\s\S]*'Share Tech Mono'[\s\S]*ShareTechMono-Regular\.woff2/);
+  assert.match(css, /@font-face[\s\S]*'Orbitron'[\s\S]*Orbitron\.woff2/);
+});
+
+test("modal content script registers fonts via FontFace API", () => {
+  const content = read("modal/content.js");
+  assert.match(content, /new FontFace\(/, "modal must use FontFace API to inject fonts into host page");
+  assert.match(content, /chrome\.runtime\.getURL\(/,
+    "modal must resolve font URLs through chrome.runtime.getURL (WAR-resolvable URL)");
+  assert.match(content, /fonts\/ShareTechMono-Regular\.woff2/, "modal must reference Share Tech Mono woff2");
+  assert.match(content, /fonts\/Orbitron\.woff2/, "modal must reference Orbitron woff2");
+});
+
+test("fonts are declared in web_accessible_resources", () => {
+  const war = manifest.web_accessible_resources || [];
+  const all = war.flatMap((w) => w.resources || []);
+  for (const rel of ["fonts/ShareTechMono-Regular.woff2", "fonts/Orbitron.woff2"]) {
+    assert.ok(all.includes(rel),
+      `font ${rel} must be in web_accessible_resources so chrome.runtime.getURL resolves cross-context`);
+  }
+});
+
+test("fonts directory has the OFL license", () => {
+  const lic = read("fonts/LICENSE");
+  assert.match(lic, /SIL Open Font License/);
+  assert.match(lic, /Share Tech Mono/);
+  assert.match(lic, /Orbitron/);
+});
+
 test("manifest permissions are all referenced by background.js or popup.js", () => {
   const popupSrc = read("popup.js");
   const all = bgSrc + "\n" + popupSrc;

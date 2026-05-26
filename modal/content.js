@@ -12,6 +12,29 @@
   if (window[MODAL_ID + "-installed"]) return; // idempotent injection
   window[MODAL_ID + "-installed"] = true;
 
+  // Load cyberpunk fonts into the host document so the shadow DOM picks them
+  // up. FontFace API lets the content script inject fonts without touching
+  // the page's stylesheet rules. Bundled in fonts/ + declared in
+  // web_accessible_resources so chrome.runtime.getURL resolves in-page.
+  let fontsLoaded = false;
+  async function ensureFonts() {
+    if (fontsLoaded || !document.fonts || !window.FontFace) { fontsLoaded = true; return; }
+    const defs = [
+      ["Share Tech Mono", "fonts/ShareTechMono-Regular.woff2", { weight: "400", style: "normal" }],
+      ["Orbitron",        "fonts/Orbitron.woff2",              { weight: "600", style: "normal" }],
+      ["Orbitron",        "fonts/Orbitron.woff2",              { weight: "900", style: "normal" }]
+    ];
+    await Promise.all(defs.map(async ([family, rel, desc]) => {
+      try {
+        const url = chrome.runtime.getURL(rel);
+        const face = new FontFace(family, `url(${url})`, desc);
+        await face.load();
+        document.fonts.add(face);
+      } catch { /* swallow — fallback to system monospace */ }
+    }));
+    fontsLoaded = true;
+  }
+
   const CATEGORIES = [
     { id: "all",     label: "All Tabs",          key: "⌘1" },
     { id: "current", label: "Current Window",    key: "⌘2" },
@@ -164,6 +187,7 @@
       cycle(+1);
       return;
     }
+    ensureFonts(); // async; modal renders immediately, font swaps in when ready
     const host = document.createElement("div");
     host.id = MODAL_ID;
     document.documentElement.appendChild(host);

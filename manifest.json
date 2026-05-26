@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "zpwrchrome — Hyper Tab Switcher",
   "short_name": "zpwrchrome",
-  "version": "0.1.0",
-  "description": "Recent-tabs switcher with 26+ keyboard shortcuts. Cyberpunk HUD by MenkeTechnologies.",
+  "version": "0.2.0",
+  "description": "Recent-tabs switcher with 28 keyboard shortcuts and JetBrains-style Cmd+E modal. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
   "minimum_chrome_version": "127",
@@ -36,7 +36,11 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["modal/content.js"],
+      "resources": [
+        "modal/content.js",
+        "fonts/Orbitron.woff2",
+        "fonts/ShareTechMono-Regular.woff2"
+      ],
       "matches": ["<all_urls>"]
     }
   ],

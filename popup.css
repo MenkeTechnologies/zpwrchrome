@@ -2,9 +2,31 @@
  * zpwrchrome popup
  * Visuals lifted from strykelang docs/hud-static.css — cyberpunk HUD palette.
  * Chrome extension popups have a hard max of 800×600. Body sized to 520×600.
- * Fonts: Google Fonts loaded via <link>? No — popups must be self-contained
- * under MV3 default-src CSP, so we degrade gracefully to system monospace.
+ * Fonts bundled locally under fonts/ (SIL OFL); the popup runs in extension
+ * context so relative font URLs resolve without web_accessible_resources.
  */
+
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/ShareTechMono-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/Orbitron.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('fonts/Orbitron.woff2') format('woff2');
+}
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
