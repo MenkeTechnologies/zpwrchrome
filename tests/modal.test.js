@@ -101,6 +101,25 @@ test("modal forwards every printable key to the filter (no Vimium leak)", () => 
     "modal must append the typed char to the filter");
 });
 
+test("modal uses a focus-sink <input> in document.body to bypass Vimium", () => {
+  // Vimium checks document.activeElement.tagName === 'INPUT' to detect
+  // "insert mode" and stops grabbing single-char keys. The closed shadow
+  // root hides our visible search from that check (host div, not input),
+  // so we add a hidden real <input> outside the shadow + keep focus on it.
+  const tmpl = readFileSync(join(ROOT, "modal/content.template.js"), "utf8");
+  assert.match(tmpl, /document\.createElement\("input"\)/,
+    "modal must create a real <input> for the focus sink");
+  assert.match(tmpl, /state\.sink/, "sink reference must be stored on state");
+  assert.match(tmpl, /sink\.focus\(\)/,
+    "modal must focus the sink so Vimium detects insert mode");
+  // The sink must be in document.body / document.documentElement so it's
+  // actually in the DOM (an input not attached to document doesn't count
+  // as the active element).
+  assert.match(tmpl, /document\.(body|documentElement)\.appendChild\(sink\)/);
+  // And it must be tabindex >= 0 so .focus() works.
+  assert.match(tmpl, /sink\.setAttribute\("tabindex",\s*"0"\)/);
+});
+
 test("plain Backspace closes the highlighted tab (Mac-laptop friendly)", () => {
   // Mac laptops don't have a Del key; Fn+Backspace is awkward. Backspace
   // closes the tab when filter is empty; otherwise it trims one char from
@@ -209,7 +228,9 @@ test("content script keyboard nav covers JetBrains-canonical keys", () => {
 
 test("content script renders an interactive search input", () => {
   assert.match(content, /class="search"/);
-  assert.match(content, /search\.focus\(\)/, "modal must focus the search input on open");
+  // Visible search is read-only; the hidden focus-sink is what actually
+  // receives focus (so Vimium detects insert mode).
+  assert.match(content, /sink\.focus\(\)/, "modal must focus the hidden sink on open");
 });
 
 test("content script uses the strykelang HUD palette", () => {

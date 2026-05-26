@@ -222,15 +222,39 @@
     document.documentElement.appendChild(host);
     const shadow = host.attachShadow({ mode: "closed" });
     shadow.innerHTML = `<style>${CSS}</style>` + html();
+
+    // Focus sink — a real <input> in document.body (outside the shadow) so
+    // Vimium/cVim and similar key-grabbing extensions detect "insert mode"
+    // (they check document.activeElement.tagName === "INPUT") and stop
+    // intercepting keystrokes. Without this, closed shadow DOM hides our
+    // visible search input — document.activeElement returns the host div
+    // (not an input) — Vimium grabs single-char keys like d, j, k.
+    const sink = document.createElement("input");
+    sink.type = "text";
+    sink.setAttribute("aria-hidden", "true");
+    sink.setAttribute("tabindex", "0");
+    sink.id = MODAL_ID + "-sink";
+    sink.style.cssText = [
+      "position:fixed !important",
+      "top:0 !important",
+      "left:0 !important",
+      "width:1px !important",
+      "height:1px !important",
+      "padding:0 !important",
+      "margin:0 !important",
+      "border:0 !important",
+      "opacity:0 !important",
+      "z-index:2147483646 !important",
+      "pointer-events:none !important"
+    ].join(";");
+    document.documentElement.appendChild(sink);
+
     state = {
-      host, shadow,
+      host, shadow, sink,
       catIdx: 0, rowIdx: 0,
       filter: "",
       mru: [], closed: [],
       currentWindowId: null,
-      // JetBrains-style: pre-select the row right after the active tab on
-      // first render, so a single Enter switches back. Once user nav
-      // happens (arrows / Cmd+E cycle / click / filter input), respect it.
       firstRender: true
     };
     wire();
@@ -241,7 +265,9 @@
     if (!state) return;
     try { window.removeEventListener("keydown", state.kd, true); } catch {}
     try { window.removeEventListener("keyup",   state.ku, true); } catch {}
+    try { document.removeEventListener("focusin",  state.fi, true); } catch {}
     try { state.host.remove(); } catch {}
+    try { state.sink.remove(); } catch {}
     state = null;
   }
 
@@ -277,26 +303,21 @@
   }
 
   function wire() {
-    const { shadow } = state;
-    // We drive the search value manually from handleKey (all keystrokes are
-    // captured at window level so other extensions can't steal them — Vimium
-    // 'd' for delete was the original report). The search element is left
-    // read-only-ish: it's an <input> for visual continuity but we never
-    // listen for its keydown directly.
+    const { shadow, sink } = state;
+
+    // The visible search input mirrors the sink. It's display-only;
+    // pointer-events disabled so clicks don't move focus off the sink.
     const search = shadow.querySelector(".search");
-    search.addEventListener("input", (e) => {
-      // Catches clicks-in-then-pastes via context menu, drag-drop, etc.
-      state.filter = e.target.value;
-      state.rowIdx = 0;
-      render();
-    });
-    setTimeout(() => search.focus(), 0);
+    search.readOnly = true;
+    search.tabIndex = -1;
+    search.style.pointerEvents = "none";
 
     shadow.querySelectorAll(".cat").forEach((el) => {
       el.addEventListener("click", () => {
         state.catIdx = Number(el.dataset.idx);
         state.rowIdx = 0;
         render();
+        sink.focus();
       });
     });
 
@@ -306,11 +327,21 @@
 
     state.kd = (e) => handleKey(e);
     state.ku = (e) => handleKeyUp(e);
-    // window (not document) — window-level capture fires before any
-    // document-level extension listener (Vimium, etc.), so we can swallow
-    // keystrokes before other extensions react to them.
+    state.fi = (e) => {
+      // If focus leaves the sink (host page steals focus, click on a row),
+      // pull it back so Vimium keeps seeing "input is focused" → backs off.
+      if (state && e.target !== state.sink) {
+        // Skip if focus moved into our own host element (e.g., a click on a row).
+        // We still want our sink focused so the next keystroke goes to us.
+        queueMicrotask(() => { if (state) state.sink.focus(); });
+      }
+    };
     window.addEventListener("keydown", state.kd, true);
     window.addEventListener("keyup",   state.ku, true);
+    document.addEventListener("focusin", state.fi, true);
+
+    // Focus the sink last so it grabs initial focus.
+    setTimeout(() => sink.focus(), 0);
   }
 
   function refresh() {
@@ -461,12 +492,11 @@
   function setFilter(next) {
     const search = state.shadow.querySelector(".search");
     search.value = next;
+    state.sink.value = next;
     state.filter = next;
     state.rowIdx = 0;
-    renderList();
+    render();
   }
-
-  function renderList() { render(); } // alias for clarity in setFilter
 
   function handleKey(e) {
     if (!state) return;
