@@ -263,6 +263,14 @@ const GM_PREFIX = "gm:";  // chrome.storage.local key prefix for per-script GM v
 const FIRE_LOG_KEY = "userScripts.fireLog";
 const FIRE_LOG_CAP = 200;
 
+async function appendFireLog(entry) {
+  const bag = await chrome.storage.local.get(FIRE_LOG_KEY);
+  const log = Array.isArray(bag[FIRE_LOG_KEY]) ? bag[FIRE_LOG_KEY] : [];
+  log.unshift({ when: Date.now(), ...entry });
+  if (log.length > FIRE_LOG_CAP) log.length = FIRE_LOG_CAP;
+  await chrome.storage.local.set({ [FIRE_LOG_KEY]: log });
+}
+
 async function readScripts() {
   const { [SCRIPTS_KEY]: arr } = await chrome.storage.local.get(SCRIPTS_KEY);
   return Array.isArray(arr) ? arr : [];
@@ -483,6 +491,18 @@ async function fallbackInject({ tabId, frameId, url }, phase) {
         },
         args: [code]
       });
+      // Log AFTER successful inject. In fallback mode the SW has full
+      // visibility into firings, so we record here instead of relying on
+      // the gm:fire beacon (which races against SW lifecycle).
+      await appendFireLog({
+        script: id,
+        name:   meta.name,
+        url,
+        tabId,
+        frame:  frameId,
+        mode:   "fallback",
+        phase
+      });
     } catch (e) {
       // Restricted pages (chrome://, web store) — silently skip.
       if (!/Cannot access|chrome:\/\/|chromewebstore/.test(e?.message || "")) {
@@ -634,21 +654,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg?.kind === "gm:fire") {
-    (async () => {
-      const bag = await chrome.storage.local.get(FIRE_LOG_KEY);
-      const log = Array.isArray(bag[FIRE_LOG_KEY]) ? bag[FIRE_LOG_KEY] : [];
-      log.unshift({
-        when:   msg.when || Date.now(),
-        script: msg.script,
-        name:   msg.name,
-        url:    msg.url,
-        tabId:  _sender?.tab?.id ?? null,
-        frame:  _sender?.frameId ?? 0
-      });
-      if (log.length > FIRE_LOG_CAP) log.length = FIRE_LOG_CAP;
-      await chrome.storage.local.set({ [FIRE_LOG_KEY]: log });
-      sendResponse({ ok: true });
-    })();
+    appendFireLog({
+      when:   msg.when || Date.now(),
+      script: msg.script,
+      name:   msg.name,
+      url:    msg.url,
+      tabId:  _sender?.tab?.id ?? null,
+      frame:  _sender?.frameId ?? 0,
+      mode:   "native"
+    }).then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
     return true;
   }
   if (msg?.kind === "scripts.firelog") {

@@ -352,6 +352,33 @@ test("background.js wires the no-dev-mode fallback via webNavigation + scripting
     "manifest must declare webNavigation permission for the fallback path");
 });
 
+test("GM shim swallows sendMessage promise rejections (SW-lifecycle races)", () => {
+  // Without this, every script invocation logs "Uncaught (in promise)
+  // Error: Could not establish connection" to the page's console.
+  const shim = read("lib/gm-shim.js");
+  assert.match(shim, /chrome\.runtime\.lastError/,
+    "GM shim must reference chrome.runtime.lastError so sendMessage errors are swallowed");
+  // The fire beacon must use the callback form (the Promise form rejects loud).
+  const fireMatch = shim.match(/kind:\s*"gm:fire"[\s\S]*?\)\s*;/);
+  assert.ok(fireMatch, "gm:fire beacon not found");
+  assert.match(fireMatch[0], /,\s*\(\)\s*=>\s*\{/,
+    "gm:fire beacon must use the callback form, not the Promise form");
+});
+
+test("background.js logs fires from fallbackInject (not just gm:fire beacon)", () => {
+  // In fallback mode the SW knows what's about to fire; logging directly
+  // avoids the race where the userscript's sendMessage arrives after SW
+  // termination.
+  const bg = read("background.js");
+  assert.match(bg, /async function appendFireLog\(/,
+    "background.js must export an appendFireLog helper");
+  // appendFireLog must be called from fallbackInject after successful inject.
+  const fb = bg.match(/async function fallbackInject\([\s\S]*?\n\}\n/);
+  assert.ok(fb, "fallbackInject body not found");
+  assert.match(fb[0], /appendFireLog\(/,
+    "fallbackInject must call appendFireLog after chrome.scripting.executeScript succeeds");
+});
+
 test("userscript run log: GM shim fires a beacon, background appends to a ring buffer", () => {
   const shim = read("lib/gm-shim.js");
   assert.match(shim, /kind:\s*"gm:fire"/,
