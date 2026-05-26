@@ -14,7 +14,8 @@ import {
   parseMetadata,
   validateUserscript,
   userscriptId,
-  includeToMatchPattern
+  includeToMatchPattern,
+  matchUrl
 } from "./lib/userscript.js";
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 
@@ -397,11 +398,99 @@ async function syncUserScripts() {
   return { registered, skipped };
 }
 
-chrome.runtime.onInstalled.addListener(syncUserScripts);
-chrome.runtime.onStartup.addListener(syncUserScripts);
-// Also sync once at SW startup (top-level await isn't allowed in module
-// service workers, but a fire-and-forget call is fine).
-syncUserScripts();
+chrome.runtime.onInstalled.addListener(initUserscripts);
+chrome.runtime.onStartup.addListener(initUserscripts);
+// Also init once at SW startup.
+initUserscripts();
+
+async function initUserscripts() {
+  const result = await syncUserScripts();
+  // If chrome.userScripts is not available, wire the fallback path so
+  // scripts still fire — same behavior as Tampermonkey without dev mode.
+  if (!chrome.userScripts) {
+    enableFallback();
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Fallback path: chrome.scripting + chrome.webNavigation. Used when
+// chrome.userScripts is unavailable (Dev mode off, Chrome < 120, or any
+// other reason the API isn't exposed). Same end-effect, slightly slower
+// because we re-check matches in JS on every navigation event.
+
+let fallbackWired = false;
+
+function enableFallback() {
+  if (fallbackWired) return;
+  if (!chrome.webNavigation || !chrome.scripting) {
+    console.warn("[zpwrchrome] no fallback possible — webNavigation or scripting permission missing");
+    return;
+  }
+  fallbackWired = true;
+  console.info("[zpwrchrome] fallback active (chrome.scripting + chrome.webNavigation)");
+  chrome.storage.local.set({ "userScripts.mode": "fallback" });
+
+  chrome.webNavigation.onCommitted.addListener((details) => fallbackInject(details, "document-start"));
+  chrome.webNavigation.onDOMContentLoaded.addListener((details) => fallbackInject(details, "document-end"));
+  chrome.webNavigation.onCompleted.addListener((details) => fallbackInject(details, "document-idle"));
+}
+
+async function fallbackInject({ tabId, frameId, url }, phase) {
+  if (typeof tabId !== "number" || tabId < 0) return;
+  if (!url || !/^(https?|file|ftp):/i.test(url)) return;
+  const scripts = await readScripts();
+  for (const s of scripts) {
+    if (!s.enabled) continue;
+    const meta = parseMetadata(s.src);
+    if (!meta) continue;
+    if (meta.runAt !== phase) continue;
+
+    const patterns = meta.matches.length
+      ? meta.matches
+      : meta.includes.map(includeToMatchPattern).filter(Boolean);
+    if (!matchUrl(patterns, url)) continue;
+    if (meta.excludes.length && matchUrl(meta.excludes, url)) continue;
+
+    const id = userscriptId(meta);
+    const info = {
+      script: {
+        id, name: meta.name, namespace: meta.namespace, version: meta.version,
+        description: meta.description, author: meta.author,
+        grants: meta.grants, matches: patterns, excludes: meta.excludes
+      },
+      version: chrome.runtime.getManifest().version,
+      scriptHandler: "zpwrchrome-fallback",
+      scriptMetaStr: (s.src.match(/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/) || [""])[0]
+    };
+    const shim = GM_SHIM_SOURCE.replace("__GM_INFO_JSON__", JSON.stringify(info));
+    const code =
+      "(function () {\n" +
+      shim + "\n" +
+      "try {\n" +
+      s.src + "\n" +
+      "} catch (e) { console.error('[zpwrchrome userscript]', " + JSON.stringify(meta.name) + ", e); }\n" +
+      "}).call(window);";
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [frameId] },
+        world: "ISOLATED",
+        injectImmediately: phase === "document-start",
+        func: (src) => {
+          try { (new Function(src))(); }
+          catch (e) { console.error("[zpwrchrome userscript fallback]", e); }
+        },
+        args: [code]
+      });
+    } catch (e) {
+      // Restricted pages (chrome://, web store) — silently skip.
+      if (!/Cannot access|chrome:\/\/|chromewebstore/.test(e?.message || "")) {
+        console.warn("[zpwrchrome] fallback inject failed for", id, "on", url, "—", e?.message || e);
+      }
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Popup data API
@@ -443,12 +532,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "scripts.list") {
     Promise.all([
       readScripts(),
-      chrome.storage.local.get(["userScripts.error", "userScripts.lastSync"])
+      chrome.storage.local.get(["userScripts.error", "userScripts.lastSync", "userScripts.mode"])
     ]).then(([scripts, meta]) => sendResponse({
       ok: true,
       scripts,
       error: meta["userScripts.error"] || null,
-      lastSync: meta["userScripts.lastSync"] || null
+      lastSync: meta["userScripts.lastSync"] || null,
+      mode: meta["userScripts.mode"] || (chrome.userScripts ? "native" : "fallback"),
+      native: !!chrome.userScripts
     }));
     return true;
   }

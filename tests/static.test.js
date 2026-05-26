@@ -333,6 +333,25 @@ test("background.js verifies registration via getScripts() and surfaces lastSync
     "background.js must persist lastSync metadata for the dashboard");
 });
 
+test("background.js wires the no-dev-mode fallback via webNavigation + scripting", () => {
+  const bg = read("background.js");
+  assert.match(bg, /chrome\.webNavigation\.onCommitted/,
+    "fallback must hook onCommitted for document-start scripts");
+  assert.match(bg, /chrome\.webNavigation\.onDOMContentLoaded/,
+    "fallback must hook onDOMContentLoaded for document-end scripts");
+  assert.match(bg, /chrome\.webNavigation\.onCompleted/,
+    "fallback must hook onCompleted for document-idle scripts");
+  assert.match(bg, /chrome\.scripting\.executeScript/,
+    "fallback must inject via chrome.scripting.executeScript");
+  assert.match(bg, /world:\s*"ISOLATED"/,
+    "fallback must inject in ISOLATED world so chrome.runtime messaging works");
+  assert.match(bg, /enableFallback\(\)/,
+    "background.js must call enableFallback() when chrome.userScripts is unavailable");
+  // Manifest must include the permission too.
+  assert.ok(manifest.permissions.includes("webNavigation"),
+    "manifest must declare webNavigation permission for the fallback path");
+});
+
 test("userscript run log: GM shim fires a beacon, background appends to a ring buffer", () => {
   const shim = read("lib/gm-shim.js");
   assert.match(shim, /kind:\s*"gm:fire"/,
@@ -433,6 +452,7 @@ test("manifest permissions are all referenced by background.js or popup.js", () 
     storage:        /chrome\.storage\./,
     scripting:      /chrome\.scripting\./,
     userScripts:    /chrome\.userScripts/,
+    webNavigation:  /chrome\.webNavigation\./,
     clipboardWrite: /navigator\.clipboard\.writeText/
   };
   for (const perm of manifest.permissions) {

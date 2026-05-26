@@ -5,6 +5,8 @@ import {
   validateUserscript,
   isValidMatchPattern,
   includeToMatchPattern,
+  matchPatternToRegex,
+  matchUrl,
   userscriptId,
   RUN_AT_VALUES
 } from "../lib/userscript.js";
@@ -147,6 +149,48 @@ test("userscriptId is stable + safe for chrome.userScripts.id", () => {
   const idA = userscriptId({ name: "A", namespace: "" });
   const idB = userscriptId({ name: "B", namespace: "" });
   assert.notEqual(idA, idB, "different names → different ids");
+});
+
+test("matchPatternToRegex handles canonical Chrome patterns", () => {
+  // Exact host
+  const re1 = matchPatternToRegex("https://example.com/*");
+  assert.ok(re1.test("https://example.com/"));
+  assert.ok(re1.test("https://example.com/path/to/page?q=1"));
+  assert.ok(!re1.test("https://sub.example.com/"));
+  assert.ok(!re1.test("http://example.com/"));
+
+  // Subdomain wildcard
+  const re2 = matchPatternToRegex("https://*.example.com/*");
+  assert.ok(re2.test("https://www.example.com/"));
+  assert.ok(re2.test("https://api.v2.example.com/x"));
+  assert.ok(re2.test("https://example.com/"), "*.example.com matches the apex too per Chrome's spec");
+  assert.ok(!re2.test("https://example.org/"));
+
+  // Scheme wildcard — Chrome spec: "*" = http|https only
+  const re3 = matchPatternToRegex("*://example.com/*");
+  assert.ok(re3.test("http://example.com/"));
+  assert.ok(re3.test("https://example.com/x"));
+  assert.ok(!re3.test("ftp://example.com/"));
+  assert.ok(!re3.test("file:///etc/hosts"));
+
+  // <all_urls>
+  const re4 = matchPatternToRegex("<all_urls>");
+  assert.ok(re4.test("https://example.com/"));
+  assert.ok(re4.test("http://anything.test/x"));
+
+  // Malformed
+  assert.equal(matchPatternToRegex("nope"), null);
+  assert.equal(matchPatternToRegex("https://example.com"), null, "no path = invalid match pattern");
+});
+
+test("matchUrl returns true on any-pattern match", () => {
+  const patterns = ["https://example.com/*", "https://*.github.com/*"];
+  assert.ok(matchUrl(patterns, "https://example.com/foo"));
+  assert.ok(matchUrl(patterns, "https://api.github.com/repos"));
+  assert.ok(!matchUrl(patterns, "https://gitlab.com/x"));
+  assert.ok(!matchUrl(patterns, ""));
+  assert.ok(!matchUrl(null,    "https://example.com/"));
+  assert.ok(!matchUrl([],      "https://example.com/"));
 });
 
 test("parseMetadata supports the Tampermonkey-style multi-match block", () => {

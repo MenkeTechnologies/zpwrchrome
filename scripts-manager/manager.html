@@ -32,9 +32,30 @@
     <button class="tab"         data-tab="help">Help</button>
   </nav>
 
+  <div id="banner-fallback" class="info hidden">
+    <strong>Running in fallback mode — scripts WILL fire.</strong>
+    Using <code>chrome.scripting</code> + <code>chrome.webNavigation</code> instead of the native
+    <code>chrome.userScripts</code> API. <em>Same end-effect.</em>
+    To switch to native mode (slightly faster), do all three at <code>chrome://extensions/</code>:
+    <ol style="margin: 6px 0 6px 20px; font-size: 11.5px;">
+      <li>Top-right: enable <em>Developer mode</em></li>
+      <li>Click the <strong>zpwrchrome card</strong> → scroll down → enable <em>Allow User Scripts</em></li>
+      <li>Click the <em>reload arrow</em> on the zpwrchrome card</li>
+    </ol>
+    <div class="banner-actions">
+      <button class="btn btn-secondary" id="open-chrome-ext">open zpwrchrome's settings page</button>
+    </div>
+  </div>
+
   <div id="error" class="error hidden">
     <strong>chrome.userScripts unavailable.</strong>
-    Enable <em>Developer mode</em> at <code>chrome://extensions</code> (top-right toggle) and reload this page.
+    Even with Developer mode on, Chrome also requires the per-extension
+    <em>Allow User Scripts</em> toggle. Go to <code>chrome://extensions/</code>, click the zpwrchrome card,
+    scroll to <strong>Allow User Scripts</strong> and turn it on, then click the reload arrow.
+    (Or just use the fallback — scripts still fire either way.)
+    <div class="banner-actions">
+      <button class="btn btn-secondary" id="open-chrome-ext-err">open zpwrchrome's settings page</button>
+    </div>
     <div class="error-detail" id="error-detail"></div>
   </div>
 

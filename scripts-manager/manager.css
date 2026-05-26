@@ -164,7 +164,20 @@ body {
 .error em { color: var(--cyan); font-style: normal; }
 .error code { background: var(--bg-secondary); padding: 1px 6px; border-radius: 2px; color: var(--cyan); }
 .error-detail { margin-top: 6px; font-size: 10.5px; color: var(--text-dim); }
+.banner-actions { margin-top: 10px; display: flex; gap: 8px; }
 .hidden { display: none !important; }
+
+.info {
+  max-width: 1400px; margin: 12px auto 0;
+  padding: 12px 18px;
+  border: 1px solid var(--yellow);
+  background: rgba(255, 215, 0, 0.06);
+  color: var(--text);
+  font-size: 12px;
+}
+.info em { color: var(--cyan); font-style: normal; }
+.info code { background: var(--bg-secondary); padding: 1px 6px; border-radius: 2px; color: var(--cyan); }
+.info strong { color: var(--yellow); }
 
 /* ===== Panes ===== */
 main {

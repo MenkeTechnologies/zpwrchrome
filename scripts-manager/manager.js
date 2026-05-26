@@ -132,23 +132,36 @@ try { $ver.textContent = "v" + chrome.runtime.getManifest().version; }
 catch { $ver.textContent = "v?"; }
 
 // ------------------- Refresh / render -------------------
+const $info = document.getElementById("banner-fallback");
+
 async function refresh() {
   const resp = await send({ kind: "scripts.list" });
   scripts = resp?.scripts || [];
-  if (resp?.error) {
+
+  const isFallback = resp?.mode === "fallback" || (resp?.native === false);
+  // Choose banner: red error only when even the fallback can't be wired
+  // (no webNavigation/scripting). Yellow info when fallback IS active.
+  $info.classList.add("hidden");
+  $error.classList.add("hidden");
+  if (resp?.error && !isFallback) {
     $error.classList.remove("hidden");
     $errorDtl.textContent = resp.error;
-    const apiCell = document.getElementById("stat-api");
-    if (apiCell) { apiCell.textContent = "unavailable (Developer mode off)"; apiCell.style.color = "var(--red)"; }
-    const diag = document.getElementById("diag-err");
-    if (diag) diag.textContent = resp.error;
-  } else {
-    $error.classList.add("hidden");
-    const apiCell = document.getElementById("stat-api");
-    if (apiCell) { apiCell.textContent = "available"; apiCell.style.color = "var(--green)"; }
-    const diag = document.getElementById("diag-err");
-    if (diag) diag.textContent = "(none)";
+  } else if (isFallback) {
+    $info.classList.remove("hidden");
   }
+
+  const apiCell = document.getElementById("stat-api");
+  if (apiCell) {
+    if (isFallback) {
+      apiCell.textContent = "fallback (chrome.scripting + webNavigation)";
+      apiCell.style.color = "var(--yellow)";
+    } else {
+      apiCell.textContent = "available (native chrome.userScripts)";
+      apiCell.style.color = "var(--green)";
+    }
+  }
+  const diag = document.getElementById("diag-err");
+  if (diag) diag.textContent = resp?.error || "(none)";
   const live = document.getElementById("stat-live");
   if (live) {
     const sync = resp?.lastSync;
@@ -411,6 +424,12 @@ function download(blob, name) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// Banner "Open chrome://extensions" buttons (red + yellow).
+for (const id of ["open-chrome-ext", "open-chrome-ext-err"]) {
+  const b = document.getElementById(id);
+  if (b) b.addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/?id=" + chrome.runtime.id }));
 }
 
 refresh();
