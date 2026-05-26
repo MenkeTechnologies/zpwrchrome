@@ -1,6 +1,6 @@
 {
   "name": "zpwrchrome",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "private": true,
   "type": "module",
   "description": "Chrome extension — recent-tabs switcher with 28 keyboard commands",

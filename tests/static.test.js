@@ -333,23 +333,29 @@ test("background.js verifies registration via getScripts() and surfaces lastSync
     "background.js must persist lastSync metadata for the dashboard");
 });
 
-test("background.js wires the no-dev-mode fallback via webNavigation + scripting", () => {
+test("background.js wires a unified webNavigation logger for both modes", () => {
   const bg = read("background.js");
   assert.match(bg, /chrome\.webNavigation\.onCommitted/,
-    "fallback must hook onCommitted for document-start scripts");
+    "must hook onCommitted for document-start scripts");
   assert.match(bg, /chrome\.webNavigation\.onDOMContentLoaded/,
-    "fallback must hook onDOMContentLoaded for document-end scripts");
+    "must hook onDOMContentLoaded for document-end scripts");
   assert.match(bg, /chrome\.webNavigation\.onCompleted/,
-    "fallback must hook onCompleted for document-idle scripts");
+    "must hook onCompleted for document-idle scripts");
   assert.match(bg, /chrome\.scripting\.executeScript/,
-    "fallback must inject via chrome.scripting.executeScript");
+    "must inject via chrome.scripting.executeScript in fallback mode");
   assert.match(bg, /world:\s*"ISOLATED"/,
     "fallback must inject in ISOLATED world so chrome.runtime messaging works");
-  assert.match(bg, /enableFallback\(\)/,
-    "background.js must call enableFallback() when chrome.userScripts is unavailable");
-  // Manifest must include the permission too.
+  assert.match(bg, /enableNavigationLogger\(\)/,
+    "background.js must wire enableNavigationLogger() in initUserscripts");
+  // handleNav must always appendFireLog, regardless of mode (native skips inject).
+  const hn = bg.match(/async function handleNav\([\s\S]*?\n\}\n/);
+  assert.ok(hn, "handleNav function not found");
+  assert.match(hn[0], /appendFireLog\(/, "handleNav must log every matching fire");
+  assert.match(hn[0], /if \(native\) continue;/,
+    "handleNav must skip injection when chrome.userScripts is available");
+  // Manifest still needs the permission.
   assert.ok(manifest.permissions.includes("webNavigation"),
-    "manifest must declare webNavigation permission for the fallback path");
+    "manifest must declare webNavigation permission");
 });
 
 test("GM shim swallows sendMessage promise rejections (SW-lifecycle races)", () => {
@@ -382,18 +388,17 @@ test("scripts.list trusts the live chrome.userScripts presence over stored mode"
     "syncUserScripts must clear the stale error key on native-mode success");
 });
 
-test("background.js logs fires from fallbackInject (not just gm:fire beacon)", () => {
-  // In fallback mode the SW knows what's about to fire; logging directly
-  // avoids the race where the userscript's sendMessage arrives after SW
-  // termination.
+test("background.js logs fires from handleNav (not via the unreliable userscript beacon)", () => {
+  // The SW knows what's about to fire — log directly from background
+  // rather than depending on the userscript's chrome.runtime.sendMessage
+  // (which races against SW lifecycle and silently drops).
   const bg = read("background.js");
   assert.match(bg, /async function appendFireLog\(/,
-    "background.js must export an appendFireLog helper");
-  // appendFireLog must be called from fallbackInject after successful inject.
-  const fb = bg.match(/async function fallbackInject\([\s\S]*?\n\}\n/);
-  assert.ok(fb, "fallbackInject body not found");
-  assert.match(fb[0], /appendFireLog\(/,
-    "fallbackInject must call appendFireLog after chrome.scripting.executeScript succeeds");
+    "background.js must declare an appendFireLog helper");
+  const hn = bg.match(/async function handleNav\([\s\S]*?\n\}\n/);
+  assert.ok(hn, "handleNav body not found");
+  assert.match(hn[0], /appendFireLog\(/,
+    "handleNav must call appendFireLog for every matching script");
 });
 
 test("userscript run log: GM shim fires a beacon, background appends to a ring buffer", () => {

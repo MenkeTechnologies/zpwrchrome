@@ -421,41 +421,47 @@ initUserscripts();
 
 async function initUserscripts() {
   const result = await syncUserScripts();
-  // If chrome.userScripts is not available, wire the fallback path so
-  // scripts still fire — same behavior as Tampermonkey without dev mode.
-  if (!chrome.userScripts) {
-    enableFallback();
-  }
+  // Wire the webNavigation logger regardless of mode. In fallback mode it
+  // ALSO injects. In native mode chrome.userScripts handles injection and
+  // we just log — this is more reliable than the gm:fire beacon which
+  // races against SW lifecycle.
+  enableNavigationLogger();
   return result;
 }
 
 // ---------------------------------------------------------------------------
-// Fallback path: chrome.scripting + chrome.webNavigation. Used when
-// chrome.userScripts is unavailable (Dev mode off, Chrome < 120, or any
-// other reason the API isn't exposed). Same end-effect, slightly slower
-// because we re-check matches in JS on every navigation event.
+// Navigation logger. Single source of fire-log truth, used by both modes:
+//   - Native mode (chrome.userScripts available): only logs; injection is
+//     handled by Chrome.
+//   - Fallback mode (chrome.userScripts unavailable): logs AND injects via
+//     chrome.scripting.executeScript.
 
-let fallbackWired = false;
+let navListenerWired = false;
 
-function enableFallback() {
-  if (fallbackWired) return;
-  if (!chrome.webNavigation || !chrome.scripting) {
-    console.warn("[zpwrchrome] no fallback possible — webNavigation or scripting permission missing");
+function enableNavigationLogger() {
+  if (navListenerWired) return;
+  if (!chrome.webNavigation) {
+    console.warn("[zpwrchrome] no webNavigation API — fire log won't update");
     return;
   }
-  fallbackWired = true;
-  console.info("[zpwrchrome] fallback active (chrome.scripting + chrome.webNavigation)");
-  chrome.storage.local.set({ "userScripts.mode": "fallback" });
+  navListenerWired = true;
+  console.info("[zpwrchrome] navigation logger active (mode:", chrome.userScripts ? "native" : "fallback", ")");
 
-  chrome.webNavigation.onCommitted.addListener((details) => fallbackInject(details, "document-start"));
-  chrome.webNavigation.onDOMContentLoaded.addListener((details) => fallbackInject(details, "document-end"));
-  chrome.webNavigation.onCompleted.addListener((details) => fallbackInject(details, "document-idle"));
+  chrome.webNavigation.onCommitted.addListener((details) => handleNav(details, "document-start"));
+  chrome.webNavigation.onDOMContentLoaded.addListener((details) => handleNav(details, "document-end"));
+  chrome.webNavigation.onCompleted.addListener((details) => handleNav(details, "document-idle"));
 }
 
-async function fallbackInject({ tabId, frameId, url }, phase) {
+async function handleNav({ tabId, frameId, url }, phase) {
   if (typeof tabId !== "number" || tabId < 0) return;
   if (!url || !/^(https?|file|ftp):/i.test(url)) return;
+  if (frameId !== 0) return; // top frame only — keeps log clean
+
   const scripts = await readScripts();
+  if (!scripts.length) return;
+
+  const native = !!chrome.userScripts;
+
   for (const s of scripts) {
     if (!s.enabled) continue;
     const meta = parseMetadata(s.src);
@@ -469,6 +475,23 @@ async function fallbackInject({ tabId, frameId, url }, phase) {
     if (meta.excludes.length && matchUrl(meta.excludes, url)) continue;
 
     const id = userscriptId(meta);
+
+    // Always log the fire — single source of truth across modes.
+    await appendFireLog({
+      script: id,
+      name:   meta.name,
+      url,
+      tabId,
+      frame:  frameId,
+      mode:   native ? "native" : "fallback",
+      phase
+    });
+
+    // Native mode: chrome.userScripts handles injection. Done.
+    if (native) continue;
+
+    // Fallback mode: inject ourselves via chrome.scripting.
+    if (!chrome.scripting) continue;
     const info = {
       script: {
         id, name: meta.name, namespace: meta.namespace, version: meta.version,
@@ -498,18 +521,6 @@ async function fallbackInject({ tabId, frameId, url }, phase) {
           catch (e) { console.error("[zpwrchrome userscript fallback]", e); }
         },
         args: [code]
-      });
-      // Log AFTER successful inject. In fallback mode the SW has full
-      // visibility into firings, so we record here instead of relying on
-      // the gm:fire beacon (which races against SW lifecycle).
-      await appendFireLog({
-        script: id,
-        name:   meta.name,
-        url,
-        tabId,
-        frame:  frameId,
-        mode:   "fallback",
-        phase
       });
     } catch (e) {
       // Restricted pages (chrome://, web store) — silently skip.
