@@ -118,6 +118,33 @@ test("recent-modal does not break the 4-default-keys ceiling", () => {
     `Chrome MV3 caps suggested_key at 4. Got ${defaults.length}: ${defaults.join(", ")}`);
 });
 
+test("background.js falls back to a frameless popup window (not chrome.action.openPopup)", () => {
+  // chrome.action.openPopup() opens an icon-anchored widget that doesn't
+  // look anything like the modal. chrome.windows.create({ type: 'popup' })
+  // gives a frameless floating window we can size to match the modal.
+  const bg = readFileSync(join(ROOT, "background.js"), "utf8");
+  // Pin that openRecentModal exists and uses chrome.windows.create.
+  assert.match(bg, /async function openRecentModal\(\)/, "openRecentModal not defined");
+  assert.match(bg, /chrome\.windows\.create\(\s*\{[\s\S]*?type:\s*"popup"/,
+    "background.js must use chrome.windows.create({ type: 'popup' }) for the modal fallback");
+  // openRecentModal must NOT call chrome.action.openPopup() — that was the
+  // inconsistent fallback. (The separate search-tabs command may keep using
+  // openPopup; we scope this assertion to openRecentModal's body.)
+  const mod = bg.match(/async function openRecentModal\(\)[\s\S]*?\n\}\n/);
+  assert.ok(mod, "could not locate openRecentModal body");
+  assert.ok(!/chrome\.action\.openPopup/.test(mod[0]),
+    "openRecentModal must not fall back to chrome.action.openPopup");
+});
+
+test("popup .modal has the cyan border + neon glow to mirror the in-page overlay", () => {
+  const css = readFileSync(join(ROOT, "popup.css"), "utf8");
+  // Find the .modal rule and verify border + box-shadow are present.
+  const m = css.match(/\.modal\s*\{[\s\S]*?\}/);
+  assert.ok(m, "no .modal rule in popup.css");
+  assert.match(m[0], /border:\s*1px solid var\(--cyan\)/, ".modal missing cyan border");
+  assert.match(m[0], /box-shadow:[\s\S]*?var\(--cyan-glow\)/, ".modal missing neon glow box-shadow");
+});
+
 test("content script is excluded from the Chrome Web Store (Chrome blocks it anyway)", () => {
   const cs = manifest.content_scripts[0];
   const excl = cs.exclude_matches || [];
