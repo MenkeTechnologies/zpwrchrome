@@ -45,7 +45,21 @@
       font-style: normal; font-weight: 900; font-display: swap;
       src: url(data:font/woff2;base64,${FONT_ORB}) format('woff2');
     }
-    :host { all: initial !important; font-family: 'Share Tech Mono', 'SF Mono', monospace; }
+    /* `all: initial !important` expands to `font-family: initial !important`
+       and every other longhand. Without !important on font-family below,
+       the !important initial wins the cascade and the body text falls back
+       to the user-agent default (Times New Roman). Mark both !important. */
+    :host {
+      all: initial !important;
+      font-family: 'Share Tech Mono', 'SF Mono', monospace !important;
+      color: #e0f0ff !important;
+    }
+    /* Belt-and-suspenders: descendants set font-family explicitly too so
+       even pathological host-page rules can't pierce the shadow boundary. */
+    .overlay, .modal, .header, .body, .cats, .cat, .list, .row, .footer,
+    .name, .path, .badge, .empty, .hint, .search {
+      font-family: 'Share Tech Mono', 'SF Mono', monospace;
+    }
     .overlay {
       position: fixed; inset: 0;
       background: rgba(5, 5, 10, 0.72);

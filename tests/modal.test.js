@@ -56,6 +56,22 @@ test("content script attaches a closed shadow root (style isolation)", () => {
     "modal must use closed shadow root to keep host CSS out");
 });
 
+test(":host font-family carries !important so all:initial doesn't reset it", () => {
+  // Regression for v0.2.3: `all: initial !important` expanded to
+  // `font-family: initial !important`, and the unprefixed
+  // `font-family: 'Share Tech Mono'` couldn't override it. Result: body
+  // text fell back to user-agent default (Times New Roman) while only
+  // .title and kbd survived because they had explicit font-family.
+  const tmpl = readFileSync(join(ROOT, "modal/content.template.js"), "utf8");
+  const m = tmpl.match(/:host\s*\{[\s\S]*?\}/);
+  assert.ok(m, "no :host rule in modal/content.template.js");
+  // Both `all: initial` and `font-family` must be `!important` so they
+  // don't fight each other.
+  assert.match(m[0], /all:\s*initial\s*!important/);
+  assert.match(m[0], /font-family:[^;]*!important/,
+    ":host font-family must carry !important to beat all:initial !important");
+});
+
 test("modal embeds fonts as base64 data URIs (bypasses host-page CSP)", () => {
   // Pages with strict font-src CSP block chrome-extension:// font URLs.
   // data: URIs are part of the stylesheet bytes — no fetch, no CSP check.
