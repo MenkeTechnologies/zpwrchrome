@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zpwrchrome — cyberpunk recent-tabs switcher</title>
-  <meta name="description" content="Chrome extension: recent-tabs switcher with 29 keyboard shortcuts and a cyberpunk HUD by MenkeTechnologies.">
+  <meta name="description" content="Chrome extension: recent-tabs switcher with 30 keyboard shortcuts and a cyberpunk HUD by MenkeTechnologies.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -183,11 +183,11 @@
 
   <header class="hero">
     <h1>zpwrchrome // recent tabs</h1>
-    <p class="tagline">Cyberpunk Chrome extension. 29 keyboard commands for tab navigation, batch tab ops, and clipboard utilities.<br>Built on the strykelang HUD palette by MenkeTechnologies.</p>
+    <p class="tagline">Cyberpunk Chrome extension. 30 keyboard commands for tab navigation, batch tab ops, and clipboard utilities.<br>Built on the strykelang HUD palette by MenkeTechnologies.</p>
     <div class="stat-row">
-      <div class="stat"><div class="n">29</div><div class="l">commands</div></div>
+      <div class="stat"><div class="n">30</div><div class="l">commands</div></div>
       <div class="stat"><div class="n">4</div><div class="l">default-keyed</div></div>
-      <div class="stat"><div class="n">25</div><div class="l">user-bound</div></div>
+      <div class="stat"><div class="n">26</div><div class="l">user-bound</div></div>
     </div>
     <div class="ctas">
       <a class="btn btn-primary"   href="https://github.com/MenkeTechnologies/zpwrchrome">▸ source on github</a>
@@ -208,7 +208,7 @@
         <div class="feature"><strong>Batch tab ops</strong>close-others, close-right, close-duplicates, reload-all, sort-by-URL, group-by-domain.</div>
         <div class="feature"><strong>Single-tab ops</strong>duplicate, pin, mute, detach, bookmark, copy URL, copy Markdown link.</div>
         <div class="feature"><strong>Numeric jumps</strong>jump-to-1..9 (1-8 nth tab, 9 = last).</div>
-        <div class="feature"><strong>25 configurable shortcuts</strong>Bind anything you want at <code>chrome://extensions/shortcuts</code>.</div>
+        <div class="feature"><strong>26 configurable shortcuts</strong>Bind anything you want at <code>chrome://extensions/shortcuts</code>.</div>
       </div>
     </section>
 
@@ -218,7 +218,7 @@
         <li><code>git clone https://github.com/MenkeTechnologies/zpwrchrome.git</code></li>
         <li>Open <code>chrome://extensions</code> and enable <strong>Developer mode</strong></li>
         <li>Click <strong>Load unpacked</strong>, pick the cloned directory</li>
-        <li>Open <code>chrome://extensions/shortcuts</code> to bind any of the 25 user-configurable commands</li>
+        <li>Open <code>chrome://extensions/shortcuts</code> to bind any of the 26 user-configurable commands</li>
         <li>Optional: <strong>Load unpacked</strong> the <code>theme/</code> subdirectory for the matching browser theme</li>
       </ol>
     </section>
@@ -226,7 +226,7 @@
     <section class="card" id="commands">
       <h2>keyboard commands</h2>
       <p style="color: var(--text-dim); font-size: 12px; margin-bottom: 8px;">
-        Chrome caps default-suggested shortcuts at 4. The remaining 25 commands are bound by the user
+        Chrome caps default-suggested shortcuts at 4. The remaining 26 commands are bound by the user
         in <code style="background: var(--bg-secondary); border: 1px solid var(--border); padding: 1px 6px; border-radius: 2px; color: var(--cyan);">chrome://extensions/shortcuts</code>.
       </p>
       <div class="table-wrap">
@@ -378,6 +378,11 @@
           <td><span class="muted">user-set</span></td>
           <td>Bookmark active tab to Other Bookmarks</td>
         </tr>
+        <tr class="user-set">
+          <td><code>manage-scripts</code></td>
+          <td><span class="muted">user-set</span></td>
+          <td>Open the userscript manager (Tampermonkey-style)</td>
+        </tr>
           </tbody>
         </table>
       </div>
@@ -396,7 +401,7 @@
   </main>
 
   <footer>
-    zpwrchrome v0.3.0 · MIT · MenkeTechnologies ·
+    zpwrchrome v0.4.0 · MIT · MenkeTechnologies ·
     <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a>
   </footer>
 </body>

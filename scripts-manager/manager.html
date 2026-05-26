@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome — userscript manager</title>
+  <link rel="stylesheet" href="manager.css">
+</head>
+<body>
+  <header class="hero">
+    <h1>zpwrchrome // userscripts</h1>
+    <p class="tag">Tampermonkey-equivalent userscript manager. <code>chrome.userScripts</code> API.</p>
+    <div class="actions">
+      <button class="btn btn-primary"   id="new-script">+ new script</button>
+      <button class="btn btn-secondary" id="import-script">import…</button>
+      <input type="file" id="file-input" accept=".user.js,.js" hidden>
+    </div>
+    <div id="error" class="error hidden">
+      <strong>chrome.userScripts unavailable.</strong>
+      Enable <em>Developer mode</em> at <code>chrome://extensions</code> (top-right toggle) and reload this page.
+      <div class="error-detail" id="error-detail"></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>installed</h2>
+      <div id="list" class="script-list">
+        <div class="empty">no scripts installed — click <strong>+ new script</strong></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="editor-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <header class="modal-head">
+        <h3 id="editor-title">edit script</h3>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="editor-cancel">cancel</button>
+          <button class="btn btn-primary"   id="editor-save">save</button>
+        </div>
+      </header>
+      <textarea id="editor" spellcheck="false" wrap="off" placeholder="// ==UserScript==
+// @name        my script
+// @namespace   https://github.com/MenkeTechnologies
+// @version     1.0
+// @match       https://*.example.com/*
+// @run-at      document-idle
+// @grant       GM.setValue
+// @description short description
+// ==/UserScript==
+
+(function () {
+  console.log('hello from my userscript');
+})();"></textarea>
+      <div class="editor-meta" id="editor-meta"></div>
+    </div>
+  </div>
+
+  <script src="manager.js" type="module"></script>
+</body>
+</html>

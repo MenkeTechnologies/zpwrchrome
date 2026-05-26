@@ -339,6 +339,7 @@ test("manifest permissions are all referenced by background.js or popup.js", () 
     bookmarks:      /chrome\.bookmarks\./,
     storage:        /chrome\.storage\./,
     scripting:      /chrome\.scripting\./,
+    userScripts:    /chrome\.userScripts/,
     clipboardWrite: /navigator\.clipboard\.writeText/
   };
   for (const perm of manifest.permissions) {

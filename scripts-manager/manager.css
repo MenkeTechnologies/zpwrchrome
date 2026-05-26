@@ -1,0 +1,254 @@
+/* zpwrchrome — userscript manager. Strykelang HUD palette. */
+
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../fonts/ShareTechMono-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal; font-weight: 600; font-display: swap;
+  src: url('../fonts/Orbitron.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal; font-weight: 900; font-display: swap;
+  src: url('../fonts/Orbitron.woff2') format('woff2');
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+::selection { background: rgba(5, 217, 232, 0.3); color: #fff; }
+
+:root {
+  --bg-primary:   #05050a;
+  --bg-secondary: #0a0a14;
+  --bg-card:      #0d0d1a;
+  --bg-hover:     #12122a;
+  --accent:       #ff2a6d;
+  --accent-glow:  rgba(255, 42, 109, 0.4);
+  --cyan:         #05d9e8;
+  --cyan-glow:    rgba(5, 217, 232, 0.4);
+  --cyan-dim:     rgba(5, 217, 232, 0.15);
+  --magenta:      #d300c5;
+  --green:        #39ff14;
+  --red:          #ff073a;
+  --yellow:       #ffd700;
+  --text:         #e0f0ff;
+  --text-dim:     #7a8ba8;
+  --text-muted:   #3d4f6a;
+  --border:       #1a1a3e;
+}
+
+body {
+  font-family: 'Share Tech Mono', 'SF Mono', monospace;
+  background-color: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(5, 217, 232, 0.04) 0%, transparent 52%),
+    radial-gradient(ellipse at 80% 20%, rgba(211, 0, 197, 0.04) 0%, transparent 50%),
+    linear-gradient(rgba(5, 217, 232, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(5, 217, 232, 0.03) 1px, transparent 1px);
+  background-size: auto, auto, 52px 52px, 52px 52px;
+  background-attachment: fixed;
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+.hero {
+  padding: 28px 32px 22px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #070714, #0a0a14);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+.hero::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--accent), var(--cyan), transparent);
+  opacity: .6;
+}
+
+h1 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px; font-weight: 900; letter-spacing: 3px; text-transform: uppercase;
+  background: linear-gradient(90deg, var(--cyan), #fff, var(--accent), var(--cyan));
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 8px var(--cyan-glow));
+  animation: shimmer 6s linear infinite;
+  margin-bottom: 6px;
+}
+@keyframes shimmer { 0% { background-position: 0% 0%; } 100% { background-position: 300% 0%; } }
+
+.tag { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; }
+.tag code { font-size: 11px; color: var(--cyan); background: var(--bg-secondary); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--border); }
+
+.actions { display: flex; gap: 10px; }
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 2px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+  cursor: pointer; border: 1px solid;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.02) 40%, transparent 60%);
+  transition: all .15s;
+}
+.btn-primary   { background: transparent; color: var(--accent); border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.btn-primary:hover   { background: rgba(255,42,109,.08); box-shadow: 0 0 15px var(--accent-glow); transform: translateY(-1px); }
+.btn-secondary { background: transparent; color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 6px var(--cyan-dim); }
+.btn-secondary:hover { background: rgba(5,217,232,.08); box-shadow: 0 0 12px var(--cyan-glow); transform: translateY(-1px); }
+
+.error {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--red);
+  background: rgba(255, 7, 58, 0.08);
+  color: var(--text);
+  font-size: 12px;
+}
+.error em { color: var(--cyan); font-style: normal; }
+.error code { background: var(--bg-secondary); padding: 1px 6px; border-radius: 2px; color: var(--cyan); }
+.error-detail { margin-top: 6px; font-size: 10.5px; color: var(--text-dim); }
+.hidden { display: none !important; }
+
+main { max-width: 80rem; margin: 0 auto; padding: 24px; }
+
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--cyan);
+  border-radius: 2px;
+  padding: 18px 22px;
+  box-shadow: 0 0 25px var(--cyan-glow);
+  animation: glow 3.5s ease-in-out infinite;
+}
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 14px var(--cyan-glow), 0 0 3px var(--cyan-glow); border-color: var(--cyan); }
+  50%      { box-shadow: 0 0 24px var(--cyan-glow), 0 0 8px rgba(211,0,197,.3); border-color: var(--accent); }
+}
+
+h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px; color: var(--cyan);
+  text-transform: uppercase; letter-spacing: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.script-list { display: flex; flex-direction: column; gap: 8px; }
+.script {
+  display: grid; grid-template-columns: 28px 1fr auto;
+  align-items: center; gap: 14px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cyan);
+}
+.script.disabled { border-left-color: var(--text-muted); opacity: .6; }
+.script:hover { background: var(--bg-hover); }
+
+.script .toggle {
+  width: 28px; height: 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer; position: relative;
+}
+.script .toggle::after {
+  content: ''; position: absolute;
+  top: 1px; left: 1px;
+  width: 12px; height: 12px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: all .15s;
+}
+.script:not(.disabled) .toggle { border-color: var(--green); }
+.script:not(.disabled) .toggle::after { left: 13px; background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+.script .info { min-width: 0; }
+.script .name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px; color: var(--text); font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.script .meta {
+  font-size: 11px; color: var(--text-dim); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.script .matches {
+  font-size: 10.5px; color: var(--text-muted); margin-top: 4px;
+  word-break: break-all;
+}
+
+.script .row-actions { display: flex; gap: 6px; }
+.script .row-actions button {
+  font-size: 10px; padding: 4px 10px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-dim); cursor: pointer;
+  font-family: inherit; letter-spacing: 1px; text-transform: uppercase;
+}
+.script .row-actions button:hover { color: var(--cyan); border-color: var(--cyan); }
+.script .row-actions button.delete:hover { color: var(--red); border-color: var(--red); }
+
+.empty { padding: 24px; color: var(--text-muted); font-style: italic; text-align: center; font-size: 13px; }
+
+/* Editor modal */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(5, 5, 10, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal {
+  width: min(960px, 92vw);
+  height: min(720px, 88vh);
+  background: var(--bg-card);
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 40px var(--cyan-glow), 0 24px 60px rgba(0, 0, 0, .6);
+  display: grid; grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #070714, #0a0a14);
+}
+.modal-head h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--cyan);
+}
+.modal-actions { display: flex; gap: 8px; }
+
+#editor {
+  flex: 1;
+  width: 100%;
+  background: var(--bg-primary);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px; line-height: 1.5;
+  padding: 16px 20px;
+  border: none; outline: none; resize: none;
+  white-space: pre;
+}
+
+.editor-meta {
+  padding: 8px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-size: 11px; color: var(--text-dim);
+  min-height: 28px;
+}
+.editor-meta .ok   { color: var(--green); }
+.editor-meta .bad  { color: var(--red); }
+.editor-meta strong { color: var(--cyan); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan), var(--magenta));
+  border-radius: 4px;
+}

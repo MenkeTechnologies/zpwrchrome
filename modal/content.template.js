@@ -239,8 +239,8 @@
 
   function closeModal() {
     if (!state) return;
-    try { document.removeEventListener("keydown", state.kd, true); } catch {}
-    try { document.removeEventListener("keyup",   state.ku, true); } catch {}
+    try { window.removeEventListener("keydown", state.kd, true); } catch {}
+    try { window.removeEventListener("keyup",   state.ku, true); } catch {}
     try { state.host.remove(); } catch {}
     state = null;
   }
@@ -278,14 +278,18 @@
 
   function wire() {
     const { shadow } = state;
+    // We drive the search value manually from handleKey (all keystrokes are
+    // captured at window level so other extensions can't steal them — Vimium
+    // 'd' for delete was the original report). The search element is left
+    // read-only-ish: it's an <input> for visual continuity but we never
+    // listen for its keydown directly.
     const search = shadow.querySelector(".search");
     search.addEventListener("input", (e) => {
+      // Catches clicks-in-then-pastes via context menu, drag-drop, etc.
       state.filter = e.target.value;
       state.rowIdx = 0;
       render();
     });
-    // Stop the host page from stealing focus while typing.
-    search.addEventListener("keydown", (e) => e.stopPropagation());
     setTimeout(() => search.focus(), 0);
 
     shadow.querySelectorAll(".cat").forEach((el) => {
@@ -302,8 +306,11 @@
 
     state.kd = (e) => handleKey(e);
     state.ku = (e) => handleKeyUp(e);
-    document.addEventListener("keydown", state.kd, true);
-    document.addEventListener("keyup",   state.ku, true);
+    // window (not document) — window-level capture fires before any
+    // document-level extension listener (Vimium, etc.), so we can swallow
+    // keystrokes before other extensions react to them.
+    window.addEventListener("keydown", state.kd, true);
+    window.addEventListener("keyup",   state.ku, true);
   }
 
   function refresh() {
@@ -451,48 +458,77 @@
     render();
   }
 
+  function setFilter(next) {
+    const search = state.shadow.querySelector(".search");
+    search.value = next;
+    state.filter = next;
+    state.rowIdx = 0;
+    renderList();
+  }
+
+  function renderList() { render(); } // alias for clarity in setFilter
+
   function handleKey(e) {
     if (!state) return;
-    // Cmd+1..6 → category jump
+    // Lone modifier presses (Shift, Cmd held down) — ignore.
+    if (e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") return;
+
+    // Cmd/Ctrl + 1..6 → category jump.
     if ((e.metaKey || e.ctrlKey) && /^[1-6]$/.test(e.key)) {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       const n = parseInt(e.key, 10) - 1;
-      if (n < CATEGORIES.length) {
-        state.catIdx = n; state.rowIdx = 0; render();
-      }
+      if (n < CATEGORIES.length) { state.catIdx = n; state.rowIdx = 0; render(); }
       return;
     }
-    // Cmd+E (or Ctrl+E): cycle while open
+    // Cmd/Ctrl + E → cycle MRU.
     if ((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E")) {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       cycle(e.shiftKey ? -1 : +1);
       return;
     }
-    if (e.key === "Escape")     { e.preventDefault(); e.stopPropagation(); closeModal(); return; }
-    if (e.key === "ArrowDown")  { e.preventDefault(); e.stopPropagation(); cycle(+1); return; }
-    if (e.key === "ArrowUp")    { e.preventDefault(); e.stopPropagation(); cycle(-1); return; }
-    if (e.key === "Enter")      { e.preventDefault(); e.stopPropagation(); activate(state.rowIdx); return; }
-    if (e.key === "Delete" || e.key === "Backspace") {
-      // Mac laptops don't have a real Del key (Fn+Backspace is awkward).
-      // Plain Backspace closes the highlighted tab — UNLESS the search
-      // input is focused and non-empty, in which case it deletes a char
-      // (default browser behavior).
-      const search = state.shadow.querySelector(".search");
-      const searchFocused = state.shadow.activeElement === search;
-      if (e.key === "Backspace" && searchFocused && search.value) {
-        return; // let the browser delete a character
+    // Any other modifier combo (Cmd+C, Cmd+A, Cmd+V, etc.) — let the
+    // browser / OS handle it. We don't block clipboard or system shortcuts.
+    if (e.metaKey || e.ctrlKey) return;
+
+    // Past this point the modal owns the key. Stop every other extension
+    // (Vimium, custom hotkeys) from acting on it.
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    if (e.key === "Escape")    { e.preventDefault(); closeModal(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); cycle(+1); return; }
+    if (e.key === "ArrowUp")   { e.preventDefault(); cycle(-1); return; }
+    if (e.key === "Enter")     { e.preventDefault(); activate(state.rowIdx); return; }
+
+    if (e.key === "Backspace") {
+      // If filter has content, trim a character. Otherwise close highlighted tab.
+      e.preventDefault();
+      if (state.filter.length > 0) {
+        setFilter(state.filter.slice(0, -1));
+      } else {
+        const t = currentList()[state.rowIdx];
+        if (t?.kind === "open") {
+          chrome.runtime.sendMessage({ kind: "close-tab", tabId: t.id }, () => refresh());
+        }
       }
-      const items = currentList();
-      const t = items[state.rowIdx];
+      return;
+    }
+    if (e.key === "Delete") {
+      // Fn+Backspace on Mac, real Del elsewhere. Always closes highlighted tab.
+      e.preventDefault();
+      const t = currentList()[state.rowIdx];
       if (t?.kind === "open") {
-        e.preventDefault(); e.stopPropagation();
         chrome.runtime.sendMessage({ kind: "close-tab", tabId: t.id }, () => refresh());
       }
       return;
     }
-    // Letter keys → focus the search box so typing filters even if search isn't focused.
-    if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
-      state.shadow.querySelector(".search").focus();
+
+    // Any printable single-char key → append to filter. e.key is the rendered
+    // character (respects shift, layout). We never let it bubble.
+    if (e.key.length === 1) {
+      e.preventDefault();
+      setFilter(state.filter + e.key);
+      return;
     }
   }
 

@@ -71,21 +71,50 @@ test("initial open pre-selects the previous-MRU row (JetBrains UX)", () => {
     "popup must locate the active tab to compute next-row selection");
 });
 
+test("modal listener attaches at window-capture so other extensions can't steal keys", () => {
+  // Vimium and similar extensions register keydown listeners on `document`.
+  // Window-level capture fires BEFORE document-level capture, so attaching
+  // to window with capture=true lets us swallow keys before Vimium sees them.
+  const tmpl = readFileSync(join(ROOT, "modal/content.template.js"), "utf8");
+  assert.match(tmpl, /window\.addEventListener\(\s*"keydown",[^,]+,\s*true\)/,
+    "modal must attach keydown to window with capture=true");
+  // And NOT to document (we moved away from that).
+  assert.ok(!/document\.addEventListener\(\s*"keydown",/.test(tmpl),
+    "modal must not listen on document — window capture beats document capture");
+});
+
+test("modal calls stopImmediatePropagation to block other extensions", () => {
+  const tmpl = readFileSync(join(ROOT, "modal/content.template.js"), "utf8");
+  // stopPropagation alone isn't enough — stopImmediatePropagation also blocks
+  // other listeners attached to the same target in the same phase.
+  assert.match(tmpl, /stopImmediatePropagation\(\)/,
+    "modal must call stopImmediatePropagation so Vimium etc. can't act on the same key");
+});
+
+test("modal forwards every printable key to the filter (no Vimium leak)", () => {
+  // The handler must accept any single-char e.key (so 'd', 's', 'j', etc.
+  // all go to the filter — none escape to Vimium).
+  const tmpl = readFileSync(join(ROOT, "modal/content.template.js"), "utf8");
+  assert.match(tmpl, /e\.key\.length === 1/,
+    "modal must catch every length-1 key (the printable set)");
+  assert.match(tmpl, /setFilter\(state\.filter \+ e\.key\)/,
+    "modal must append the typed char to the filter");
+});
+
 test("plain Backspace closes the highlighted tab (Mac-laptop friendly)", () => {
   // Mac laptops don't have a Del key; Fn+Backspace is awkward. Backspace
-  // alone must close the tab — but only when the search input isn't busy
-  // editing (focused + non-empty value defers to the browser).
+  // closes the tab when filter is empty; otherwise it trims one char from
+  // the filter.
   const tmpl = readFileSync(join(ROOT, "modal/content.template.js"), "utf8");
-  assert.match(tmpl, /e\.key === "Delete" \|\| e\.key === "Backspace"/,
-    "modal must accept either Del or plain Backspace");
-  assert.match(tmpl, /searchFocused && search\.value/,
-    "Backspace must defer to the search input when it has content");
+  assert.match(tmpl, /e\.key === "Backspace"/, "modal must handle Backspace");
+  assert.match(tmpl, /e\.key === "Delete"/,    "modal must also accept Del");
+  assert.match(tmpl, /state\.filter\.length > 0/,
+    "Backspace must trim filter chars first, only close-tab when filter empty");
   assert.ok(!/Backspace.*e\.shiftKey/.test(tmpl),
     "Shift+Backspace requirement removed — Backspace alone now works");
-  // Popup parity.
+  // Popup parity (popup is in extension context, not subject to Vimium).
   const popup = readFileSync(join(ROOT, "popup.js"), "utf8");
   assert.match(popup, /e\.key === "Delete" \|\| e\.key === "Backspace"/);
-  assert.match(popup, /document\.activeElement === \$q && \$q\.value/);
 });
 
 test(":host font-family carries !important so all:initial doesn't reset it", () => {
@@ -180,7 +209,7 @@ test("content script keyboard nav covers JetBrains-canonical keys", () => {
 
 test("content script renders an interactive search input", () => {
   assert.match(content, /class="search"/);
-  assert.match(content, /\.querySelector\("\.search"\)\.focus\(\)/);
+  assert.match(content, /search\.focus\(\)/, "modal must focus the search input on open");
 });
 
 test("content script uses the strykelang HUD palette", () => {

@@ -10,6 +10,13 @@ import {
   hostnameOf,
   resolveJumpIndex
 } from "./lib/util.js";
+import {
+  parseMetadata,
+  validateUserscript,
+  userscriptId,
+  includeToMatchPattern
+} from "./lib/userscript.js";
+import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 
 const MRU_KEY = "mru";
 
@@ -78,6 +85,12 @@ async function dispatch(command) {
   if (command === "copy-url")             return copyActiveUrl();
   if (command === "copy-title-md")        return copyActiveTitleMd();
   if (command === "bookmark-tab")         return bookmarkActive();
+  if (command === "manage-scripts")       return openScriptsManager();
+}
+
+async function openScriptsManager() {
+  const url = chrome.runtime.getURL("scripts-manager/manager.html");
+  await chrome.tabs.create({ url });
 }
 
 async function getActive() {
@@ -242,6 +255,91 @@ async function bookmarkActive() {
 }
 
 // ---------------------------------------------------------------------------
+// Userscripts (Tampermonkey-style)
+
+const SCRIPTS_KEY = "userscripts";
+const GM_PREFIX = "gm:";  // chrome.storage.local key prefix for per-script GM values
+
+async function readScripts() {
+  const { [SCRIPTS_KEY]: arr } = await chrome.storage.local.get(SCRIPTS_KEY);
+  return Array.isArray(arr) ? arr : [];
+}
+
+async function writeScripts(scripts) {
+  await chrome.storage.local.set({ [SCRIPTS_KEY]: scripts });
+  await syncUserScripts();
+}
+
+async function syncUserScripts() {
+  if (!chrome.userScripts) return; // permission absent or older Chrome
+  const scripts = await readScripts();
+  // Unregister our existing entries (filter by id prefix to avoid clobbering
+  // anything another extension may have left behind — though chrome.userScripts
+  // is per-extension, the filter is still good hygiene).
+  try {
+    await chrome.userScripts.unregister();
+  } catch (e) {
+    // Throws when dev mode is off — surface in storage so the manager can show it.
+    await chrome.storage.local.set({ "userScripts.error": e.message || String(e) });
+    return;
+  }
+  await chrome.storage.local.remove("userScripts.error");
+
+  const registrations = [];
+  for (const s of scripts) {
+    if (!s.enabled) continue;
+    const meta = parseMetadata(s.src);
+    if (!meta || validateUserscript(meta).length) continue;
+
+    const matches = meta.matches.length
+      ? meta.matches
+      : meta.includes.map(includeToMatchPattern).filter(Boolean);
+    if (!matches.length) continue;
+
+    const info = {
+      script: {
+        id: userscriptId(meta),
+        name: meta.name,
+        namespace: meta.namespace,
+        version: meta.version,
+        description: meta.description,
+        author: meta.author,
+        grants: meta.grants,
+        matches: matches,
+        excludes: meta.excludes
+      },
+      version: chrome.runtime.getManifest().version,
+      scriptHandler: "zpwrchrome",
+      scriptMetaStr: (s.src.match(/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/) || [""])[0]
+    };
+
+    const shim = GM_SHIM_SOURCE.replace("__GM_INFO_JSON__", JSON.stringify(info));
+    const code = `(function () {\n${shim}\ntry {\n${s.src}\n} catch (e) { console.error("[zpwrchrome userscript]", ${JSON.stringify(meta.name)}, e); }\n}).call(window);`;
+
+    registrations.push({
+      id: userscriptId(meta),
+      matches,
+      excludeMatches: meta.excludes,
+      js: [{ code }],
+      runAt: meta.runAt.replace(/-/g, "_"), // chrome wants document_idle etc.
+      world: "USER_SCRIPT",
+      allFrames: false
+    });
+  }
+
+  if (registrations.length) {
+    try {
+      await chrome.userScripts.register(registrations);
+    } catch (e) {
+      await chrome.storage.local.set({ "userScripts.error": e.message || String(e) });
+    }
+  }
+}
+
+chrome.runtime.onInstalled.addListener(syncUserScripts);
+chrome.runtime.onStartup.addListener(syncUserScripts);
+
+// ---------------------------------------------------------------------------
 // Popup data API
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -269,6 +367,111 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg?.kind === "close-tab") {
     chrome.tabs.remove(msg.tabId).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
+  // --- Userscript manager API ---
+  if (msg?.kind === "scripts.list") {
+    Promise.all([readScripts(), chrome.storage.local.get("userScripts.error")])
+      .then(([scripts, err]) => sendResponse({ ok: true, scripts, error: err["userScripts.error"] || null }));
+    return true;
+  }
+  if (msg?.kind === "scripts.save") {
+    (async () => {
+      const all = await readScripts();
+      const incoming = msg.script;
+      const meta = parseMetadata(incoming.src);
+      const errors = validateUserscript(meta);
+      if (errors.length) { sendResponse({ ok: false, errors }); return; }
+      incoming.id = incoming.id || userscriptId(meta);
+      incoming.name = meta.name;
+      incoming.updatedAt = Date.now();
+      const idx = all.findIndex((s) => s.id === incoming.id);
+      if (idx >= 0) all[idx] = { ...all[idx], ...incoming };
+      else { incoming.enabled = incoming.enabled !== false; all.push(incoming); }
+      await writeScripts(all);
+      sendResponse({ ok: true, script: incoming });
+    })();
+    return true;
+  }
+  if (msg?.kind === "scripts.delete") {
+    (async () => {
+      const all = (await readScripts()).filter((s) => s.id !== msg.id);
+      await writeScripts(all);
+      // Drop per-script storage too.
+      await chrome.storage.local.remove(GM_PREFIX + msg.id);
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+  if (msg?.kind === "scripts.toggle") {
+    (async () => {
+      const all = await readScripts();
+      const s = all.find((x) => x.id === msg.id);
+      if (s) s.enabled = !!msg.enabled;
+      await writeScripts(all);
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+
+  // --- GM.* shim handlers (from inside userscripts) ---
+  if (msg?.kind === "gm:getValue") {
+    chrome.storage.local.get(GM_PREFIX + msg.script).then((bag) => {
+      const map = bag[GM_PREFIX + msg.script] || {};
+      sendResponse({ ok: true, value: map[msg.key] });
+    });
+    return true;
+  }
+  if (msg?.kind === "gm:setValue") {
+    (async () => {
+      const key = GM_PREFIX + msg.script;
+      const bag = await chrome.storage.local.get(key);
+      const map = bag[key] || {};
+      map[msg.key] = msg.value;
+      await chrome.storage.local.set({ [key]: map });
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+  if (msg?.kind === "gm:deleteValue") {
+    (async () => {
+      const key = GM_PREFIX + msg.script;
+      const bag = await chrome.storage.local.get(key);
+      const map = bag[key] || {};
+      delete map[msg.key];
+      await chrome.storage.local.set({ [key]: map });
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+  if (msg?.kind === "gm:listValues") {
+    chrome.storage.local.get(GM_PREFIX + msg.script).then((bag) => {
+      const map = bag[GM_PREFIX + msg.script] || {};
+      sendResponse({ ok: true, keys: Object.keys(map) });
+    });
+    return true;
+  }
+  if (msg?.kind === "gm:setClipboard") {
+    writeClipboard(msg.text).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  if (msg?.kind === "gm:openInTab") {
+    chrome.tabs.create({ url: msg.url, active: !!msg.active })
+      .then((t) => sendResponse({ ok: true, tabId: t.id }));
+    return true;
+  }
+  if (msg?.kind === "gm:notification") {
+    if (chrome.notifications) {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: msg.title || "zpwrchrome userscript",
+        message: msg.text || ""
+      }, () => sendResponse({ ok: true }));
+    } else {
+      sendResponse({ ok: false });
+    }
     return true;
   }
 });

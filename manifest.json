@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "zpwrchrome — Hyper Tab Switcher",
   "short_name": "zpwrchrome",
-  "version": "0.3.0",
-  "description": "Recent-tabs switcher with 28 keyboard shortcuts and JetBrains-style Cmd+E modal. Cyberpunk HUD by MenkeTechnologies.",
+  "version": "0.4.0",
+  "description": "Recent-tabs switcher (JetBrains-style Cmd+E) + Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
   "minimum_chrome_version": "127",
@@ -15,8 +15,14 @@
     "bookmarks",
     "storage",
     "scripting",
+    "userScripts",
     "clipboardWrite"
   ],
+
+  "options_ui": {
+    "page": "scripts-manager/manager.html",
+    "open_in_tab": true
+  },
   "host_permissions": ["<all_urls>"],
 
   "background": {
@@ -116,6 +122,8 @@
     "group-by-domain":     { "description": "Group tabs in current window by domain (Chrome tab groups)" },
     "copy-url":            { "description": "Copy active tab URL to clipboard" },
     "copy-title-md":       { "description": "Copy active tab as Markdown link" },
-    "bookmark-tab":        { "description": "Bookmark active tab to Other Bookmarks" }
+    "bookmark-tab":        { "description": "Bookmark active tab to Other Bookmarks" },
+
+    "manage-scripts":      { "description": "Open the userscript manager (Tampermonkey-style)" }
   }
 }
