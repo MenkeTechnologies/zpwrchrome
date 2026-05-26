@@ -6,3 +6,13 @@
 node_modules/
 *.log
 .DS_Store
+
+# Chrome auto-generates Cached Theme.pak inside an unpacked theme directory
+# when it loads the theme. Source has the SVGs + manifest; the .pak is
+# rebuildable.
+theme/Cached Theme.pak
+*.pak
+
+# Artifacts produced by CI zip-pack step.
+zpwrchrome.zip
+zpwrchrome-theme.zip

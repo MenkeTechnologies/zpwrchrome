@@ -2,7 +2,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 
@@ -124,6 +124,15 @@ test("theme SVG sources exist next to every theme PNG", () => {
   for (const rel of Object.values(tm.theme.images)) {
     const svg = join(THEME, rel.replace(/\.png$/, ".svg"));
     assert.ok(existsSync(svg), `missing SVG source: ${svg}`);
+  }
+});
+
+test("no Chrome runtime artifacts (Cached Theme.pak) are tracked", () => {
+  // Chrome auto-generates `theme/Cached Theme.pak` inside an unpacked theme
+  // directory the moment the theme is loaded. It's a binary cache; ours
+  // bled into a prior commit before .gitignore caught up.
+  for (const e of readdirSync(THEME)) {
+    assert.ok(!/\.pak$/.test(e), `Chrome cache artifact must not ship: ${e}`);
   }
 });
 
