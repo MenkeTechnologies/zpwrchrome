@@ -84,7 +84,27 @@ async function refreshLog() {
   const resp = await send({ kind: "scripts.firelog" });
   logEntries = resp?.log || [];
   renderLog();
+  updateLogCount();
 }
+
+function updateLogCount() {
+  const tab = document.querySelector('.tab[data-tab="log"]');
+  if (!tab) return;
+  tab.textContent = logEntries.length > 0 ? `Run Log (${logEntries.length})` : "Run Log";
+}
+
+// Live update: refresh the log whenever the SW writes a new entry.
+// This way the Run Log tab updates as soon as a script fires, no
+// manual refresh needed.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes["userScripts.fireLog"]) {
+    refreshLog();
+  }
+});
+
+// Pull once on load so the count badge is accurate before any firing.
+refreshLog();
 
 function renderLog() {
   const f = $logFilter.value.trim().toLowerCase();

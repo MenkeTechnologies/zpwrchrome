@@ -365,6 +365,23 @@ test("GM shim swallows sendMessage promise rejections (SW-lifecycle races)", () 
     "gm:fire beacon must use the callback form, not the Promise form");
 });
 
+test("scripts.list trusts the live chrome.userScripts presence over stored mode", () => {
+  // Bug v0.4.5: storage "userScripts.mode" was set to "fallback" on the
+  // first load (before Allow User Scripts was toggled on). After the user
+  // enabled the toggle + reloaded, chrome.userScripts WAS defined but the
+  // dashboard still rendered "fallback" because it read the stale storage.
+  const bg = read("background.js");
+  const sec = bg.match(/msg\?\.kind === "scripts\.list"[\s\S]*?return true;/);
+  assert.ok(sec, "scripts.list handler not found");
+  assert.match(sec[0], /const native = !!chrome\.userScripts/,
+    "scripts.list must derive native from the LIVE API check");
+  // syncUserScripts on success must write "native" + clear stale error.
+  assert.match(bg, /chrome\.storage\.local\.set\(\{\s*"userScripts\.mode":\s*"native"\s*\}\)/,
+    "syncUserScripts must set mode to 'native' when chrome.userScripts is available");
+  assert.match(bg, /chrome\.storage\.local\.remove\("userScripts\.error"\)/,
+    "syncUserScripts must clear the stale error key on native-mode success");
+});
+
 test("background.js logs fires from fallbackInject (not just gm:fire beacon)", () => {
   // In fallback mode the SW knows what's about to fire; logging directly
   // avoids the race where the userscript's sendMessage arrives after SW

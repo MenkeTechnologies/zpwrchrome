@@ -266,9 +266,11 @@ const FIRE_LOG_CAP = 200;
 async function appendFireLog(entry) {
   const bag = await chrome.storage.local.get(FIRE_LOG_KEY);
   const log = Array.isArray(bag[FIRE_LOG_KEY]) ? bag[FIRE_LOG_KEY] : [];
-  log.unshift({ when: Date.now(), ...entry });
+  const final = { when: Date.now(), ...entry };
+  log.unshift(final);
   if (log.length > FIRE_LOG_CAP) log.length = FIRE_LOG_CAP;
   await chrome.storage.local.set({ [FIRE_LOG_KEY]: log });
+  console.info("[zpwrchrome] fire logged:", final.mode, final.name || final.script, "→", final.url);
 }
 
 async function readScripts() {
@@ -302,10 +304,16 @@ async function configureUserScriptsWorld() {
 async function syncUserScripts() {
   if (!chrome.userScripts) {
     await chrome.storage.local.set({
-      "userScripts.error": "chrome.userScripts API not available — Chrome 120+ + Developer mode required"
+      "userScripts.error": "chrome.userScripts API not available — Chrome 120+ + Developer mode + per-extension 'Allow User Scripts' toggle required",
+      "userScripts.mode":  "fallback"
     });
     return { registered: 0, error: "API unavailable" };
   }
+
+  // Native mode is live. Clear any stale "fallback" mode + error key from
+  // a prior load when the API was unavailable.
+  await chrome.storage.local.set({ "userScripts.mode": "native" });
+  await chrome.storage.local.remove("userScripts.error");
 
   await configureUserScriptsWorld();
 
@@ -552,15 +560,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "scripts.list") {
     Promise.all([
       readScripts(),
-      chrome.storage.local.get(["userScripts.error", "userScripts.lastSync", "userScripts.mode"])
-    ]).then(([scripts, meta]) => sendResponse({
-      ok: true,
-      scripts,
-      error: meta["userScripts.error"] || null,
-      lastSync: meta["userScripts.lastSync"] || null,
-      mode: meta["userScripts.mode"] || (chrome.userScripts ? "native" : "fallback"),
-      native: !!chrome.userScripts
-    }));
+      chrome.storage.local.get(["userScripts.error", "userScripts.lastSync"])
+    ]).then(([scripts, meta]) => {
+      // Trust the LIVE API check, not the (possibly stale) storage value.
+      // If chrome.userScripts is defined now, we're in native mode period —
+      // even if some prior load wrote "fallback" to storage.
+      const native = !!chrome.userScripts;
+      sendResponse({
+        ok: true,
+        scripts,
+        error: native ? null : (meta["userScripts.error"] || null),
+        lastSync: meta["userScripts.lastSync"] || null,
+        mode: native ? "native" : "fallback",
+        native
+      });
+    });
     return true;
   }
 
