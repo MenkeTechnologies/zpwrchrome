@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install librsvg (for theme/icon image checks)
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
+
+      - name: Setup Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Show versions
+        run: |
+          node --version
+          npm --version
+          bash --version | head -1
+          rsvg-convert --version
+
+      - name: Validate JSON syntax
+        run: |
+          node -e 'JSON.parse(require("fs").readFileSync("manifest.json","utf8"))'
+          node -e 'JSON.parse(require("fs").readFileSync("theme/manifest.json","utf8"))'
+          node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'
+
+      - name: Static syntax check
+        run: |
+          node --check background.js
+          node --check popup.js
+          node --check lib/util.js
+          node --check scripts/gen.mjs
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify generator is idempotent (doc-drift guard)
+        run: |
+          scripts/gen.sh
+          git diff --exit-code -- README.md docs/index.html
+
+      - name: Pack extension zip (artifact)
+        if: matrix.node == '22'
+        run: |
+          zip -r zpwrchrome.zip \
+            manifest.json background.js popup.html popup.css popup.js \
+            lib/ icons/ \
+            -x '*.DS_Store'
+          zip -r zpwrchrome-theme.zip theme/ -x '*.DS_Store' '*.svg'
+
+      - name: Upload extension artifact
+        if: matrix.node == '22'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zpwrchrome-unpacked
+          path: |
+            zpwrchrome.zip
+            zpwrchrome-theme.zip
+          retention-days: 14

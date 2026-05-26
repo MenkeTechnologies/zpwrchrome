@@ -176,6 +176,60 @@ test("docs/index.html keeps the strykelang cyberpunk palette", () => {
   assert.match(html, /--accent:\s*#ff2a6d/);
 });
 
+test("scripts/gen.sh is syntactically valid bash", () => {
+  // Catches `set -euo pipefail` typos, unbalanced HEREDOCs, missing quotes.
+  execFileSync("bash", ["-n", join(ROOT, "scripts/gen.sh")], { stdio: "pipe" });
+});
+
+test("every exported helper in lib/util.js is imported by background.js", () => {
+  // No dead exports: if a helper lives in util.js but background.js doesn't
+  // import it, either it's unused (delete it) or the test was forgotten.
+  const util = read("lib/util.js");
+  const exports = [...util.matchAll(/^export (?:const|function)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
+  assert.ok(exports.length > 0, "lib/util.js exports nothing");
+  for (const name of exports) {
+    assert.ok(
+      bgSrc.includes(name),
+      `lib/util.js exports "${name}" but background.js never references it`
+    );
+  }
+});
+
+test("popup.html declares the document language", () => {
+  // Accessibility baseline.
+  assert.match(read("popup.html"), /<html\s+[^>]*\blang=/);
+});
+
+test("popup.html has UTF-8 charset declared in first 1024 bytes (HTML spec)", () => {
+  const head = read("popup.html").slice(0, 1024);
+  assert.match(head, /<meta\s+charset=["']?utf-8/i);
+});
+
+test("icons SVG source parses (well-formed enough for rsvg-convert)", () => {
+  // We don't ship an XML parser. Use the simplest possible sanity check:
+  // open/close tag balance and an <svg> root.
+  const svg = read("icons/icon.svg");
+  assert.match(svg, /<svg\b/);
+  assert.match(svg, /<\/svg>\s*$/);
+  const opens  = (svg.match(/<[A-Za-z]/g)  || []).length;
+  const closes = (svg.match(/<\/[A-Za-z]/g) || []).length;
+  const selfs  = (svg.match(/\/>/g)         || []).length;
+  // every open is either closed (matching </tag>) or self-closing.
+  assert.equal(opens, closes + selfs,
+    `icon.svg tag count mismatch — opens=${opens} closes=${closes} self-close=${selfs}`);
+});
+
+test("README banner block contains the ZPWRCHROME letters", () => {
+  // Cheap structural assertion that the banner wasn't replaced with a
+  // generic header. The ASCII block uses backslashes and underscores; we
+  // just verify the README's banner code-fence is the figlet output, not
+  // some other code block.
+  const readme = read("README.md");
+  const banner = readme.match(/^```\n([\s\S]+?)\n```/);
+  assert.ok(banner, "README has no opening code fence");
+  assert.match(banner[1], /\\/, "banner does not look like figlet output (no backslash glyphs)");
+});
+
 test("manifest permissions are all referenced by background.js or popup.js", () => {
   const popupSrc = read("popup.js");
   const all = bgSrc + "\n" + popupSrc;

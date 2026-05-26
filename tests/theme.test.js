@@ -80,3 +80,68 @@ test("theme version uses 1-4 dot-separated 0-65535 ints (Chrome's version rule)"
     assert.ok(Number.isInteger(n) && n >= 0 && n <= 65535, `version part "${p}" out of range`);
   }
 });
+
+test("theme declares no permissions / action / background (Chrome rejects mixed manifests)", () => {
+  // A Chrome theme must be a pure theme — no API surface.
+  assert.equal(tm.permissions, undefined, "theme must not declare permissions");
+  assert.equal(tm.host_permissions, undefined, "theme must not declare host_permissions");
+  assert.equal(tm.content_scripts, undefined, "theme must not declare content_scripts");
+  assert.equal(tm.commands, undefined, "theme must not declare commands");
+});
+
+test("theme version tracks extension version (same release line)", () => {
+  // If the extension version bumps but the theme doesn't, users won't get the
+  // updated theme on auto-update. We enforce version parity at the major.minor
+  // level — patch may drift if only one side has a fix.
+  const extVersion = JSON.parse(readFileSync(join(ROOT, "manifest.json"), "utf8")).version;
+  const [extMaj, extMin] = extVersion.split(".");
+  const [thMaj, thMin]   = tm.version.split(".");
+  assert.equal(thMaj, extMaj, `theme major ${thMaj} ≠ extension major ${extMaj}`);
+  assert.equal(thMin, extMin, `theme minor ${thMin} ≠ extension minor ${extMin}`);
+});
+
+test("theme PNGs match their declared resolution", () => {
+  // Pin the dimensions we documented in README/theme/README.md so a silent
+  // re-render at the wrong size can't ship.
+  const expected = {
+    "images/theme_ntp_background.png": [1920, 1200],
+    "images/theme_frame.png":          [1920,  120],
+    "images/theme_toolbar.png":        [1920,   80]
+  };
+  for (const [rel, [w, h]] of Object.entries(expected)) {
+    const buf = readFileSync(join(THEME, rel));
+    // PNG IHDR: signature(8) + length(4) + type(4) + width(4) + height(4)
+    const width  = buf.readUInt32BE(16);
+    const height = buf.readUInt32BE(20);
+    assert.equal(width,  w, `${rel} width ${width} ≠ ${w}`);
+    assert.equal(height, h, `${rel} height ${height} ≠ ${h}`);
+  }
+});
+
+test("theme SVG sources exist next to every theme PNG", () => {
+  // Doc-anchor: theme/README.md instructs regenerating PNGs from SVGs. If a
+  // PNG ships without its SVG source, future regen impossible.
+  for (const rel of Object.values(tm.theme.images)) {
+    const svg = join(THEME, rel.replace(/\.png$/, ".svg"));
+    assert.ok(existsSync(svg), `missing SVG source: ${svg}`);
+  }
+});
+
+test("theme palette anchors match popup.css palette anchors (cross-asset consistency)", () => {
+  // The marketing pitch is "the rest of the browser matches the popup."
+  // Verify the load-bearing color slots in both files agree on hex values.
+  const popupCss = readFileSync(join(ROOT, "popup.css"), "utf8");
+  const c = tm.theme.colors;
+  const pairs = [
+    ["--bg-primary",   "#05050a", c.frame,          [5, 5, 10]],
+    ["--cyan",         "#05d9e8", c.ntp_link,       [5, 217, 232]],
+    ["--accent",       "#ff2a6d", c.ntp_header,     [255, 42, 109]],
+    ["--bg-secondary", "#0a0a14", c.toolbar,        [10, 10, 20]],
+  ];
+  for (const [cssVar, hex, themeRgb, expected] of pairs) {
+    const re = new RegExp(`${cssVar}:\\s*${hex}`, "i");
+    assert.match(popupCss, re, `popup.css missing ${cssVar}: ${hex}`);
+    assert.deepEqual(themeRgb, expected,
+      `theme color for ${cssVar} (${hex}) ≠ ${JSON.stringify(expected)}; got ${JSON.stringify(themeRgb)}`);
+  }
+});
