@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 80">
+  <defs>
+    <linearGradient id="tbGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a0a14"/>
+      <stop offset="100%" stop-color="#0d0d1a"/>
+    </linearGradient>
+    <pattern id="tbGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#05d9e8" stroke-width="1" stroke-opacity="0.04"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="80" fill="url(#tbGrad)"/>
+  <rect width="1920" height="80" fill="url(#tbGrid)"/>
+</svg>

@@ -1,0 +1,8 @@
+# Override the global gitignore: `docs/` here is the published landing page,
+# not a build artifact.
+!docs/
+!docs/*
+
+node_modules/
+*.log
+.DS_Store

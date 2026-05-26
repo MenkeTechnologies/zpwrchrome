@@ -157,12 +157,23 @@ test("popup.css keeps the strykelang cyberpunk palette variables", () => {
   assert.match(css, /--accent:\s*#ff2a6d/);
 });
 
-test("README is in sync with manifest (scripts/gen-readme.sh is idempotent)", () => {
-  const before = read("README.md");
-  execFileSync("bash", [join(ROOT, "scripts/gen-readme.sh")], { stdio: "pipe" });
-  const after = read("README.md");
-  assert.equal(after, before,
-    "README.md drifted from manifest.json — re-run scripts/gen-readme.sh and commit");
+test("README and docs/index.html are in sync with manifest (scripts/gen.sh is idempotent)", () => {
+  const readmeBefore = read("README.md");
+  const docsBefore   = read("docs/index.html");
+  execFileSync("bash", [join(ROOT, "scripts/gen.sh")], { stdio: "pipe" });
+  assert.equal(read("README.md"),       readmeBefore, "README.md drifted — re-run scripts/gen.sh and commit");
+  assert.equal(read("docs/index.html"), docsBefore,   "docs/index.html drifted — re-run scripts/gen.sh and commit");
+});
+
+test("docs/index.html keeps the strykelang cyberpunk palette", () => {
+  // Same guard as popup.css — the landing page must not silently lose the
+  // visual identity it advertises.
+  const html = read("docs/index.html");
+  for (const v of ["--cyan", "--accent", "--magenta", "--bg-card", "--cyan-glow"]) {
+    assert.ok(html.includes(v), `docs/index.html missing palette variable ${v}`);
+  }
+  assert.match(html, /--cyan:\s*#05d9e8/);
+  assert.match(html, /--accent:\s*#ff2a6d/);
 });
 
 test("manifest permissions are all referenced by background.js or popup.js", () => {

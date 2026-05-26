@@ -15,6 +15,7 @@ Built by [MenkeTechnologies](https://github.com/MenkeTechnologies). Manifest V3.
 - Window-level batch ops: close-others, close-right, close-duplicates, reload-all, sort-by-URL, group-by-domain
 - Single-tab ops: duplicate, pin, mute, detach to new window, bookmark, copy URL, copy Markdown link
 - Numeric tab jumps 1-9 (1-8 = nth tab; 9 = last tab)
+- Companion Chrome **theme** in [`theme/`](theme/) that paints the rest of the browser with the same palette
 
 ## Install (unpacked)
 
@@ -23,6 +24,8 @@ Built by [MenkeTechnologies](https://github.com/MenkeTechnologies). Manifest V3.
 3. Enable **Developer mode** (top-right)
 4. Click **Load unpacked**, pick the cloned directory
 5. Open `chrome://extensions/shortcuts` to bind any of the 24 user-configurable commands
+
+To also install the matching theme, **Load unpacked** the `theme/` subdirectory.
 
 ## Keyboard commands
 
@@ -69,8 +72,10 @@ bound by the user from `chrome://extensions/shortcuts`. **4 ship with default ke
 | `background.js` | Service worker: MRU tracker, command dispatcher |
 | `lib/util.js` | Pure helpers (MRU push/drop/step, hostname parse, jump-index) — unit-testable in node |
 | `popup.html` / `popup.css` / `popup.js` | Cyberpunk HUD popup (palette from strykelang `docs/hud-static.css`) |
+| `docs/index.html` | Landing page styled with the strykelang palette |
+| `theme/` | Companion Chrome theme (separate extension) |
 | `icons/icon.svg` | Source SVG; PNGs rasterized via `rsvg-convert` |
-| `scripts/gen-readme.sh` | Regenerate this README from `manifest.json` |
+| `scripts/gen.sh` | Regenerate README and landing page from `manifest.json` |
 | `tests/` | `node:test` suite — static manifest invariants + pure-logic unit tests |
 | `package.json` | `npm test` script |
 
@@ -86,17 +91,18 @@ The suite runs under stock Node ≥ 20 with no external dependencies. It covers:
   default shortcuts, command-to-handler coverage in `background.js`, every
   manifest-declared file exists with correct PNG dimensions, popup HTML has no
   inline event handlers (MV3 CSP), cyberpunk palette intact, every declared
-  permission is actually used, and `README.md` matches a fresh
-  `scripts/gen-readme.sh` run (doc-drift guard).
+  permission is actually used, both `README.md` and `docs/index.html` match a
+  fresh `scripts/gen.sh` run (doc-drift guard).
 - **Pure logic**: `lib/util.js` helpers — MRU stack behavior, hostname parse,
   numeric tab-jump resolution.
 
-## Regenerating this README
+## Regenerating docs
 
-Command list and counts are derived from `manifest.json`. To refresh:
+Command list, counts, and the landing-page table are derived from
+`manifest.json`. To refresh:
 
 ```sh
-scripts/gen-readme.sh
+scripts/gen.sh
 ```
 
 ## License
