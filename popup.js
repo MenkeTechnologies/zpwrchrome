@@ -126,9 +126,17 @@ function renderList() {
   $list.querySelectorAll(".row img.favicon").forEach((img) => {
     img.addEventListener("error", () => { img.style.visibility = "hidden"; });
   });
+  // mouseenter fires on scroll-induced position shifts too. Only honor it
+  // when the user actually moved the mouse — otherwise scrollIntoView
+  // clobbers keyboard nav (ArrowDown apparently broken with many items).
+  if (!$list._mouseMoveBound) {
+    $list.addEventListener("mousemove", () => { state.lastMouseMove = Date.now(); }, { passive: true });
+    $list._mouseMoveBound = true;
+  }
   $list.querySelectorAll(".row").forEach((el) => {
     el.addEventListener("click", () => activate(Number(el.dataset.idx)));
     el.addEventListener("mouseenter", () => {
+      if (!state.lastMouseMove || Date.now() - state.lastMouseMove > 100) return;
       state.rowIdx = Number(el.dataset.idx);
       $list.querySelectorAll(".row").forEach((r) =>
         r.classList.toggle("sel", Number(r.dataset.idx) === state.rowIdx));

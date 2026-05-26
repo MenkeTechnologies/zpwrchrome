@@ -453,9 +453,20 @@
     list.querySelectorAll(".row img.favicon").forEach((img) => {
       img.addEventListener("error", () => { img.style.visibility = "hidden"; });
     });
+    // Track real mouse movement on the list. mouseenter alone fires on
+    // scroll (when scrollIntoView shifts a row under a stationary cursor)
+    // — without this guard, every ArrowDown press jumps selection back to
+    // whatever row happens to be under the mouse.
+    if (!list._mouseMoveBound) {
+      list.addEventListener("mousemove", () => { state.lastMouseMove = Date.now(); }, { passive: true });
+      list._mouseMoveBound = true;
+    }
     list.querySelectorAll(".row").forEach((el) => {
       el.addEventListener("click", () => activate(Number(el.dataset.idx)));
       el.addEventListener("mouseenter", () => {
+        // Only honor mouseenter if the user actually moved the mouse just
+        // now — not if scroll-into-view shifted the row under the cursor.
+        if (!state.lastMouseMove || Date.now() - state.lastMouseMove > 100) return;
         state.rowIdx = Number(el.dataset.idx);
         list.querySelectorAll(".row").forEach((r) =>
           r.classList.toggle("sel", Number(r.dataset.idx) === state.rowIdx));

@@ -293,6 +293,24 @@ test("Run Log tab shows a live count badge", () => {
 });
 
 // ============================================================================
+// Arrow keys broke with many items because scrollIntoView triggers
+// mouseenter on the row that lands under a stationary cursor — which then
+// reset state.rowIdx to the mouse-row, undoing the keyboard nav.
+// Both popup and modal must gate mouseenter on a recent real mousemove.
+// ============================================================================
+test("hover-selection is gated on real mousemove (arrow keys + many items)", () => {
+  for (const file of ["popup.js", "modal/content.template.js"]) {
+    const src = read(file);
+    // Must listen for mousemove on the list and stash the timestamp.
+    assert.match(src, /addEventListener\("mousemove"[\s\S]{0,200}lastMouseMove/,
+      `${file}: must track real mousemove timestamps on the list`);
+    // Must gate mouseenter on a recent mousemove (within 100ms-ish).
+    assert.match(src, /Date\.now\(\)\s*-\s*state\.lastMouseMove\s*>\s*\d+/,
+      `${file}: mouseenter must skip when no recent mousemove (scroll-induced)`);
+  }
+});
+
+// ============================================================================
 // Match-pattern semantics — Chrome's spec says `*` scheme = http|https only.
 // Catches future drift where someone widens it to include file/ftp.
 // ============================================================================
