@@ -26,6 +26,7 @@
   <nav class="tabs">
     <button class="tab-add" id="new-script" title="add new userscript">＋</button>
     <button class="tab active"  data-tab="installed">Installed Userscripts</button>
+    <button class="tab"         data-tab="log">Run Log</button>
     <button class="tab"         data-tab="settings">Settings</button>
     <button class="tab"         data-tab="utilities">Utilities</button>
     <button class="tab"         data-tab="help">Help</button>
@@ -68,6 +69,32 @@
       </div>
     </section>
 
+    <!-- ===== Run Log pane ===== -->
+    <section class="pane" id="pane-log">
+      <div class="filterbar">
+        <input type="search" id="log-filter" class="filter" placeholder="filter // script name, url" autocomplete="off">
+        <button class="btn btn-secondary" id="log-refresh">refresh</button>
+        <button class="btn btn-danger"    id="log-clear">clear log</button>
+      </div>
+      <div class="table-wrap">
+        <table class="scripts log-table">
+          <thead>
+            <tr>
+              <th class="num">#</th>
+              <th>When</th>
+              <th>Script</th>
+              <th>URL</th>
+              <th class="tab-col">Tab</th>
+              <th class="frame-col">Frame</th>
+            </tr>
+          </thead>
+          <tbody id="log-list">
+            <tr class="empty-row"><td colspan="6" class="empty">no script firings yet — make sure <strong>Developer mode</strong> is on and the script matches a page you visit</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ===== Settings pane ===== -->
     <section class="pane" id="pane-settings">
       <div class="card">
@@ -75,6 +102,7 @@
         <div class="row-meta"><span class="k">scripts saved</span> <span class="v" id="stat-count">0</span></div>
         <div class="row-meta"><span class="k">total source bytes</span> <span class="v" id="stat-bytes">0</span></div>
         <div class="row-meta"><span class="k">chrome.userScripts API</span> <span class="v" id="stat-api">checking…</span></div>
+        <div class="row-meta"><span class="k">last registration sync</span> <span class="v" id="stat-live">checking…</span></div>
       </div>
       <div class="card">
         <h2>defaults for new scripts</h2>

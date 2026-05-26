@@ -310,6 +310,60 @@ test("every JS source parses (node --check)", () => {
   }
 });
 
+test("background.js configures the USER_SCRIPT world before registering", () => {
+  // Without configureWorld({ messaging: true }) the GM.* shim's
+  // chrome.runtime.sendMessage silently fails inside USER_SCRIPT world,
+  // and some Chrome builds refuse to fire the scripts at all until the
+  // world is configured.
+  const bg = read("background.js");
+  assert.match(bg, /chrome\.userScripts\.configureWorld/,
+    "background.js must call chrome.userScripts.configureWorld");
+  assert.match(bg, /messaging:\s*true/,
+    "configureWorld must enable messaging so the GM.* shim's sendMessage works");
+});
+
+test("background.js verifies registration via getScripts() and surfaces lastSync", () => {
+  // After register, the background must verify with getScripts() and
+  // persist a lastSync object the dashboard can show. This catches the
+  // silent-no-fire case the user hit on example.com.
+  const bg = read("background.js");
+  assert.match(bg, /chrome\.userScripts\.getScripts/,
+    "background.js must call getScripts() to verify the post-register state");
+  assert.match(bg, /userScripts\.lastSync/,
+    "background.js must persist lastSync metadata for the dashboard");
+});
+
+test("userscript run log: GM shim fires a beacon, background appends to a ring buffer", () => {
+  const shim = read("lib/gm-shim.js");
+  assert.match(shim, /kind:\s*"gm:fire"/,
+    "GM shim must send a gm:fire beacon at script load");
+  assert.match(shim, /url:\s*location\.href/,
+    "fire beacon must carry the current URL");
+
+  const bg = read("background.js");
+  assert.match(bg, /msg\?\.kind === "gm:fire"/,
+    "background.js must handle gm:fire");
+  assert.match(bg, /FIRE_LOG_CAP\s*=\s*\d+/,
+    "background.js must cap the fire log size (ring buffer)");
+  assert.match(bg, /msg\?\.kind === "scripts\.firelog"/,
+    "background.js must expose scripts.firelog reader");
+  assert.match(bg, /msg\?\.kind === "scripts\.firelog\.clear"/,
+    "background.js must expose scripts.firelog.clear");
+
+  // Dashboard
+  const html = read("scripts-manager/manager.html");
+  assert.match(html, /data-tab="log"/, "dashboard must have a Run Log tab");
+  assert.match(html, /id="pane-log"/,  "dashboard must have a #pane-log section");
+  assert.match(html, /id="log-list"/,  "dashboard must have a #log-list tbody");
+});
+
+test("background.js omits empty excludeMatches from the registration", () => {
+  // Empty arrays make some Chrome versions reject the whole register call.
+  const bg = read("background.js");
+  assert.match(bg, /if \(meta\.excludes\.length\) reg\.excludeMatches/,
+    "background.js must omit excludeMatches when empty");
+});
+
 test("popup and modal both have a discoverable link to the userscript dashboard", () => {
   // Without a visible entry point, users have to right-click the extension
   // icon → Options. That's not discoverable.
@@ -335,7 +389,7 @@ test("userscript dashboard has Tampermonkey-style structure", () => {
   // 4 tabs (Installed / Settings / Utilities / Help), sortable Name column,
   // table view (not card view), filter input, banner.
   const html = read("scripts-manager/manager.html");
-  for (const tab of ["installed", "settings", "utilities", "help"]) {
+  for (const tab of ["installed", "log", "settings", "utilities", "help"]) {
     const re = new RegExp(`data-tab="${tab}"`);
     assert.match(html, re, `dashboard missing tab: ${tab}`);
     const paneRe = new RegExp(`id="pane-${tab}"`);

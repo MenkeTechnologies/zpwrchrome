@@ -68,7 +68,63 @@ document.querySelectorAll(".tab").forEach((el) => {
     document.querySelectorAll(".pane").forEach((p) => p.classList.remove("active"));
     el.classList.add("active");
     document.getElementById("pane-" + el.dataset.tab).classList.add("active");
+    if (el.dataset.tab === "log") refreshLog();
   });
+});
+
+// ------------------- Run Log -------------------
+const $logList    = document.getElementById("log-list");
+const $logFilter  = document.getElementById("log-filter");
+const $logRefresh = document.getElementById("log-refresh");
+const $logClear   = document.getElementById("log-clear");
+
+let logEntries = [];
+
+async function refreshLog() {
+  const resp = await send({ kind: "scripts.firelog" });
+  logEntries = resp?.log || [];
+  renderLog();
+}
+
+function renderLog() {
+  const f = $logFilter.value.trim().toLowerCase();
+  const rows = logEntries.filter((e) => {
+    if (!f) return true;
+    return (e.name || "").toLowerCase().includes(f)
+        || (e.script || "").toLowerCase().includes(f)
+        || (e.url || "").toLowerCase().includes(f);
+  });
+  if (!rows.length) {
+    $logList.innerHTML = `<tr class="empty-row"><td colspan="6" class="empty">${
+      logEntries.length
+        ? "no matches"
+        : `no script firings yet — make sure <strong>Developer mode</strong> is on and the script matches a page you visit`
+    }</td></tr>`;
+    return;
+  }
+  $logList.innerHTML = rows.map((e, i) => {
+    const d = new Date(e.when);
+    const time = d.toLocaleTimeString() + "." + String(d.getMilliseconds()).padStart(3, "0");
+    const date = d.toLocaleDateString();
+    return `
+      <tr>
+        <td class="num">${i + 1}</td>
+        <td class="ver" title="${escapeHtml(d.toISOString())}">${escapeHtml(date)} <small>${escapeHtml(time)}</small></td>
+        <td class="name">${escapeHtml(e.name || "(unnamed)")} <small>${escapeHtml(e.script || "")}</small></td>
+        <td class="ver"><a class="home-link" href="${escapeHtml(e.url || "")}" target="_blank" rel="noopener">${escapeHtml((e.url || "").slice(0, 80))}</a></td>
+        <td class="ver">${e.tabId ?? "—"}</td>
+        <td class="ver">${e.frame ?? 0}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+$logFilter.addEventListener("input", renderLog);
+$logRefresh.addEventListener("click", refreshLog);
+$logClear.addEventListener("click", async () => {
+  if (!confirm("clear the run log?")) return;
+  await send({ kind: "scripts.firelog.clear" });
+  refreshLog();
 });
 
 // ------------------- Header version -------------------
@@ -92,6 +148,19 @@ async function refresh() {
     if (apiCell) { apiCell.textContent = "available"; apiCell.style.color = "var(--green)"; }
     const diag = document.getElementById("diag-err");
     if (diag) diag.textContent = "(none)";
+  }
+  const live = document.getElementById("stat-live");
+  if (live) {
+    const sync = resp?.lastSync;
+    if (sync) {
+      const t = new Date(sync.at).toLocaleString();
+      live.innerHTML = `<strong style="color:var(--green)">${sync.registered}</strong> registered · <span style="color:var(--text-dim)">${t}</span>`;
+      if (sync.skipped?.length) {
+        live.innerHTML += `<br><span style="color:var(--yellow);font-size:10.5px">${sync.skipped.length} skipped: ${sync.skipped.map(x => x.id + ' (' + x.reason + ')').join('; ')}</span>`;
+      }
+    } else {
+      live.textContent = "no sync yet";
+    }
   }
   render();
   refreshStats();
@@ -318,11 +387,12 @@ document.getElementById("util-export-bundle").addEventListener("click", () => {
   download(blob, "zpwrchrome-userscripts.user.js");
 });
 document.getElementById("util-resync").addEventListener("click", async () => {
-  // No direct re-register endpoint — toggling each enabled script off+on forces it.
-  // Simpler: ask background to re-run its sync by saving an unchanged script.
-  if (!scripts.length) { alert("nothing to re-register"); return; }
-  for (const s of scripts) {
-    await send({ kind: "scripts.toggle", id: s.id, enabled: s.enabled });
+  const r = await send({ kind: "scripts.resync" });
+  if (r?.error) {
+    alert("re-register failed:\n" + r.error);
+  } else {
+    alert("registered " + (r?.registered ?? 0) + " script(s)"
+      + (r?.skipped?.length ? "\nskipped: " + r.skipped.map((s) => s.id + " (" + s.reason + ")").join(", ") : ""));
   }
   refresh();
 });

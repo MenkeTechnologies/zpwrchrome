@@ -259,6 +259,8 @@ async function bookmarkActive() {
 
 const SCRIPTS_KEY = "userscripts";
 const GM_PREFIX = "gm:";  // chrome.storage.local key prefix for per-script GM values
+const FIRE_LOG_KEY = "userScripts.fireLog";
+const FIRE_LOG_CAP = 200;
 
 async function readScripts() {
   const { [SCRIPTS_KEY]: arr } = await chrome.storage.local.get(SCRIPTS_KEY);
@@ -270,43 +272,68 @@ async function writeScripts(scripts) {
   await syncUserScripts();
 }
 
+// chrome.userScripts.configureWorld must be called once per SW lifecycle
+// before any script in the USER_SCRIPT world can use chrome.runtime
+// (messaging is disabled by default). Without this, the GM.* shim's
+// sendMessage calls fail silently and GM.getValue / GM.setValue look dead.
+// We attempt it on every sync — Chrome ignores the call if the world is
+// already configured the same way.
+async function configureUserScriptsWorld() {
+  if (!chrome.userScripts?.configureWorld) return;
+  try {
+    await chrome.userScripts.configureWorld({
+      messaging: true,
+      csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval'; object-src 'self'"
+    });
+  } catch (e) {
+    console.warn("[zpwrchrome] configureWorld failed:", e?.message || e);
+  }
+}
+
 async function syncUserScripts() {
-  if (!chrome.userScripts) return; // permission absent or older Chrome
+  if (!chrome.userScripts) {
+    await chrome.storage.local.set({
+      "userScripts.error": "chrome.userScripts API not available — Chrome 120+ + Developer mode required"
+    });
+    return { registered: 0, error: "API unavailable" };
+  }
+
+  await configureUserScriptsWorld();
+
   const scripts = await readScripts();
-  // Unregister our existing entries (filter by id prefix to avoid clobbering
-  // anything another extension may have left behind — though chrome.userScripts
-  // is per-extension, the filter is still good hygiene).
+  console.info("[zpwrchrome] syncUserScripts: loaded", scripts.length, "saved script(s)");
+
+  // Unregister everything we previously registered.
   try {
     await chrome.userScripts.unregister();
   } catch (e) {
-    // Throws when dev mode is off — surface in storage so the manager can show it.
-    await chrome.storage.local.set({ "userScripts.error": e.message || String(e) });
-    return;
+    const msg = e?.message || String(e);
+    console.error("[zpwrchrome] unregister failed:", msg);
+    await chrome.storage.local.set({ "userScripts.error": "unregister: " + msg });
+    return { registered: 0, error: msg };
   }
   await chrome.storage.local.remove("userScripts.error");
 
   const registrations = [];
+  const skipped = [];
   for (const s of scripts) {
-    if (!s.enabled) continue;
+    if (!s.enabled) { skipped.push({ id: s.id, reason: "disabled" }); continue; }
     const meta = parseMetadata(s.src);
-    if (!meta || validateUserscript(meta).length) continue;
+    if (!meta) { skipped.push({ id: s.id, reason: "no metadata block" }); continue; }
+    const errs = validateUserscript(meta);
+    if (errs.length) { skipped.push({ id: s.id, reason: errs.join(", ") }); continue; }
 
     const matches = meta.matches.length
       ? meta.matches
       : meta.includes.map(includeToMatchPattern).filter(Boolean);
-    if (!matches.length) continue;
+    if (!matches.length) { skipped.push({ id: s.id, reason: "no usable @match" }); continue; }
 
+    const id = userscriptId(meta);
     const info = {
       script: {
-        id: userscriptId(meta),
-        name: meta.name,
-        namespace: meta.namespace,
-        version: meta.version,
-        description: meta.description,
-        author: meta.author,
-        grants: meta.grants,
-        matches: matches,
-        excludes: meta.excludes
+        id, name: meta.name, namespace: meta.namespace, version: meta.version,
+        description: meta.description, author: meta.author,
+        grants: meta.grants, matches, excludes: meta.excludes
       },
       version: chrome.runtime.getManifest().version,
       scriptHandler: "zpwrchrome",
@@ -314,30 +341,67 @@ async function syncUserScripts() {
     };
 
     const shim = GM_SHIM_SOURCE.replace("__GM_INFO_JSON__", JSON.stringify(info));
-    const code = `(function () {\n${shim}\ntry {\n${s.src}\n} catch (e) { console.error("[zpwrchrome userscript]", ${JSON.stringify(meta.name)}, e); }\n}).call(window);`;
+    const code =
+      "(function () {\n" +
+      shim + "\n" +
+      "try {\n" +
+      s.src + "\n" +
+      "} catch (e) { console.error('[zpwrchrome userscript]', " + JSON.stringify(meta.name) + ", e); }\n" +
+      "}).call(window);";
 
-    registrations.push({
-      id: userscriptId(meta),
+    const reg = {
+      id,
       matches,
-      excludeMatches: meta.excludes,
       js: [{ code }],
-      runAt: meta.runAt.replace(/-/g, "_"), // chrome wants document_idle etc.
+      runAt: meta.runAt.replace(/-/g, "_"),  // chrome wants document_idle
       world: "USER_SCRIPT",
       allFrames: false
-    });
+    };
+    // Only include excludeMatches when non-empty — some Chrome versions
+    // reject the registration object outright on an empty array.
+    if (meta.excludes.length) reg.excludeMatches = meta.excludes;
+
+    registrations.push(reg);
   }
 
+  console.info("[zpwrchrome] registering", registrations.length, "script(s); skipped", skipped.length);
+  if (skipped.length) console.info("[zpwrchrome] skipped:", skipped);
+
+  let registered = 0;
   if (registrations.length) {
     try {
       await chrome.userScripts.register(registrations);
+      registered = registrations.length;
     } catch (e) {
-      await chrome.storage.local.set({ "userScripts.error": e.message || String(e) });
+      const msg = e?.message || String(e);
+      console.error("[zpwrchrome] register failed:", msg, "\nfirst registration was:", registrations[0]);
+      await chrome.storage.local.set({ "userScripts.error": "register: " + msg });
+      return { registered: 0, error: msg, skipped };
     }
   }
+
+  // Verify by querying back what's actually live.
+  try {
+    const live = await chrome.userScripts.getScripts();
+    console.info("[zpwrchrome] live scripts after sync:", live.length, live.map((x) => x.id));
+    await chrome.storage.local.set({ "userScripts.lastSync": {
+      at: Date.now(),
+      registered,
+      liveIds: live.map((x) => x.id),
+      skipped
+    }});
+  } catch (e) {
+    console.warn("[zpwrchrome] getScripts verification failed:", e?.message || e);
+  }
+
+  return { registered, skipped };
 }
 
 chrome.runtime.onInstalled.addListener(syncUserScripts);
 chrome.runtime.onStartup.addListener(syncUserScripts);
+// Also sync once at SW startup (top-level await isn't allowed in module
+// service workers, but a fire-and-forget call is fine).
+syncUserScripts();
 
 // ---------------------------------------------------------------------------
 // Popup data API
@@ -377,8 +441,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   // --- Userscript manager API ---
   if (msg?.kind === "scripts.list") {
-    Promise.all([readScripts(), chrome.storage.local.get("userScripts.error")])
-      .then(([scripts, err]) => sendResponse({ ok: true, scripts, error: err["userScripts.error"] || null }));
+    Promise.all([
+      readScripts(),
+      chrome.storage.local.get(["userScripts.error", "userScripts.lastSync"])
+    ]).then(([scripts, meta]) => sendResponse({
+      ok: true,
+      scripts,
+      error: meta["userScripts.error"] || null,
+      lastSync: meta["userScripts.lastSync"] || null
+    }));
+    return true;
+  }
+
+  if (msg?.kind === "scripts.resync") {
+    syncUserScripts().then((r) => sendResponse({ ok: true, ...r }));
     return true;
   }
   if (msg?.kind === "scripts.save") {
@@ -466,6 +542,35 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .then((t) => sendResponse({ ok: true, tabId: t.id }));
     return true;
   }
+  if (msg?.kind === "gm:fire") {
+    (async () => {
+      const bag = await chrome.storage.local.get(FIRE_LOG_KEY);
+      const log = Array.isArray(bag[FIRE_LOG_KEY]) ? bag[FIRE_LOG_KEY] : [];
+      log.unshift({
+        when:   msg.when || Date.now(),
+        script: msg.script,
+        name:   msg.name,
+        url:    msg.url,
+        tabId:  _sender?.tab?.id ?? null,
+        frame:  _sender?.frameId ?? 0
+      });
+      if (log.length > FIRE_LOG_CAP) log.length = FIRE_LOG_CAP;
+      await chrome.storage.local.set({ [FIRE_LOG_KEY]: log });
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+  if (msg?.kind === "scripts.firelog") {
+    chrome.storage.local.get(FIRE_LOG_KEY).then((bag) => {
+      sendResponse({ ok: true, log: bag[FIRE_LOG_KEY] || [] });
+    });
+    return true;
+  }
+  if (msg?.kind === "scripts.firelog.clear") {
+    chrome.storage.local.set({ [FIRE_LOG_KEY]: [] }).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
   if (msg?.kind === "gm:notification") {
     if (chrome.notifications) {
       chrome.notifications.create({
