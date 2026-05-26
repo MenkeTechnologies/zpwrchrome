@@ -1,8 +1,17 @@
 // zpwrchrome — service worker
 // MV3: no persistent globals; state lives in chrome.storage.session.
 
+import {
+  MRU_CAP_DEFAULT,
+  mruPush,
+  mruDrop,
+  mruStep as mruStepPure,
+  mruPrevious,
+  hostnameOf,
+  resolveJumpIndex
+} from "./lib/util.js";
+
 const MRU_KEY = "mru";
-const MRU_CAP = 200;
 
 async function readMru() {
   const { [MRU_KEY]: mru } = await chrome.storage.session.get(MRU_KEY);
@@ -10,21 +19,18 @@ async function readMru() {
 }
 
 async function writeMru(mru) {
-  await chrome.storage.session.set({ [MRU_KEY]: mru.slice(0, MRU_CAP) });
+  await chrome.storage.session.set({ [MRU_KEY]: mru.slice(0, MRU_CAP_DEFAULT) });
 }
 
 async function pushMru(tabId) {
-  if (typeof tabId !== "number") return;
-  const mru = await readMru();
-  const filtered = mru.filter((id) => id !== tabId);
-  filtered.unshift(tabId);
-  await writeMru(filtered);
+  const next = mruPush(await readMru(), tabId);
+  await writeMru(next);
 }
 
 async function dropFromMru(tabId) {
   const mru = await readMru();
-  const filtered = mru.filter((id) => id !== tabId);
-  if (filtered.length !== mru.length) await writeMru(filtered);
+  const next = mruDrop(mru, tabId);
+  if (next.length !== mru.length) await writeMru(next);
 }
 
 chrome.tabs.onActivated.addListener(({ tabId }) => { pushMru(tabId); });
@@ -84,9 +90,8 @@ async function withActive(fn) {
 }
 
 async function switchPreviousTab() {
-  const mru = await readMru();
   const active = await getActive();
-  const prev = mru.find((id) => id !== active?.id);
+  const prev = mruPrevious(await readMru(), active?.id);
   if (typeof prev !== "number") return;
   try {
     const tab = await chrome.tabs.get(prev);
@@ -98,28 +103,22 @@ async function switchPreviousTab() {
 }
 
 async function mruStep(delta) {
-  const mru = await readMru();
-  if (mru.length < 2) return;
   const active = await getActive();
-  const idx = mru.indexOf(active?.id);
-  const next = mru[(idx + delta + mru.length) % mru.length];
-  if (typeof next === "number" && next !== active?.id) {
-    try {
-      const tab = await chrome.tabs.get(next);
-      await chrome.tabs.update(next, { active: true });
-      if (tab.windowId !== active?.windowId) {
-        await chrome.windows.update(tab.windowId, { focused: true });
-      }
-    } catch { await dropFromMru(next); }
-  }
+  const next = mruStepPure(await readMru(), active?.id, delta);
+  if (typeof next !== "number" || next === active?.id) return;
+  try {
+    const tab = await chrome.tabs.get(next);
+    await chrome.tabs.update(next, { active: true });
+    if (tab.windowId !== active?.windowId) {
+      await chrome.windows.update(tab.windowId, { focused: true });
+    }
+  } catch { await dropFromMru(next); }
 }
 
 async function jumpTo(command) {
-  const n = parseInt(command.slice("jump-to-".length), 10);
-  if (!Number.isFinite(n)) return;
   const tabs = await chrome.tabs.query({ currentWindow: true });
-  if (!tabs.length) return;
-  const idx = n === 9 ? tabs.length - 1 : Math.min(n - 1, tabs.length - 1);
+  const idx = resolveJumpIndex(command, tabs.length);
+  if (idx < 0) return;
   await chrome.tabs.update(tabs[idx].id, { active: true });
 }
 
@@ -169,10 +168,6 @@ async function sortByUrl() {
   for (let i = 0; i < sorted.length; i++) {
     await chrome.tabs.move(sorted[i].id, { index: base + i });
   }
-}
-
-function hostnameOf(url) {
-  try { return new URL(url).hostname || "(local)"; } catch { return "(other)"; }
 }
 
 async function groupByDomain() {

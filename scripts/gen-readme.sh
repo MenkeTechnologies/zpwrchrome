@@ -62,9 +62,29 @@ ${cmds.map(row).join("\n")}
 | --- | --- |
 | \`manifest.json\` | MV3 manifest, command registry |
 | \`background.js\` | Service worker: MRU tracker, command dispatcher |
+| \`lib/util.js\` | Pure helpers (MRU push/drop/step, hostname parse, jump-index) — unit-testable in node |
 | \`popup.html\` / \`popup.css\` / \`popup.js\` | Cyberpunk HUD popup (palette from strykelang \`docs/hud-static.css\`) |
 | \`icons/icon.svg\` | Source SVG; PNGs rasterized via \`rsvg-convert\` |
 | \`scripts/gen-readme.sh\` | Regenerate this README from \`manifest.json\` |
+| \`tests/\` | \`node:test\` suite — static manifest invariants + pure-logic unit tests |
+| \`package.json\` | \`npm test\` script |
+
+## Tests
+
+\`\`\`sh
+npm test
+\`\`\`
+
+The suite runs under stock Node ≥ 20 with no external dependencies. It covers:
+
+- **Static invariants**: manifest validity, ≤4 suggested keys, no macOS/Chrome-reserved
+  default shortcuts, command-to-handler coverage in \`background.js\`, every
+  manifest-declared file exists with correct PNG dimensions, popup HTML has no
+  inline event handlers (MV3 CSP), cyberpunk palette intact, every declared
+  permission is actually used, and \`README.md\` matches a fresh
+  \`scripts/gen-readme.sh\` run (doc-drift guard).
+- **Pure logic**: \`lib/util.js\` helpers — MRU stack behavior, hostname parse,
+  numeric tab-jump resolution.
 
 ## Regenerating this README
 
