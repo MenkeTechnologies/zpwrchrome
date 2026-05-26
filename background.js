@@ -123,22 +123,17 @@ async function jumpTo(command) {
   await chrome.tabs.update(tabs[idx].id, { active: true });
 }
 
-// Same dimensions as the in-page modal's `.modal` inner box so the popup
-// window and the overlay feel identical. 720×560 fits comfortably under the
-// 800×600 ceiling for chrome.action popups too, so the same popup.html
-// renders correctly when invoked from the toolbar icon.
-const MODAL_W = 720;
-const MODAL_H = 560;
-
 async function openRecentModal() {
+  // Regular pages: content script renders the shadow-DOM modal overlay.
+  // chrome://, view-source://, web store, extension pages: Chrome blocks
+  // content scripts, so we open the toolbar action popup, which renders
+  // the SAME 2-column layout as the in-page modal (popup.html mirrors
+  // modal/content.js).
   const t = await getActive();
-  if (!t?.id) return openModalWindow();
+  if (!t?.id) return chrome.action.openPopup().catch(() => {});
   try {
     await chrome.tabs.sendMessage(t.id, { kind: "open-modal" });
   } catch {
-    // Content script absent (restricted page). Try injecting on the fly;
-    // if that fails too — chrome:// blocks scripting.executeScript — open
-    // a frameless popup window so the user still sees the modal UI.
     try {
       await chrome.scripting.executeScript({
         target: { tabId: t.id },
@@ -146,27 +141,9 @@ async function openRecentModal() {
       });
       await chrome.tabs.sendMessage(t.id, { kind: "open-modal" });
     } catch {
-      await openModalWindow();
+      await chrome.action.openPopup().catch(() => {});
     }
   }
-}
-
-async function openModalWindow() {
-  // Frameless ("popup" type) Chrome window centered on the current window.
-  // No tab strip, no omnibox — looks like a floating modal sitting on top
-  // of whatever page can't host a content script.
-  const win = await chrome.windows.getCurrent().catch(() => null);
-  const left = win ? Math.round((win.left ?? 0) + ((win.width  ?? 1200) - MODAL_W) / 2) : 100;
-  const top  = win ? Math.round((win.top  ?? 0) + ((win.height ??  800) - MODAL_H) / 2) : 100;
-  await chrome.windows.create({
-    url: chrome.runtime.getURL("popup.html"),
-    type: "popup",
-    width:  MODAL_W,
-    height: MODAL_H,
-    left,
-    top,
-    focused: true
-  });
 }
 
 async function restoreLastClosed() {

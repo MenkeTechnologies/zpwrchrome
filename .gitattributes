@@ -1,0 +1,3 @@
+# Build artifacts — mark as generated so GitHub diffs collapse them and
+# the linguist stats don't credit the base64 to "JavaScript".
+modal/content.js linguist-generated=true -diff

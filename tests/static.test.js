@@ -180,12 +180,14 @@ test("popup.css keeps the strykelang cyberpunk palette variables", () => {
   assert.match(css, /--accent:\s*#ff2a6d/);
 });
 
-test("README and docs/index.html are in sync with manifest (scripts/gen.sh is idempotent)", () => {
+test("README, docs/index.html, and modal/content.js are in sync (scripts/gen.sh is idempotent)", () => {
   const readmeBefore = read("README.md");
   const docsBefore   = read("docs/index.html");
+  const modalBefore  = read("modal/content.js");
   execFileSync("bash", [join(ROOT, "scripts/gen.sh")], { stdio: "pipe" });
-  assert.equal(read("README.md"),       readmeBefore, "README.md drifted — re-run scripts/gen.sh and commit");
-  assert.equal(read("docs/index.html"), docsBefore,   "docs/index.html drifted — re-run scripts/gen.sh and commit");
+  assert.equal(read("README.md"),         readmeBefore, "README.md drifted — re-run scripts/gen.sh and commit");
+  assert.equal(read("docs/index.html"),   docsBefore,   "docs/index.html drifted — re-run scripts/gen.sh and commit");
+  assert.equal(read("modal/content.js"),  modalBefore,  "modal/content.js drifted — re-run scripts/build-modal.sh and commit");
 });
 
 test("docs/index.html keeps the strykelang cyberpunk palette", () => {
@@ -283,22 +285,16 @@ test("popup.css declares @font-face for the bundled fonts", () => {
   assert.match(css, /@font-face[\s\S]*'Orbitron'[\s\S]*Orbitron\.woff2/);
 });
 
-test("modal content script registers fonts via FontFace API", () => {
+test("modal content script embeds fonts inline (CSP-safe data: URIs, no network fetch)", () => {
+  // Pre-v0.2.3 we used FontFace API + chrome.runtime.getURL, but that path
+  // is subject to the host page's font-src CSP and silently failed on
+  // strict sites. Now base64-inlined via scripts/build-modal.sh.
   const content = read("modal/content.js");
-  assert.match(content, /new FontFace\(/, "modal must use FontFace API to inject fonts into host page");
-  assert.match(content, /chrome\.runtime\.getURL\(/,
-    "modal must resolve font URLs through chrome.runtime.getURL (WAR-resolvable URL)");
-  assert.match(content, /fonts\/ShareTechMono-Regular\.woff2/, "modal must reference Share Tech Mono woff2");
-  assert.match(content, /fonts\/Orbitron\.woff2/, "modal must reference Orbitron woff2");
-});
-
-test("fonts are declared in web_accessible_resources", () => {
-  const war = manifest.web_accessible_resources || [];
-  const all = war.flatMap((w) => w.resources || []);
-  for (const rel of ["fonts/ShareTechMono-Regular.woff2", "fonts/Orbitron.woff2"]) {
-    assert.ok(all.includes(rel),
-      `font ${rel} must be in web_accessible_resources so chrome.runtime.getURL resolves cross-context`);
-  }
+  assert.match(content, /url\(data:font\/woff2;base64,/,
+    "modal must use base64 data: URIs in @font-face — bypasses host CSP");
+  // Old FontFace path must be gone in the generated file too.
+  assert.ok(!/new FontFace\(/.test(content),
+    "modal must not use the FontFace API — replaced by inline data URIs");
 });
 
 test("fonts directory has the OFL license", () => {

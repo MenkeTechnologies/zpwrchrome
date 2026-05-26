@@ -7,3 +7,5 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 ZPWR_ROOT="$ROOT" node "$ROOT/scripts/gen.mjs"
 echo "wrote $ROOT/README.md + $ROOT/docs/index.html" >&2
+
+bash "$ROOT/scripts/build-modal.sh"
