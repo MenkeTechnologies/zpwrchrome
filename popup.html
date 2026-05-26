@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>zpwrchrome</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app">
+    <div class="crt-scanline"></div>
+    <div class="crt-scanline-v"></div>
+
+    <header class="docs-header">
+      <div class="docs-title-block">
+        <h1>zpwrchrome // recent tabs</h1>
+        <div class="docs-sub" id="hint">Alt+Z back · Alt+Shift+T restore · Alt+S search · ↑↓ nav · Enter switch · Del close</div>
+      </div>
+      <input id="q" class="search" type="search" placeholder="filter // url, title, host" autofocus>
+    </header>
+
+    <main class="docs-main">
+      <section class="doc-card">
+        <h2>open // mru</h2>
+        <ul class="tab-list" id="mru"></ul>
+      </section>
+
+      <section class="doc-card">
+        <h2>recently closed</h2>
+        <ul class="tab-list" id="closed"></ul>
+      </section>
+    </main>
+  </div>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

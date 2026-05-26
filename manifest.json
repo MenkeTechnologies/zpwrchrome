@@ -1,0 +1,102 @@
+{
+  "manifest_version": 3,
+  "name": "zpwrchrome — Hyper Tab Switcher",
+  "short_name": "zpwrchrome",
+  "version": "0.1.0",
+  "description": "Recent-tabs switcher with 26+ keyboard shortcuts. Cyberpunk HUD by MenkeTechnologies.",
+  "author": "MenkeTechnologies",
+  "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
+  "minimum_chrome_version": "127",
+
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "sessions",
+    "bookmarks",
+    "storage",
+    "scripting",
+    "clipboardWrite"
+  ],
+  "host_permissions": ["<all_urls>"],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "action": {
+    "default_title": "zpwrchrome — recent tabs",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+T",
+        "mac": "Alt+T"
+      },
+      "description": "Open zpwrchrome popup"
+    },
+    "switch-previous-tab": {
+      "suggested_key": {
+        "default": "Alt+Z",
+        "mac": "Alt+Z"
+      },
+      "description": "Switch to the previously active tab (MRU)"
+    },
+    "restore-last-closed": {
+      "suggested_key": {
+        "default": "Alt+Shift+T",
+        "mac": "Alt+Shift+T"
+      },
+      "description": "Restore the most recently closed tab"
+    },
+    "search-tabs": {
+      "suggested_key": {
+        "default": "Alt+S",
+        "mac": "Alt+S"
+      },
+      "description": "Open popup focused on the tab search box"
+    },
+
+    "mru-next":            { "description": "Cycle forward through MRU stack" },
+    "mru-prev":            { "description": "Cycle backward through MRU stack" },
+
+    "jump-to-1": { "description": "Jump to tab #1 in current window" },
+    "jump-to-2": { "description": "Jump to tab #2 in current window" },
+    "jump-to-3": { "description": "Jump to tab #3 in current window" },
+    "jump-to-4": { "description": "Jump to tab #4 in current window" },
+    "jump-to-5": { "description": "Jump to tab #5 in current window" },
+    "jump-to-6": { "description": "Jump to tab #6 in current window" },
+    "jump-to-7": { "description": "Jump to tab #7 in current window" },
+    "jump-to-8": { "description": "Jump to tab #8 in current window" },
+    "jump-to-9": { "description": "Jump to last tab in current window" },
+
+    "duplicate-tab":       { "description": "Duplicate the active tab" },
+    "pin-tab":             { "description": "Toggle pin on the active tab" },
+    "mute-tab":            { "description": "Toggle mute on the active tab" },
+    "move-to-new-window":  { "description": "Detach active tab to a new window" },
+    "close-others":        { "description": "Close all other tabs in current window" },
+    "close-right":         { "description": "Close all tabs to the right of the active tab" },
+    "close-duplicates":    { "description": "Close tabs with duplicate URLs (keeps leftmost)" },
+    "reload-all":          { "description": "Reload every tab in current window" },
+    "sort-by-url":         { "description": "Sort tabs in current window by URL" },
+    "group-by-domain":     { "description": "Group tabs in current window by domain (Chrome tab groups)" },
+    "copy-url":            { "description": "Copy active tab URL to clipboard" },
+    "copy-title-md":       { "description": "Copy active tab as Markdown link" },
+    "bookmark-tab":        { "description": "Bookmark active tab to Other Bookmarks" }
+  }
+}
