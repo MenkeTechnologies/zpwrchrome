@@ -9,22 +9,22 @@
 
 [![CI](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml)
 [![Manifest](https://img.shields.io/badge/manifest-v3-05d9e8.svg)](manifest.json)
-[![Commands](https://img.shields.io/badge/commands-28-ff2a6d.svg)](#0x02-keyboard-commands)
+[![Commands](https://img.shields.io/badge/commands-29-ff2a6d.svg)](#0x02-keyboard-commands)
 [![Theme](https://img.shields.io/badge/companion-theme-d300c5.svg)](theme/)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zpwrchrome/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ### `[THE FASTEST RECENT-TABS SWITCHER WITH THE MOST KEYBOARD SHORTCUTS IN THE WORLD]`
 
-> *"Recent Tabs with one shortcut. zpwrchrome with 28."*
+> *"Recent Tabs with one shortcut. zpwrchrome with 29."*
 >
 > *"MRU is a primitive, not a side panel."*
 >
-> *"28 commands. 4 default-keyed. 24 user-bound. Zero compromises."*
+> *"29 commands. 4 default-keyed. 25 user-bound. Zero compromises."*
 
 ## `[CYBERPUNK HUD]`
 
-The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window MRU stack, 24 user-bindable commands for batch tab ops and clipboard utilities, sub-popup live-filter search, and a companion Chrome theme that paints the rest of the browser with the same strykelang HUD palette. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero runtime dependencies.
+The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window MRU stack, 25 user-bindable commands for batch tab ops and clipboard utilities, sub-popup live-filter search, and a companion Chrome theme that paints the rest of the browser with the same strykelang HUD palette. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero runtime dependencies.
 
 ### [`Live Site`](https://menketechnologies.github.io/zpwrchrome/) &middot; [`Source`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [`Theme`](theme/)
 
@@ -36,25 +36,27 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 - [\[0x01\] Install](#0x01-install)
 - [\[0x02\] Keyboard Commands](#0x02-keyboard-commands)
 - [\[0x03\] Popup UI](#0x03-popup-ui)
-- [\[0x04\] Companion Theme](#0x04-companion-theme)
-- [\[0x05\] Architecture](#0x05-architecture)
-- [\[0x06\] vs Recent Tabs](#0x06-vs-recent-tabs)
-- [\[0x07\] Files](#0x07-files)
-- [\[0x08\] Tests](#0x08-tests)
-- [\[0x09\] CI](#0x09-ci)
-- [\[0x0A\] Regenerating Docs](#0x0a-regenerating-docs)
+- [\[0x04\] Recent-Tabs Modal](#0x04-recent-tabs-modal)
+- [\[0x05\] Companion Theme](#0x05-companion-theme)
+- [\[0x06\] Architecture](#0x06-architecture)
+- [\[0x07\] vs Recent Tabs](#0x07-vs-recent-tabs)
+- [\[0x08\] Files](#0x08-files)
+- [\[0x09\] Tests](#0x09-tests)
+- [\[0x0A\] CI](#0x0a-ci)
+- [\[0x0B\] Regenerating Docs](#0x0b-regenerating-docs)
 - [\[0xFF\] License](#0xff-license)
 
 ---
 
 ## [0x00] OVERVIEW
 
-`zpwrchrome` is a Chrome MV3 extension that replaces [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) with a keyboard-first switcher carrying 27× more commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
+`zpwrchrome` is a Chrome MV3 extension that replaces [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) with a keyboard-first switcher carrying 28× more commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via `chrome.storage.session`, survives service-worker restarts
 - **Alt+Z back** — one-keystroke return to previous tab (matches Recent Tabs’ only shortcut)
+- **Cmd+E / Ctrl+E modal** — JetBrains-style Recent Files overlay: 2-column shadow-DOM modal injected into the active page with categories (All / Current Window / Pinned / Audible / Muted / Recently Closed), Cmd+1–6 category jumps, live filter, hold-cycle on the trigger key
 - **Alt+Shift+T restore** — reopens the most recently closed tab/window from any window
-- **24 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities)
+- **25 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities)
 - **Sub-popup live filter** — type to filter open + closed tabs; `↑`/`↓`/`Enter`/`Delete`/`Esc` nav
 - **Companion Chrome theme** — `theme/` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from `strykelang/docs/hud-static.css` (`--cyan #05d9e8`, `--accent #ff2a6d`, `--magenta #d300c5`, CRT scanlines, neon-border-glow card frames)
@@ -75,7 +77,7 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 1. Open `chrome://extensions`
 2. Enable **Developer mode** (top-right)
 3. Click **Load unpacked**, pick the cloned directory
-4. Open `chrome://extensions/shortcuts` to bind any of the 24 user-configurable commands
+4. Open `chrome://extensions/shortcuts` to bind any of the 25 user-configurable commands
 
 #### Theme
 
@@ -86,14 +88,15 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 
 ## [0x02] KEYBOARD COMMANDS
 
-Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **24** user-bindable, for **28 total** — versus Recent Tabs’ 1.
+Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **25** user-bindable, for **29 total** — versus Recent Tabs’ 1.
 
 | Command | Default | Description |
 | --- | --- | --- |
 | `_execute_action` | Alt+T | Open zpwrchrome popup |
 | `switch-previous-tab` | Alt+Z | Switch to the previously active tab (MRU) |
 | `restore-last-closed` | Alt+Shift+T | Restore the most recently closed tab |
-| `search-tabs` | Alt+S | Open popup focused on the tab search box |
+| `recent-modal` | Ctrl+E | Open the JetBrains-style Recent Tabs modal overlay |
+| `search-tabs` | *(user-set in `chrome://extensions/shortcuts`)* | Open popup focused on the tab search box |
 | `mru-next` | *(user-set in `chrome://extensions/shortcuts`)* | Cycle forward through MRU stack |
 | `mru-prev` | *(user-set in `chrome://extensions/shortcuts`)* | Cycle backward through MRU stack |
 | `jump-to-1` | *(user-set in `chrome://extensions/shortcuts`)* | Jump to tab #1 in current window |
@@ -142,7 +145,26 @@ Click any row to activate it. Hover reveals a `×` icon to close.
 
 ---
 
-## [0x04] COMPANION THEME
+## [0x04] RECENT-TABS MODAL
+
+JetBrains IDEs have a Recent Files modal (`Cmd+E` on Mac). `zpwrchrome` ports the same UX to Chrome: a full-page shadow-DOM overlay injected into the active tab, with categories on the left and the live tab list on the right.
+
+| Key | Action |
+| --- | --- |
+| `Cmd+E` / `Ctrl+E` | open the modal — and, while open, cycle MRU forward |
+| `Cmd+Shift+E` / `Ctrl+Shift+E` | cycle MRU backward (when modal is open) |
+| `Cmd+1` … `Cmd+6` | jump to category (All / Current Window / Pinned / Audible / Muted / Recently Closed) |
+| `↑` / `↓` | move selection |
+| `Enter` | switch to / restore selection |
+| `Delete` / `Shift+Backspace` | close the highlighted open tab in place |
+| `Esc` | dismiss without activating |
+| any letter | live-filter by title / URL / hostname |
+
+Implementation: `modal/content.js` is a content script registered on `<all_urls>` (excluded from the Chrome Web Store, which rejects all extensions). It builds the modal inside a closed shadow root so host-page CSS can never leak in. Visuals are the strykelang HUD palette inline-rendered into a `<style>` block. On restricted pages (`chrome://`, `view-source://`, the Web Store) the command transparently falls back to the regular action popup.
+
+---
+
+## [0x05] COMPANION THEME
 
 The `theme/` directory ships a separate Chrome theme. Same strykelang palette as the popup, applied to the browser frame, toolbar, omnibox, and new-tab page.
 
@@ -164,7 +186,7 @@ Color anchors (RGB triplets in `theme/manifest.json`):
 
 ---
 
-## [0x05] ARCHITECTURE
+## [0x06] ARCHITECTURE
 
 ```
                   ┌──────────────────────────┐
@@ -202,16 +224,17 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 
 ---
 
-## [0x06] VS RECENT TABS
+## [0x07] VS RECENT TABS
 
 | Feature | `zpwrchrome` | Recent Tabs (Jason Savard) |
 | --- | --- | --- |
 | Default keyboard shortcuts | **4** | 1 (`Alt+Z`) |
-| User-bindable commands | **24** | a few |
-| Total commands | **28** | ~3-5 |
+| User-bindable commands | **25** | a few |
+| Total commands | **29** | ~3-5 |
 | Cross-window MRU | **yes** | yes |
 | In-popup live filter | **yes** | yes |
 | In-popup arrow / Enter / Del nav | **yes** | partial |
+| JetBrains-style `Cmd+E` modal overlay | **yes** | no |
 | Restore closed tabs | **yes** | yes |
 | Batch tab ops (close-others/right/dupes, reload-all) | **yes** | no |
 | Sort tabs by URL | **yes** | no |
@@ -222,12 +245,12 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 | Companion browser theme | **yes** | no |
 | Manifest version | **MV3** | MV2/MV3 |
 | License | **MIT** | proprietary |
-| Test suite | **78** node:test cases | none public |
+| Test suite | **95** node:test cases | none public |
 | Generator + doc-drift CI | **yes** | n/a |
 
 ---
 
-## [0x07] FILES
+## [0x08] FILES
 
 | Path | Purpose |
 | --- | --- |
@@ -235,6 +258,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 | `background.js` | Service worker — MRU tracker, command dispatcher, popup message API |
 | `lib/util.js` | Pure helpers — `mruPush`/`mruDrop`/`mruStep`/`mruPrevious`/`hostnameOf`/`resolveJumpIndex` |
 | `popup.html` / `popup.css` / `popup.js` | Cyberpunk HUD popup |
+| `modal/content.js` | JetBrains-style Recent Tabs modal — content script, shadow DOM, 2-column layout |
 | `docs/index.html` | GitHub-Pages landing page (regenerated from manifest) |
 | `theme/` | Companion Chrome theme — separate unpacked extension |
 | `icons/icon.svg` + `icon{16,32,48,128}.png` | Extension icons; PNGs rasterized via `rsvg-convert` |
@@ -245,7 +269,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 
 ---
 
-## [0x08] TESTS
+## [0x09] TESTS
 
 ```sh
 npm test
@@ -260,7 +284,7 @@ Stock Node ≥ 20, no external dependencies, ~200 ms total runtime. Covers:
 
 ---
 
-## [0x09] CI
+## [0x0A] CI
 
 `.github/workflows/ci.yml` runs `npm test` on every push and pull-request. Matrix: Node `20` + `22` on `ubuntu-latest`. The doc-drift test (re-run `scripts/gen.sh` and compare) catches stale README / landing page in the same job.
 
@@ -277,7 +301,7 @@ CI badge at the top of this README.
 
 ---
 
-## [0x0A] REGENERATING DOCS
+## [0x0B] REGENERATING DOCS
 
 `README.md` and `docs/index.html` are derived from `manifest.json`. Refresh both with:
 

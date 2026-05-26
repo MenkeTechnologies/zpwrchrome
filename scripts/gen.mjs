@@ -77,13 +77,14 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 - [\\[0x01\\] Install](#0x01-install)
 - [\\[0x02\\] Keyboard Commands](#0x02-keyboard-commands)
 - [\\[0x03\\] Popup UI](#0x03-popup-ui)
-- [\\[0x04\\] Companion Theme](#0x04-companion-theme)
-- [\\[0x05\\] Architecture](#0x05-architecture)
-- [\\[0x06\\] vs Recent Tabs](#0x06-vs-recent-tabs)
-- [\\[0x07\\] Files](#0x07-files)
-- [\\[0x08\\] Tests](#0x08-tests)
-- [\\[0x09\\] CI](#0x09-ci)
-- [\\[0x0A\\] Regenerating Docs](#0x0a-regenerating-docs)
+- [\\[0x04\\] Recent-Tabs Modal](#0x04-recent-tabs-modal)
+- [\\[0x05\\] Companion Theme](#0x05-companion-theme)
+- [\\[0x06\\] Architecture](#0x06-architecture)
+- [\\[0x07\\] vs Recent Tabs](#0x07-vs-recent-tabs)
+- [\\[0x08\\] Files](#0x08-files)
+- [\\[0x09\\] Tests](#0x09-tests)
+- [\\[0x0A\\] CI](#0x0a-ci)
+- [\\[0x0B\\] Regenerating Docs](#0x0b-regenerating-docs)
 - [\\[0xFF\\] License](#0xff-license)
 
 ---
@@ -94,6 +95,7 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 
 - **MRU stack** — cross-window most-recently-used tracking via \`chrome.storage.session\`, survives service-worker restarts
 - **Alt+Z back** — one-keystroke return to previous tab (matches Recent Tabs’ only shortcut)
+- **Cmd+E / Ctrl+E modal** — JetBrains-style Recent Files overlay: 2-column shadow-DOM modal injected into the active page with categories (All / Current Window / Pinned / Audible / Muted / Recently Closed), Cmd+1–6 category jumps, live filter, hold-cycle on the trigger key
 - **Alt+Shift+T restore** — reopens the most recently closed tab/window from any window
 - **${userBound} user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at \`chrome://extensions/shortcuts\` (single-tab ops, batch ops, numeric jumps, clipboard utilities)
 - **Sub-popup live filter** — type to filter open + closed tabs; \`↑\`/\`↓\`/\`Enter\`/\`Delete\`/\`Esc\` nav
@@ -156,7 +158,26 @@ Click any row to activate it. Hover reveals a \`×\` icon to close.
 
 ---
 
-## [0x04] COMPANION THEME
+## [0x04] RECENT-TABS MODAL
+
+JetBrains IDEs have a Recent Files modal (\`Cmd+E\` on Mac). \`zpwrchrome\` ports the same UX to Chrome: a full-page shadow-DOM overlay injected into the active tab, with categories on the left and the live tab list on the right.
+
+| Key | Action |
+| --- | --- |
+| \`Cmd+E\` / \`Ctrl+E\` | open the modal — and, while open, cycle MRU forward |
+| \`Cmd+Shift+E\` / \`Ctrl+Shift+E\` | cycle MRU backward (when modal is open) |
+| \`Cmd+1\` … \`Cmd+6\` | jump to category (All / Current Window / Pinned / Audible / Muted / Recently Closed) |
+| \`↑\` / \`↓\` | move selection |
+| \`Enter\` | switch to / restore selection |
+| \`Delete\` / \`Shift+Backspace\` | close the highlighted open tab in place |
+| \`Esc\` | dismiss without activating |
+| any letter | live-filter by title / URL / hostname |
+
+Implementation: \`modal/content.js\` is a content script registered on \`<all_urls>\` (excluded from the Chrome Web Store, which rejects all extensions). It builds the modal inside a closed shadow root so host-page CSS can never leak in. Visuals are the strykelang HUD palette inline-rendered into a \`<style>\` block. On restricted pages (\`chrome://\`, \`view-source://\`, the Web Store) the command transparently falls back to the regular action popup.
+
+---
+
+## [0x05] COMPANION THEME
 
 The \`theme/\` directory ships a separate Chrome theme. Same strykelang palette as the popup, applied to the browser frame, toolbar, omnibox, and new-tab page.
 
@@ -178,7 +199,7 @@ Color anchors (RGB triplets in \`theme/manifest.json\`):
 
 ---
 
-## [0x05] ARCHITECTURE
+## [0x06] ARCHITECTURE
 
 \`\`\`
                   ┌──────────────────────────┐
@@ -216,7 +237,7 @@ The service worker holds no globals — MRU lives in \`chrome.storage.session\`.
 
 ---
 
-## [0x06] VS RECENT TABS
+## [0x07] VS RECENT TABS
 
 | Feature | \`zpwrchrome\` | Recent Tabs (Jason Savard) |
 | --- | --- | --- |
@@ -226,6 +247,7 @@ The service worker holds no globals — MRU lives in \`chrome.storage.session\`.
 | Cross-window MRU | **yes** | yes |
 | In-popup live filter | **yes** | yes |
 | In-popup arrow / Enter / Del nav | **yes** | partial |
+| JetBrains-style \`Cmd+E\` modal overlay | **yes** | no |
 | Restore closed tabs | **yes** | yes |
 | Batch tab ops (close-others/right/dupes, reload-all) | **yes** | no |
 | Sort tabs by URL | **yes** | no |
@@ -241,7 +263,7 @@ The service worker holds no globals — MRU lives in \`chrome.storage.session\`.
 
 ---
 
-## [0x07] FILES
+## [0x08] FILES
 
 | Path | Purpose |
 | --- | --- |
@@ -249,6 +271,7 @@ The service worker holds no globals — MRU lives in \`chrome.storage.session\`.
 | \`background.js\` | Service worker — MRU tracker, command dispatcher, popup message API |
 | \`lib/util.js\` | Pure helpers — \`mruPush\`/\`mruDrop\`/\`mruStep\`/\`mruPrevious\`/\`hostnameOf\`/\`resolveJumpIndex\` |
 | \`popup.html\` / \`popup.css\` / \`popup.js\` | Cyberpunk HUD popup |
+| \`modal/content.js\` | JetBrains-style Recent Tabs modal — content script, shadow DOM, 2-column layout |
 | \`docs/index.html\` | GitHub-Pages landing page (regenerated from manifest) |
 | \`theme/\` | Companion Chrome theme — separate unpacked extension |
 | \`icons/icon.svg\` + \`icon{16,32,48,128}.png\` | Extension icons; PNGs rasterized via \`rsvg-convert\` |
@@ -259,7 +282,7 @@ The service worker holds no globals — MRU lives in \`chrome.storage.session\`.
 
 ---
 
-## [0x08] TESTS
+## [0x09] TESTS
 
 \`\`\`sh
 npm test
@@ -274,7 +297,7 @@ Stock Node ≥ 20, no external dependencies, ~200 ms total runtime. Covers:
 
 ---
 
-## [0x09] CI
+## [0x0A] CI
 
 \`.github/workflows/ci.yml\` runs \`npm test\` on every push and pull-request. Matrix: Node \`20\` + \`22\` on \`ubuntu-latest\`. The doc-drift test (re-run \`scripts/gen.sh\` and compare) catches stale README / landing page in the same job.
 
@@ -291,7 +314,7 @@ CI badge at the top of this README.
 
 ---
 
-## [0x0A] REGENERATING DOCS
+## [0x0B] REGENERATING DOCS
 
 \`README.md\` and \`docs/index.html\` are derived from \`manifest.json\`. Refresh both with:
 

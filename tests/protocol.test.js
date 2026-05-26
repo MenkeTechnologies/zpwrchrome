@@ -14,17 +14,25 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
 
-const popupSrc = read("popup.js");
-const bgSrc    = read("background.js");
+const popupSrc   = read("popup.js");
+const bgSrc      = read("background.js");
+const contentSrc = read("modal/content.js");
 
 // `chrome.runtime.sendMessage({ kind: "..."` is the wire shape.
 const sentByPopup = new Set(
   [...popupSrc.matchAll(/sendMessage\(\s*\{\s*kind:\s*"([a-z-]+)"/g)].map((m) => m[1])
 );
+const sentByContent = new Set(
+  [...contentSrc.matchAll(/sendMessage\(\s*\{\s*kind:\s*"([a-z-]+)"/g)].map((m) => m[1])
+);
+const sentByClients = new Set([...sentByPopup, ...sentByContent]);
 
-// `msg?.kind === "..."` is how background.js dispatches.
+// `msg?.kind === "..."` is how background.js and content.js dispatch.
 const handledByBg = new Set(
   [...bgSrc.matchAll(/msg\?\.kind === "([a-z-]+)"/g)].map((m) => m[1])
+);
+const handledByContent = new Set(
+  [...contentSrc.matchAll(/msg\?\.kind === "([a-z-]+)"/g)].map((m) => m[1])
 );
 
 test("popup.js sends at least one message kind", () => {
@@ -35,25 +43,46 @@ test("background.js handles at least one message kind", () => {
   assert.ok(handledByBg.size > 0, "background.js has no kind dispatcher");
 });
 
-test("every popup→background kind has a background handler", () => {
-  for (const kind of sentByPopup) {
+test("every client→background kind has a background handler", () => {
+  for (const kind of sentByClients) {
     assert.ok(handledByBg.has(kind),
-      `popup.js sends "${kind}" but background.js has no \`msg?.kind === "${kind}"\` branch`);
+      `popup.js or modal/content.js sends "${kind}" but background.js has no handler`);
   }
 });
 
-test("every background handler is reachable from popup.js", () => {
+test("every background handler is reachable from at least one client", () => {
   for (const kind of handledByBg) {
-    assert.ok(sentByPopup.has(kind),
-      `background.js handles "${kind}" but popup.js never sends it — dead code`);
+    assert.ok(sentByClients.has(kind),
+      `background.js handles "${kind}" but no client (popup.js or modal/content.js) sends it`);
   }
 });
 
-test("known protocol kinds are present", () => {
-  // Pin the protocol so a silent rename can't slip past.
+test("known popup ↔ background protocol kinds are present", () => {
   const expected = ["list", "activate", "restore", "close-tab"];
   for (const k of expected) {
     assert.ok(sentByPopup.has(k), `popup.js missing required kind "${k}"`);
     assert.ok(handledByBg.has(k), `background.js missing handler for "${k}"`);
   }
+});
+
+test("modal content script ↔ background protocol kinds are present", () => {
+  // The modal opens via background→content (open-modal), then fetches data
+  // (list) and acts (activate / restore / close-tab) through the same wire.
+  assert.ok(handledByContent.has("open-modal"),
+    "modal/content.js must handle open-modal");
+  assert.ok(handledByContent.has("close-modal"),
+    "modal/content.js must handle close-modal");
+  for (const k of ["list", "activate", "restore", "close-tab"]) {
+    assert.ok(sentByContent.has(k),
+      `modal/content.js must send "${k}"`);
+  }
+});
+
+test("background→content kinds (open-modal/close-modal) are tabs.sendMessage targets, not runtime handlers", () => {
+  // Sanity: background.js should NOT also handle open-modal/close-modal —
+  // those are inbound for the content script only.
+  assert.ok(!handledByBg.has("open-modal"),
+    "open-modal is sent to content script, not handled in background");
+  assert.ok(!handledByBg.has("close-modal"),
+    "close-modal is sent to content script, not handled in background");
 });

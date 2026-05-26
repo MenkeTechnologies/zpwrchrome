@@ -61,6 +61,7 @@ async function dispatch(command) {
   if (command === "switch-previous-tab")  return switchPreviousTab();
   if (command === "restore-last-closed")  return restoreLastClosed();
   if (command === "search-tabs")          return chrome.action.openPopup();
+  if (command === "recent-modal")         return openRecentModal();
   if (command === "mru-next")             return mruStep(+1);
   if (command === "mru-prev")             return mruStep(-1);
   if (command.startsWith("jump-to-"))     return jumpTo(command);
@@ -120,6 +121,29 @@ async function jumpTo(command) {
   const idx = resolveJumpIndex(command, tabs.length);
   if (idx < 0) return;
   await chrome.tabs.update(tabs[idx].id, { active: true });
+}
+
+async function openRecentModal() {
+  // Try to message the content script in the active tab. If the tab is a
+  // restricted page (chrome://, chrome-extension://, view-source://, the
+  // web store) the message will fail; fall back to opening the popup.
+  const t = await getActive();
+  if (!t?.id) return chrome.action.openPopup();
+  try {
+    await chrome.tabs.sendMessage(t.id, { kind: "open-modal" });
+  } catch {
+    // Content script not present (restricted page). Try injecting on the
+    // fly; if that also fails, fall back to popup.
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: t.id },
+        files: ["modal/content.js"]
+      });
+      await chrome.tabs.sendMessage(t.id, { kind: "open-modal" });
+    } catch {
+      await chrome.action.openPopup().catch(() => {});
+    }
+  }
 }
 
 async function restoreLastClosed() {

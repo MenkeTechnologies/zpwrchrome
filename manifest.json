@@ -24,6 +24,23 @@
     "type": "module"
   },
 
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
+      "js": ["modal/content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["modal/content.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
   "action": {
     "default_title": "zpwrchrome — recent tabs",
     "default_popup": "popup.html",
@@ -64,13 +81,15 @@
       },
       "description": "Restore the most recently closed tab"
     },
-    "search-tabs": {
+    "recent-modal": {
       "suggested_key": {
-        "default": "Alt+S",
-        "mac": "Alt+S"
+        "default": "Ctrl+E",
+        "mac": "Command+E"
       },
-      "description": "Open popup focused on the tab search box"
+      "description": "Open the JetBrains-style Recent Tabs modal overlay"
     },
+
+    "search-tabs":         { "description": "Open popup focused on the tab search box" },
 
     "mru-next":            { "description": "Cycle forward through MRU stack" },
     "mru-prev":            { "description": "Cycle backward through MRU stack" },
