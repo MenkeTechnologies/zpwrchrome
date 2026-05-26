@@ -603,6 +603,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     (async () => {
       const all = await readScripts();
       const incoming = msg.script;
+      const isNew = !!msg.isNew;
       const meta = parseMetadata(incoming.src);
       const errors = validateUserscript(meta);
       if (errors.length) { sendResponse({ ok: false, errors }); return; }
@@ -610,25 +611,40 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       incoming.name = meta.name;
       incoming.updatedAt = Date.now();
 
-      // Duplicate-name guard. Two scripts with the same @name + namespace
-      // produce the same id, which would silently overwrite the older one.
-      // Tampermonkey lets users have duplicates by appending a counter to
-      // the name; we just refuse and tell the user to rename.
-      const idx = all.findIndex((s) => s.id === incoming.id);
-      const dupe = all.find((s) =>
-        s.id !== incoming.id &&
-        (s.name || "").toLowerCase() === (incoming.name || "").toLowerCase()
-      );
-      if (dupe) {
-        sendResponse({
-          ok: false,
-          errors: [`a script with @name "${incoming.name}" already exists (id ${dupe.id}). Rename it or delete the existing one.`]
-        });
-        return;
+      const nameLc = (incoming.name || "").toLowerCase();
+
+      if (isNew) {
+        // Creating new: reject if ANY existing script collides on id or name.
+        // (Same @name+@namespace produces same userscriptId — would otherwise
+        // overwrite the existing script silently.)
+        const idCollide   = all.find((s) => s.id === incoming.id);
+        const nameCollide = all.find((s) => (s.name || "").toLowerCase() === nameLc);
+        if (idCollide || nameCollide) {
+          const existing = idCollide || nameCollide;
+          sendResponse({
+            ok: false,
+            errors: [`a script with @name "${incoming.name}" already exists (id ${existing.id}). Rename your new script or delete the existing one first.`]
+          });
+          return;
+        }
+        incoming.enabled = incoming.enabled !== false;
+        all.push(incoming);
+      } else {
+        // Updating: incoming.id was passed from editing.id. Only refuse if
+        // renaming would collide with a DIFFERENT existing script.
+        const idx = all.findIndex((s) => s.id === incoming.id);
+        const dupe = all.find((s) => s.id !== incoming.id && (s.name || "").toLowerCase() === nameLc);
+        if (dupe) {
+          sendResponse({
+            ok: false,
+            errors: [`renaming to @name "${incoming.name}" collides with an existing script (id ${dupe.id}). Pick another name.`]
+          });
+          return;
+        }
+        if (idx >= 0) all[idx] = { ...all[idx], ...incoming };
+        else { incoming.enabled = incoming.enabled !== false; all.push(incoming); }
       }
 
-      if (idx >= 0) all[idx] = { ...all[idx], ...incoming };
-      else { incoming.enabled = incoming.enabled !== false; all.push(incoming); }
       await writeScripts(all);
       sendResponse({ ok: true, script: incoming });
     })();

@@ -390,16 +390,33 @@ test("scripts.list trusts the live chrome.userScripts presence over stored mode"
     "userScripts.mode must NOT be persisted (live API check is the source of truth)");
 });
 
-test("scripts.save refuses duplicate @name (case-insensitive)", () => {
-  // Two scripts with the same @name + namespace produce the same userscript
-  // id, which would silently overwrite the older script. Reject upfront.
+test("scripts.save refuses duplicate @name with isNew flag (closes silent-overwrite hole)", () => {
+  // Two new scripts with the same @name + namespace produce the same
+  // userscriptId. Without an explicit isNew flag, the server can't tell
+  // a fresh create from an edit-in-place and would silently overwrite.
+  // Pin: the save handler must branch on msg.isNew.
   const bg = read("background.js");
   const sec = bg.match(/msg\?\.kind === "scripts\.save"[\s\S]*?return true;/);
   assert.ok(sec, "scripts.save handler not found");
-  assert.match(sec[0], /already exists/,
-    "scripts.save must reject duplicate @name with a useful error message");
+  assert.match(sec[0], /isNew = !!msg\.isNew/,
+    "save handler must read msg.isNew from the client");
+  assert.match(sec[0], /if \(isNew\)/,
+    "save handler must branch on isNew");
+  // Both paths must reject duplicates.
+  assert.match(sec[0], /idCollide \|\| nameCollide/,
+    "create path must reject id-collision AND name-collision");
+  assert.match(sec[0], /renaming to @name/,
+    "update path must reject rename-collision");
   assert.match(sec[0], /toLowerCase\(\)/,
     "duplicate-name check must be case-insensitive");
+});
+
+test("manager.js sends isNew flag from the save dialog", () => {
+  const mgr = read("scripts-manager/manager.js");
+  assert.match(mgr, /const isNew = !editing/,
+    "manager.js must determine isNew from whether `editing` is null");
+  assert.match(mgr, /kind: "scripts\.save"[\s\S]{0,200}isNew/,
+    "scripts.save message must include the isNew flag");
 });
 
 test("background.js logs fires from handleNav (not via the unreliable userscript beacon)", () => {

@@ -246,7 +246,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 | Companion browser theme | **yes** | no |
 | Manifest version | **MV3** | MV2/MV3 |
 | License | **MIT** | proprietary |
-| Test suite | **174** node:test cases | none public |
+| Test suite | **175** node:test cases | none public |
 | Generator + doc-drift CI | **yes** | n/a |
 
 ---

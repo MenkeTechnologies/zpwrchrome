@@ -367,9 +367,11 @@ $editSave.addEventListener("click", async () => {
   const meta = parseMetadata(src);
   const errs = validateUserscript(meta);
   if (errs.length) { alert("can't save:\n" + errs.join("\n")); return; }
+  const isNew = !editing;
   const id = editing?.id || userscriptId(meta);
   const resp = await send({
     kind: "scripts.save",
+    isNew,
     script: { ...(editing || {}), id, src, enabled: editing ? editing.enabled : true }
   });
   if (!resp?.ok) { alert("save failed:\n" + ((resp?.errors || []).join("\n") || "unknown error")); return; }
