@@ -217,9 +217,10 @@ test("content script declares the 6 JetBrains-style categories", () => {
 });
 
 test("content script keyboard nav covers JetBrains-canonical keys", () => {
-  // Cmd+E (cycle), Cmd+1..6 (category jump), Arrow nav, Enter, Esc, Delete.
+  // Cmd+E (cycle), Cmd+0..9 (category jump — 0 = 10th slot for History),
+  // Arrow nav, Enter, Esc, Delete.
   assert.match(content, /metaKey.*ctrlKey.*"e"/, "Cmd/Ctrl+E cycling missing");
-  assert.match(content, /\[1-6\]/,                  "Cmd+1..6 category nav missing");
+  assert.match(content, /\[0-9\]/,                  "Cmd+0..9 category nav missing");
   assert.match(content, /e\.key === "ArrowDown"/,   "ArrowDown missing");
   assert.match(content, /e\.key === "ArrowUp"/,     "ArrowUp missing");
   assert.match(content, /e\.key === "Enter"/,       "Enter missing");

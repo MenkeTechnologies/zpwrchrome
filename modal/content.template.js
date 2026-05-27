@@ -25,14 +25,27 @@
   // line with lib/fzf.js's FZF_INLINE_START/END block, `export ` stripped.
 %%FZF%%
 
+  // Shared tab helpers (hostnameOf, buildTabTree, flattenTree, domainHueFor)
+  // inlined from lib/util.js's UTIL_INLINE_START/END block — same trick as
+  // fzf above. Single source of truth is lib/util.js; the build script
+  // substitutes here.
+%%UTIL%%
+
   const CATEGORIES = [
     { id: "all",     label: "All Tabs",          key: "⌘1" },
     { id: "current", label: "Current Window",    key: "⌘2" },
     { id: "pinned",  label: "Pinned",            key: "⌘3" },
     { id: "audible", label: "Audible",           key: "⌘4" },
     { id: "muted",   label: "Muted",             key: "⌘5" },
-    { id: "closed",  label: "Recently Closed",   key: "⌘6" }
+    { id: "closed",  label: "Recently Closed",   key: "⌘6" },
+    { id: "scenes",  label: "Scenes",            key: "⌘7" },
+    { id: "tree",    label: "Tree (by opener)",  key: "⌘8" },
+    { id: "minimap", label: "Minimap",           key: "⌘9" },
+    { id: "history", label: "History",           key: "⌘0" }
   ];
+
+  // chrome.history fetch ceiling — see popup.js comment.
+  const HISTORY_MAX_RESULTS = 5000;
 
   const CSS = `
     @font-face {
@@ -213,6 +226,74 @@
     ::-webkit-scrollbar-track { background: #05050a; }
     ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #05d9e8, #d300c5); border-radius: 3px; }
     @keyframes shimmer { 0% { background-position: 0% 0%; } 100% { background-position: 300% 0%; } }
+
+    /* Tree view */
+    .row.tree-row { grid-template-columns: 16px 16px 1fr auto; }
+    .tree-toggle {
+      width: 14px; height: 14px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 9px; color: #7a8ba8;
+      background: transparent; border: none; cursor: pointer; padding: 0;
+    }
+    .tree-toggle:hover { color: #05d9e8; }
+    .tree-toggle.ghost { cursor: default; visibility: hidden; }
+
+    /* Scenes */
+    .scene-save-form {
+      display: flex; gap: 8px; padding: 10px 16px;
+      border-bottom: 1px solid #1a1a3e; background: #0a0a14;
+      align-items: center;
+    }
+    .scene-name {
+      flex: 1; min-width: 0;
+      padding: 5px 9px;
+      background: #070714;
+      color: #e0f0ff;
+      border: 1px solid #1a1a3e;
+      font: inherit; font-size: 12px;
+      border-radius: 2px;
+      outline: none;
+    }
+    .scene-name:focus { border-color: #05d9e8; box-shadow: 0 0 6px rgba(5, 217, 232, 0.35); }
+    .scene-save-btn {
+      padding: 5px 10px;
+      background: transparent; color: #ff2a6d;
+      border: 1px solid #ff2a6d; border-radius: 2px;
+      font: inherit; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+      cursor: pointer;
+    }
+    .scene-save-btn:hover { background: rgba(255, 42, 109, 0.1); box-shadow: 0 0 8px rgba(255, 42, 109, 0.35); }
+    .scene-save-status { font-size: 10px; color: #7a8ba8; }
+    .scene-glyph { color: #d300c5; font-size: 14px; line-height: 16px; text-align: center; }
+    .scene-restore-btn, .scene-delete-btn {
+      font: inherit; cursor: pointer;
+      background: transparent;
+    }
+    .scene-restore-btn { color: #05d9e8; border-color: #05d9e8; }
+    .scene-restore-btn:hover { background: rgba(5, 217, 232, 0.1); }
+    .scene-delete-btn  { color: #7a8ba8; border-color: #7a8ba8; }
+    .scene-delete-btn:hover { color: #ff073a; border-color: #ff073a; background: rgba(255, 7, 58, 0.06); }
+
+    /* Minimap */
+    .minimap { padding: 10px 16px; display: flex; flex-direction: column; gap: 14px; }
+    .mm-window { display: flex; flex-direction: column; gap: 4px; }
+    .mm-window-label {
+      font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: #7a8ba8;
+    }
+    .mm-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(18px, 1fr));
+      gap: 3px;
+    }
+    .mm-cell {
+      height: 18px; border-radius: 2px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+    .mm-cell:hover { transform: scale(1.15); }
+    .mm-pinned { border-color: #ff2a6d; }
+    .mm-active { box-shadow: 0 0 0 2px #fff; }
   `;
 
   let state = null;
@@ -264,7 +345,9 @@
       host, shadow, sink,
       catIdx: 0, rowIdx: 0,
       filter: "",
-      mru: [], closed: [],
+      mru: [], closed: [], scenes: [], history: [],
+      historyLoaded: false,
+      collapsedTreeIds: new Set(),
       currentWindowId: null,
       firstRender: true
     };
@@ -307,7 +390,8 @@
           <div class="footer">
             <span><kbd>↑↓</kbd>nav</span>
             <span><kbd>Enter</kbd>switch</span>
-            <span><kbd>⌘1–6</kbd>category</span>
+            <span><kbd>⌘1–0</kbd>category</span>
+            <span><kbd>←→</kbd>tree</span>
             <span><kbd>⌫</kbd>close tab</span>
             <span><kbd>Esc</kbd>cancel</span>
           </div>
@@ -381,14 +465,36 @@
       state.currentWindowId = state.mru.find((t) => t.active)?.windowId
                             ?? state.mru[0]?.windowId
                             ?? null;
-      if (state.firstRender) {
-        const items = currentList();
-        const i = items.findIndex((t) => t.active);
-        state.rowIdx = i >= 0 && i + 1 < items.length ? i + 1 : 0;
-        state.firstRender = false;
-      }
-      render();
+      chrome.runtime.sendMessage({ kind: "scenes-list" }, (sd) => {
+        if (!state) return;
+        state.scenes = sd?.scenes || [];
+        chrome.runtime.sendMessage(
+          { kind: "history-list", maxResults: HISTORY_MAX_RESULTS },
+          (hd) => {
+            if (!state) return;
+            state.history = hd?.history || [];
+            state.historyLoaded = true;
+            if (state.firstRender) {
+              const items = currentList();
+              const i = items.findIndex((t) => t.active);
+              state.rowIdx = i >= 0 && i + 1 < items.length ? i + 1 : 0;
+              state.firstRender = false;
+            }
+            render();
+          }
+        );
+      });
     });
+  }
+
+  function timeAgo(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return "";
+    const sec = Math.floor((Date.now() - ms) / 1000);
+    if (sec < 60)     return sec + "s ago";
+    if (sec < 3600)   return Math.floor(sec / 60) + "m ago";
+    if (sec < 86400)  return Math.floor(sec / 3600) + "h ago";
+    if (sec < 604800) return Math.floor(sec / 86400) + "d ago";
+    return Math.floor(sec / 604800) + "w ago";
   }
 
   function hostOf(url) { try { return new URL(url).hostname; } catch { return ""; } }
@@ -403,6 +509,55 @@
         const t = s.tab || s.window?.tabs?.[0];
         return t && { ...t, kind: "closed", sessionId: s.tab?.sessionId || s.window?.sessionId };
       }).filter(Boolean);
+    } else if (cat.id === "scenes") {
+      // Scenes — plain substring match (not fzf — name+slug, not URL+title).
+      const f = state.filter.toLowerCase();
+      return state.scenes
+        .filter((s) => !f || s.name.toLowerCase().includes(f) || s.slug.includes(f))
+        .map((s) => ({
+          kind: "scene",
+          slug: s.slug,
+          name: s.name,
+          title: s.name,
+          url: `scene://${s.slug}`,
+          tabCount: s.tabs?.length || 0,
+          updated_at: s.updated_at,
+        }));
+    } else if (cat.id === "tree") {
+      // Tree rows preserve parent→child ordering — bypass fzf reshape.
+      const f = state.filter.toLowerCase();
+      const matchesLite = (t) => !f
+        || (t.title || "").toLowerCase().includes(f)
+        || (t.url   || "").toLowerCase().includes(f)
+        || hostOf(t.url || "").toLowerCase().includes(f);
+      const { roots } = buildTabTree(state.mru);
+      const flat = flattenTree(roots, state.collapsedTreeIds);
+      return flat
+        .filter((n) => matchesLite(n.tab))
+        .map((n) => ({
+          ...n.tab,
+          kind: "tree",
+          _depth: n.depth,
+          _hasChildren: n.hasChildren,
+          _collapsed: n.collapsed,
+        }));
+    } else if (cat.id === "minimap") {
+      const f = state.filter.toLowerCase();
+      const matchesLite = (t) => !f
+        || (t.title || "").toLowerCase().includes(f)
+        || (t.url   || "").toLowerCase().includes(f)
+        || hostOf(t.url || "").toLowerCase().includes(f);
+      return state.mru
+        .filter(matchesLite)
+        .map((t) => ({ ...t, kind: "minimap" }));
+    } else if (cat.id === "history") {
+      items = state.history.map((h) => ({
+        kind: "history",
+        url: h.url,
+        title: h.title,
+        lastVisitTime: h.lastVisitTime,
+        visitCount: h.visitCount,
+      }));
     } else {
       items = state.mru.map((t) => ({ ...t, kind: "open" }));
       if      (cat.id === "current") items = items.filter((t) => t.windowId === state.currentWindowId);
@@ -438,18 +593,34 @@
   function render() {
     if (!state) return;
     const { shadow } = state;
+    const cat = CATEGORIES[state.catIdx];
+    const isScenes  = cat.id === "scenes";
+    const isMinimap = cat.id === "minimap";
     shadow.querySelectorAll(".cat").forEach((el, i) => {
       el.classList.toggle("sel", i === state.catIdx);
     });
     const list = shadow.querySelector(".list");
     const items = currentList();
+
+    if (isMinimap) { renderMinimap(list, items); return; }
+
+    const saveForm = isScenes ? `
+      <div class="scene-save-form">
+        <input class="scene-name" type="text" placeholder="name this scene (e.g. 'research', 'client-x')"
+               maxlength="48" autocomplete="off">
+        <button class="scene-save-btn">Save current window</button>
+        <span class="scene-save-status muted small"></span>
+      </div>
+    ` : "";
+
     if (!items.length) {
-      list.innerHTML = `<div class="empty">no matches</div>`;
+      list.innerHTML = saveForm + `<div class="empty">${isScenes ? "no scenes saved yet" : "no matches"}</div>`;
+      if (isScenes) wireSceneForm();
       return;
     }
     if (state.rowIdx >= items.length) state.rowIdx = items.length - 1;
     if (state.rowIdx < 0) state.rowIdx = 0;
-    list.innerHTML = items.map((t, i) => row(t, i, i === state.rowIdx)).join("");
+    list.innerHTML = saveForm + items.map((t, i) => row(t, i, i === state.rowIdx)).join("");
     list.querySelectorAll(".row img.favicon").forEach((img) => {
       img.addEventListener("error", () => { img.style.visibility = "hidden"; });
     });
@@ -462,7 +633,10 @@
       list._mouseMoveBound = true;
     }
     list.querySelectorAll(".row").forEach((el) => {
-      el.addEventListener("click", () => activate(Number(el.dataset.idx)));
+      el.addEventListener("click", (ev) => {
+        if (ev.target.closest(".scene-restore-btn") || ev.target.closest(".scene-delete-btn")) return;
+        activate(Number(el.dataset.idx));
+      });
       el.addEventListener("mouseenter", () => {
         // Only honor mouseenter if the user actually moved the mouse just
         // now — not if scroll-into-view shifted the row under the cursor.
@@ -472,8 +646,90 @@
           r.classList.toggle("sel", Number(r.dataset.idx) === state.rowIdx));
       });
     });
+    list.querySelectorAll(".scene-restore-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        chrome.runtime.sendMessage({ kind: "scenes-restore", slug: btn.dataset.slug }, () => closeModal());
+      });
+    });
+    list.querySelectorAll(".scene-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        chrome.runtime.sendMessage({ kind: "scenes-delete", slug: btn.dataset.slug }, () => refresh());
+      });
+    });
+    list.querySelectorAll(".tree-toggle").forEach((btn) => {
+      if (btn.classList.contains("ghost")) return;
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tid = Number(btn.dataset.tid);
+        if (!Number.isFinite(tid)) return;
+        if (state.collapsedTreeIds.has(tid)) state.collapsedTreeIds.delete(tid);
+        else state.collapsedTreeIds.add(tid);
+        render();
+      });
+    });
+    if (isScenes) wireSceneForm();
     const sel = list.querySelector(".row.sel");
     if (sel) sel.scrollIntoView({ block: "nearest" });
+  }
+
+  function renderMinimap(list, items) {
+    if (!items.length) { list.innerHTML = `<div class="empty">no tabs</div>`; return; }
+    const grouped = new Map();
+    for (const t of items) {
+      const winId = t.windowId ?? 0;
+      if (!grouped.has(winId)) grouped.set(winId, []);
+      grouped.get(winId).push(t);
+    }
+    const winRows = [...grouped.entries()].map(([winId, tabs]) => {
+      const cells = tabs.map((t) => {
+        const hue = domainHueFor(t.url || "");
+        const sel = t.windowId === state.currentWindowId && t.active;
+        return `<div class="mm-cell${t.pinned ? " mm-pinned" : ""}${sel ? " mm-active" : ""}"
+                      data-idx="${items.indexOf(t)}" data-tab-id="${t.id}"
+                      style="background:hsl(${hue},75%,45%);"
+                      title="${escapeHtml((t.title || t.url || "").slice(0, 80))}"></div>`;
+      }).join("");
+      return `<div class="mm-window">
+        <div class="mm-window-label">win ${winId === state.currentWindowId ? "★" : ""} · ${tabs.length}</div>
+        <div class="mm-grid">${cells}</div>
+      </div>`;
+    }).join("");
+    list.innerHTML = `<div class="minimap">${winRows}</div>`;
+    list.querySelectorAll(".mm-cell").forEach((el) => {
+      el.addEventListener("click", () => activate(Number(el.dataset.idx)));
+    });
+  }
+
+  function wireSceneForm() {
+    const list = state.shadow.querySelector(".list");
+    const nameInput = list.querySelector(".scene-name");
+    const saveBtn   = list.querySelector(".scene-save-btn");
+    const status    = list.querySelector(".scene-save-status");
+    if (!nameInput || !saveBtn) return;
+    // The scene-name input is a real <input> — let it own keyboard focus so
+    // the user can type. handleKey's window-level catch still works for
+    // Cmd+1..0 since input doesn't stop those when filter is empty here.
+    nameInput.addEventListener("keydown", (e) => e.stopPropagation());
+    const submit = () => {
+      const name = nameInput.value.trim();
+      if (!name) { status.textContent = "name required"; return; }
+      status.textContent = "saving…";
+      chrome.runtime.sendMessage({ kind: "scenes-save", name }, (resp) => {
+        if (!resp?.ok) {
+          status.textContent = "error: " + (resp?.error || "no tabs to save");
+          return;
+        }
+        status.textContent = `saved ${resp.scene?.tabs?.length || 0} tabs`;
+        nameInput.value = "";
+        refresh();
+      });
+    };
+    saveBtn.addEventListener("click", submit);
+    nameInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+    });
   }
 
   function escapeHtml(s) {
@@ -483,6 +739,23 @@
   }
 
   function row(t, idx, selected) {
+    if (t.kind === "scene") {
+      const when = t.updated_at ? new Date(t.updated_at).toLocaleString() : "";
+      return `
+        <div class="row scene-row${selected ? " sel" : ""}"
+             data-idx="${idx}" data-kind="scene" data-slug="${escapeHtml(t.slug)}">
+          <span class="favicon scene-glyph">⌬</span>
+          <div class="title-col">
+            <span class="name">${escapeHtml(t.name)}</span>
+            <span class="path">${t.tabCount} tab${t.tabCount === 1 ? "" : "s"} · ${escapeHtml(when)} · slug: ${escapeHtml(t.slug)}</span>
+          </div>
+          <div class="badges">
+            <button class="badge scene-restore-btn" data-slug="${escapeHtml(t.slug)}">restore</button>
+            <button class="badge scene-delete-btn"  data-slug="${escapeHtml(t.slug)}">delete</button>
+          </div>
+        </div>
+      `;
+    }
     const host = hostOf(t.url || "");
     const titleText = t.title || t.url || "(untitled)";
     const titleHtml = t._titleHl?.length ? highlightWithIndices(titleText, t._titleHl, escapeHtml) : escapeHtml(titleText);
@@ -491,13 +764,23 @@
     if (t.pinned)            badges.push(`<span class="badge pinned">pin</span>`);
     if (t.audible)           badges.push(`<span class="badge audible">audio</span>`);
     if (t.mutedInfo?.muted)  badges.push(`<span class="badge muted">muted</span>`);
+    if (t.kind === "history" && t.lastVisitTime) {
+      badges.push(`<span class="badge muted" title="${escapeHtml(new Date(t.lastVisitTime).toLocaleString())}">${escapeHtml(timeAgo(t.lastVisitTime))}</span>`);
+    }
     const fav = t.favIconUrl ? `<img class="favicon" src="${escapeHtml(t.favIconUrl)}" referrerpolicy="no-referrer">` : `<span class="favicon"></span>`;
+    const isTree = t.kind === "tree";
+    const indent = isTree ? `style="padding-left:${8 + t._depth * 14}px;"` : "";
+    const toggle = isTree && t._hasChildren
+      ? `<button class="tree-toggle" data-tid="${t.id}" title="${t._collapsed ? "expand" : "collapse"} branch">${t._collapsed ? "▶" : "▼"}</button>`
+      : (isTree ? `<span class="tree-toggle ghost"></span>` : "");
     return `
-      <div class="row${selected ? " sel" : ""}${t.active ? " active-tab" : ""}"
+      <div class="row${selected ? " sel" : ""}${t.active ? " active-tab" : ""}${isTree ? " tree-row" : ""}"
            data-idx="${idx}"
            data-kind="${t.kind}"
            data-tab-id="${t.id ?? ""}"
-           data-session-id="${t.sessionId ?? ""}">
+           data-session-id="${t.sessionId ?? ""}"
+           ${indent}>
+        ${toggle}
         ${fav}
         <div class="title-col">
           <span class="name">${titleHtml}</span>
@@ -515,6 +798,13 @@
     const swallow = () => { void chrome.runtime.lastError; };
     if (t.kind === "closed") {
       chrome.runtime.sendMessage({ kind: "restore", sessionId: t.sessionId }, swallow);
+    } else if (t.kind === "scene") {
+      chrome.runtime.sendMessage({ kind: "scenes-restore", slug: t.slug }, swallow);
+    } else if (t.kind === "history") {
+      // Content scripts can't call chrome.tabs.create directly; route through
+      // background. We piggyback on the gm:openInTab handler that's already
+      // wired for userscripts — same behavior (new active tab).
+      chrome.runtime.sendMessage({ kind: "gm:openInTab", url: t.url, active: true }, swallow);
     } else {
       chrome.runtime.sendMessage({ kind: "activate", tabId: t.id }, swallow);
     }
@@ -543,11 +833,12 @@
     // Lone modifier presses (Shift, Cmd held down) — ignore.
     if (e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") return;
 
-    // Cmd/Ctrl + 1..6 → category jump.
-    if ((e.metaKey || e.ctrlKey) && /^[1-6]$/.test(e.key)) {
+    // Cmd/Ctrl + 1..9 + Cmd/Ctrl + 0 → category jump (0 = History, 10th slot).
+    if ((e.metaKey || e.ctrlKey) && /^[0-9]$/.test(e.key)) {
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      const n = parseInt(e.key, 10) - 1;
-      if (n < CATEGORIES.length) { state.catIdx = n; state.rowIdx = 0; render(); }
+      const n = parseInt(e.key, 10);
+      const idx = n === 0 ? 9 : n - 1;
+      if (idx < CATEGORIES.length) { state.catIdx = idx; state.rowIdx = 0; render(); }
       return;
     }
     // Cmd/Ctrl + E → cycle MRU.
@@ -566,12 +857,24 @@
     e.stopImmediatePropagation();
 
     if (e.key === "Escape")    { e.preventDefault(); closeModal(); return; }
+    // Tree-view: ← / → collapse / expand the current branch.
+    if (CATEGORIES[state.catIdx].id === "tree" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      const cur = currentList()[state.rowIdx];
+      if (cur && cur._hasChildren) {
+        e.preventDefault();
+        if (e.key === "ArrowLeft")  state.collapsedTreeIds.add(cur.id);
+        if (e.key === "ArrowRight") state.collapsedTreeIds.delete(cur.id);
+        render();
+        return;
+      }
+    }
     if (e.key === "ArrowDown") { e.preventDefault(); cycle(+1); return; }
     if (e.key === "ArrowUp")   { e.preventDefault(); cycle(-1); return; }
     if (e.key === "Enter")     { e.preventDefault(); activate(state.rowIdx); return; }
 
     if (e.key === "Backspace") {
-      // If filter has content, trim a character. Otherwise close highlighted tab.
+      // If filter has content, trim a character. Otherwise act on the row:
+      //   open → close tab, history → delete URL from history.
       e.preventDefault();
       if (state.filter.length > 0) {
         setFilter(state.filter.slice(0, -1));
@@ -579,16 +882,29 @@
         const t = currentList()[state.rowIdx];
         if (t?.kind === "open") {
           chrome.runtime.sendMessage({ kind: "close-tab", tabId: t.id }, () => refresh());
+        } else if (t?.kind === "history" && t.url) {
+          const url = t.url;
+          chrome.runtime.sendMessage({ kind: "history-delete", url }, () => {
+            state.history = state.history.filter((h) => h.url !== url);
+            render();
+          });
         }
       }
       return;
     }
     if (e.key === "Delete") {
-      // Fn+Backspace on Mac, real Del elsewhere. Always closes highlighted tab.
+      // Fn+Backspace on Mac, real Del elsewhere. Closes highlighted tab,
+      // or deletes a history entry when in the History category.
       e.preventDefault();
       const t = currentList()[state.rowIdx];
       if (t?.kind === "open") {
         chrome.runtime.sendMessage({ kind: "close-tab", tabId: t.id }, () => refresh());
+      } else if (t?.kind === "history" && t.url) {
+        const url = t.url;
+        chrome.runtime.sendMessage({ kind: "history-delete", url }, () => {
+          state.history = state.history.filter((h) => h.url !== url);
+          render();
+        });
       }
       return;
     }

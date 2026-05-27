@@ -441,13 +441,13 @@ function refresh() {
 }
 
 function loadHistory(done) {
-  if (!chrome.history) { state.historyLoaded = true; return done(); }
-  // text:"" returns everything ordered by lastVisitTime desc.
-  // startTime:0 is the documented way to ask for the full window.
-  chrome.history.search(
-    { text: "", maxResults: HISTORY_MAX_RESULTS, startTime: 0 },
-    (results) => {
-      state.history = results || [];
+  // Both popup and modal go through background.js `history-list` so there's
+  // one code path. Content scripts can't reach chrome.history directly in
+  // MV3 — routing through the SW is the shared point of truth.
+  chrome.runtime.sendMessage(
+    { kind: "history-list", maxResults: HISTORY_MAX_RESULTS },
+    (resp) => {
+      state.history = resp?.history || [];
       state.historyLoaded = true;
       done();
     }
@@ -508,10 +508,11 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();
       chrome.runtime.sendMessage({ kind: "close-tab", tabId: t.id }, refresh);
     } else if (t?.kind === "history" && t.url) {
-      // chrome.history.deleteUrl removes ALL visits to this URL — that's
-      // what the user wants for an fzf-history sweep (one stroke = gone).
+      // Background's history-delete wraps chrome.history.deleteUrl, which
+      // removes ALL visits to this URL — what the user wants for an
+      // fzf-history sweep (one stroke = gone).
       e.preventDefault();
-      chrome.history.deleteUrl({ url: t.url }, () => {
+      chrome.runtime.sendMessage({ kind: "history-delete", url: t.url }, () => {
         state.history = state.history.filter((h) => h.url !== t.url);
         renderList();
       });

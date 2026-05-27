@@ -797,6 +797,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  // --- chrome.history wrappers (popup AND modal both go through here so
+  //     content-script callers — which can't reach chrome.history directly
+  //     in MV3 — get the same data as the popup) ---
+  if (msg?.kind === "history-list") {
+    if (!chrome.history) { sendResponse({ ok: false, history: [] }); return true; }
+    chrome.history.search(
+      { text: "", maxResults: msg.maxResults || 5000, startTime: 0 },
+      (results) => sendResponse({ ok: true, history: results || [] })
+    );
+    return true;
+  }
+  if (msg?.kind === "history-delete") {
+    if (!chrome.history) { sendResponse({ ok: false }); return true; }
+    chrome.history.deleteUrl({ url: String(msg.url || "") }, () => sendResponse({ ok: true }));
+    return true;
+  }
+
   // --- chrome.processes (dev/canary only) ---
   if (msg?.kind === "processes-snapshot") {
     snapshotProcesses()
