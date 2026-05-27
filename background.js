@@ -96,6 +96,16 @@ async function dispatch(command) {
   if (command === "save-scene-prompt")    return chrome.action.openPopup();
   if (command.startsWith("restore-scene-")) return restoreSceneByOrdinal(command);
   if (command === "kill-heaviest")        return killHeaviestTab();
+  if (command === "open-history")         return openHistoryInPopup();
+}
+
+async function openHistoryInPopup() {
+  // Hand the category off to the popup via session storage. The popup reads
+  // and clears this on init so it jumps straight to the History tab. We use
+  // session (not local) so a stale value from a prior browser run never
+  // hijacks the popup the next time Alt+T is pressed.
+  await chrome.storage.session.set({ pendingCategory: "history" });
+  await chrome.action.openPopup().catch(() => {});
 }
 
 async function openScriptsManager() {

@@ -94,9 +94,9 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 \`zpwrchrome\` is a Chrome MV3 extension that replaces [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) with a keyboard-first switcher carrying ${total - 1}× more commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via \`chrome.storage.session\`, survives service-worker restarts
-- **Alt+Z back** — one-keystroke return to previous tab (matches Recent Tabs’ only shortcut)
+- **Alt+T popup** — the cyberpunk HUD with 10 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History), Cmd+1–0 jumps, fzf scoring on every row
 - **Cmd+E / Ctrl+E modal** — JetBrains-style Recent Files overlay: 2-column shadow-DOM modal injected into the active page with categories (All / Current Window / Pinned / Audible / Muted / Recently Closed), Cmd+1–6 category jumps, live filter, hold-cycle on the trigger key
-- **Alt+Shift+T restore** — reopens the most recently closed tab/window from any window
+- **Cmd+Y / Ctrl+Y history** — replaces Chrome’s built-in chrome://history page with an fzf-fuzzy search over up to ${5000} entries, Backspace deletes the highlighted URL from history
 - **${userBound} user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at \`chrome://extensions/shortcuts\` (single-tab ops, batch ops, numeric jumps, clipboard utilities)
 - **Sub-popup live filter** — type to filter open + closed tabs; \`↑\`/\`↓\`/\`Enter\`/\`Delete\`/\`Esc\` nav
 - **Companion Chrome theme** — \`theme/\` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
@@ -565,8 +565,8 @@ const html = `<!DOCTYPE html>
       <h2>features</h2>
       <div class="features">
         <div class="feature"><strong>MRU tracking</strong>Cross-window most-recently-used stack. Survives service-worker restarts.</div>
-        <div class="feature"><strong>Alt+Z back</strong>Jump to previous tab, just like Recent Tabs.</div>
-        <div class="feature"><strong>Alt+Shift+T restore</strong>Reopen the most recently closed tab from any window.</div>
+        <div class="feature"><strong>Cmd+Y history</strong>Replaces Chrome's chrome://history with an fzf-fuzzy search over up to ${5000} URLs. Backspace deletes.</div>
+        <div class="feature"><strong>Cmd+E modal</strong>JetBrains-style Recent Files overlay injected into the active page.</div>
         <div class="feature"><strong>Filtered popup</strong>Live filter over open + closed tabs, ↑↓/Enter/Del nav.</div>
         <div class="feature"><strong>Batch tab ops</strong>close-others, close-right, close-duplicates, reload-all, sort-by-URL, group-by-domain.</div>
         <div class="feature"><strong>Single-tab ops</strong>duplicate, pin, mute, detach, bookmark, copy URL, copy Markdown link.</div>

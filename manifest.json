@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "zpwrchrome — Hyper Tab Switcher",
   "short_name": "zpwrchrome",
-  "version": "0.4.13",
-  "description": "Recent-tabs switcher (JetBrains-style Cmd+E) with named scenes, opener-tree, minimap + Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
+  "version": "0.4.14",
+  "description": "Recent-tabs switcher (JetBrains-style Cmd+E) with named scenes, opener-tree, minimap, fzf history search + Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
   "minimum_chrome_version": "127",
@@ -13,6 +13,7 @@
     "tabGroups",
     "sessions",
     "bookmarks",
+    "history",
     "storage",
     "scripting",
     "userScripts",
@@ -77,26 +78,21 @@
       },
       "description": "Open zpwrchrome popup"
     },
-    "switch-previous-tab": {
-      "suggested_key": {
-        "default": "Alt+Z",
-        "mac": "Alt+Z"
-      },
-      "description": "Switch to the previously active tab (MRU)"
-    },
-    "restore-last-closed": {
-      "suggested_key": {
-        "default": "Alt+Shift+T",
-        "mac": "Alt+Shift+T"
-      },
-      "description": "Restore the most recently closed tab"
-    },
+    "switch-previous-tab":  { "description": "Switch to the previously active tab (MRU)" },
+    "restore-last-closed":  { "description": "Restore the most recently closed tab" },
     "recent-modal": {
       "suggested_key": {
         "default": "Ctrl+E",
         "mac": "Command+E"
       },
       "description": "Open the JetBrains-style Recent Tabs modal overlay"
+    },
+    "open-history": {
+      "suggested_key": {
+        "default": "Ctrl+Y",
+        "mac": "Command+Y"
+      },
+      "description": "Open the popup focused on the History category (fzf-search browsing history)"
     },
 
     "search-tabs":         { "description": "Open popup focused on the tab search box" },

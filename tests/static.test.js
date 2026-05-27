@@ -536,6 +536,7 @@ test("manifest permissions are all referenced by background.js or popup.js", () 
     tabGroups:      /chrome\.tabGroups\./,
     sessions:       /chrome\.sessions\./,
     bookmarks:      /chrome\.bookmarks\./,
+    history:        /chrome\.history\./,
     storage:        /chrome\.storage\./,
     scripting:      /chrome\.scripting\./,
     userScripts:    /chrome\.userScripts/,

@@ -17,8 +17,15 @@ const CATEGORIES = [
   { id: "closed",  label: "Recently Closed",   key: "⌘6" },
   { id: "scenes",  label: "Scenes",            key: "⌘7" },
   { id: "tree",    label: "Tree (by opener)",  key: "⌘8" },
-  { id: "minimap", label: "Minimap",           key: "⌘9" }
+  { id: "minimap", label: "Minimap",           key: "⌘9" },
+  { id: "history", label: "History",           key: "⌘0" }
 ];
+
+// Browsing-history fetch ceiling. chrome.history.search() with text:""
+// returns up to maxResults entries ordered by lastVisitTime desc — chosen
+// large enough that fzf has room to match obscure typed terms but bounded
+// so the popup doesn't stall scoring 100k rows.
+const HISTORY_MAX_RESULTS = 5000;
 
 const state = {
   catIdx: 0,
@@ -27,6 +34,8 @@ const state = {
   mru: [],
   closed: [],
   scenes: [],
+  history: [],
+  historyLoaded: false,
   currentWindowId: null,
   // JetBrains-style: on first render, select the row right after the
   // active tab so a single Enter switches back to the previous tab.
@@ -103,6 +112,17 @@ function currentList() {
         _hasChildren: n.hasChildren,
         _collapsed: n.collapsed,
       }));
+  } else if (cat.id === "history") {
+    // Browsing history. Pre-scored against fzf — but chrome.history's own
+    // text-match is cheaper for the no-filter case, so we leave the rows
+    // raw when filter is empty (already lastVisitTime-desc).
+    items = state.history.map((h) => ({
+      kind: "history",
+      url: h.url,
+      title: h.title,
+      lastVisitTime: h.lastVisitTime,
+      visitCount: h.visitCount,
+    }));
   } else if (cat.id === "minimap") {
     // Minimap doesn't render titles; filter still helps when user types.
     const f = state.filter.toLowerCase();
@@ -196,6 +216,9 @@ function renderList() {
     if (t.pinned)            badges.push(`<span class="badge pinned">pin</span>`);
     if (t.audible)           badges.push(`<span class="badge audible">audio</span>`);
     if (t.mutedInfo?.muted)  badges.push(`<span class="badge muted">muted</span>`);
+    if (t.kind === "history" && t.lastVisitTime) {
+      badges.push(`<span class="badge muted" title="${escapeHtml(new Date(t.lastVisitTime).toLocaleString())}">${escapeHtml(timeAgo(t.lastVisitTime))}</span>`);
+    }
     const fav = t.favIconUrl ? `<img class="favicon" src="${escapeHtml(t.favIconUrl)}" referrerpolicy="no-referrer">` : `<span class="favicon"></span>`;
     const isTree = t.kind === "tree";
     const indent = isTree ? `style="padding-left:${8 + t._depth * 14}px;"` : "";
@@ -282,6 +305,16 @@ function fmtMb(bytes) {
   return mb < 100 ? mb.toFixed(0) + "M" : (mb / 1024).toFixed(2) + "G";
 }
 
+function timeAgo(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  const sec = Math.floor((Date.now() - ms) / 1000);
+  if (sec < 60)     return sec + "s ago";
+  if (sec < 3600)   return Math.floor(sec / 60) + "m ago";
+  if (sec < 86400)  return Math.floor(sec / 3600) + "h ago";
+  if (sec < 604800) return Math.floor(sec / 86400) + "d ago";
+  return Math.floor(sec / 604800) + "w ago";
+}
+
 function renderMinimap(items) {
   if (!items.length) {
     $list.innerHTML = `<div class="empty">no tabs</div>`;
@@ -353,6 +386,8 @@ function activate(idx) {
     chrome.runtime.sendMessage({ kind: "restore", sessionId: t.sessionId }, () => window.close());
   } else if (t.kind === "scene") {
     chrome.runtime.sendMessage({ kind: "scenes-restore", slug: t.slug }, () => window.close());
+  } else if (t.kind === "history") {
+    chrome.tabs.create({ url: t.url, active: true }, () => window.close());
   } else {
     // "open", "tree", "minimap" — all wrap an open Tab.
     chrome.runtime.sendMessage({ kind: "activate", tabId: t.id }, () => window.close());
@@ -379,16 +414,44 @@ function refresh() {
       // Best-effort processes snapshot. No-op on stable Chrome.
       chrome.runtime.sendMessage({ kind: "processes-snapshot" }, (pd) => {
         state.proc = pd && pd.available ? pd : { available: false, perTab: {} };
-        if (state.firstRender) {
-          const items = currentList();
-          const i = items.findIndex((t) => t.active);
-          state.rowIdx = i >= 0 && i + 1 < items.length ? i + 1 : 0;
-          state.firstRender = false;
-        }
-        render();
+        loadHistory(() => {
+          if (state.firstRender) {
+            // open-history (Cmd+Y) writes pendingCategory before openPopup;
+            // pick it up exactly once.
+            chrome.storage.session.get("pendingCategory", (bag) => {
+              const pending = bag?.pendingCategory;
+              if (pending) {
+                const idx = CATEGORIES.findIndex((c) => c.id === pending);
+                if (idx >= 0) state.catIdx = idx;
+                chrome.storage.session.remove("pendingCategory");
+              }
+              const items = currentList();
+              const i = items.findIndex((t) => t.active);
+              state.rowIdx = i >= 0 && i + 1 < items.length ? i + 1 : 0;
+              state.firstRender = false;
+              render();
+            });
+          } else {
+            render();
+          }
+        });
       });
     });
   });
+}
+
+function loadHistory(done) {
+  if (!chrome.history) { state.historyLoaded = true; return done(); }
+  // text:"" returns everything ordered by lastVisitTime desc.
+  // startTime:0 is the documented way to ask for the full window.
+  chrome.history.search(
+    { text: "", maxResults: HISTORY_MAX_RESULTS, startTime: 0 },
+    (results) => {
+      state.history = results || [];
+      state.historyLoaded = true;
+      done();
+    }
+  );
 }
 
 $q.addEventListener("input", (e) => {
@@ -405,12 +468,14 @@ document.getElementById("killHeaviest")?.addEventListener("click", () => {
 });
 
 document.addEventListener("keydown", (e) => {
-  // Cmd/Ctrl+1..9 → category jump (capped at categories.length).
-  if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
+  // Cmd/Ctrl+1..9 + Cmd/Ctrl+0 (10th slot → History).
+  if ((e.metaKey || e.ctrlKey) && /^[0-9]$/.test(e.key)) {
+    // 1..9 map to indices 0..8; 0 maps to index 9 (History).
     const n = parseInt(e.key, 10);
-    if (n - 1 < CATEGORIES.length) {
+    const idx = n === 0 ? 9 : n - 1;
+    if (idx < CATEGORIES.length) {
       e.preventDefault();
-      state.catIdx = n - 1;
+      state.catIdx = idx;
       state.rowIdx = 0;
       render();
       return;
@@ -442,6 +507,14 @@ document.addEventListener("keydown", (e) => {
     if (t?.kind === "open") {
       e.preventDefault();
       chrome.runtime.sendMessage({ kind: "close-tab", tabId: t.id }, refresh);
+    } else if (t?.kind === "history" && t.url) {
+      // chrome.history.deleteUrl removes ALL visits to this URL — that's
+      // what the user wants for an fzf-history sweep (one stroke = gone).
+      e.preventDefault();
+      chrome.history.deleteUrl({ url: t.url }, () => {
+        state.history = state.history.filter((h) => h.url !== t.url);
+        renderList();
+      });
     }
     return;
   }
