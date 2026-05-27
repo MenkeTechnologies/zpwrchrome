@@ -185,13 +185,15 @@ test("popup.css keeps the strykelang cyberpunk palette variables", () => {
   assert.match(css, /--accent:\s*#ff2a6d/);
 });
 
-test("README, docs/index.html, and modal/content.js are in sync (scripts/gen.sh is idempotent)", () => {
+test("README, docs/index.html, docs/report.html, and modal/content.js are in sync (scripts/gen.sh is idempotent)", () => {
   const readmeBefore = read("README.md");
   const docsBefore   = read("docs/index.html");
+  const reportBefore = read("docs/report.html");
   const modalBefore  = read("modal/content.js");
   execFileSync("bash", [join(ROOT, "scripts/gen.sh")], { stdio: "pipe" });
   assert.equal(read("README.md"),         readmeBefore, "README.md drifted — re-run scripts/gen.sh and commit");
   assert.equal(read("docs/index.html"),   docsBefore,   "docs/index.html drifted — re-run scripts/gen.sh and commit");
+  assert.equal(read("docs/report.html"),  reportBefore, "docs/report.html drifted — re-run scripts/gen.sh and commit");
   assert.equal(read("modal/content.js"),  modalBefore,  "modal/content.js drifted — re-run scripts/build-modal.sh and commit");
 });
 
