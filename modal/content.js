@@ -287,6 +287,30 @@ function domainHueFor(url) {
   return h % 360;
 }
 
+// ---------------------------------------------------------------------------
+// Frecency — combine recency + frequency into one ranking score for history.
+//
+//   frecency = (visitCount + 2*typedCount) / (hoursAgo + 2)
+//
+// Typed visits weigh 2x because the user deliberately chose the URL (not just
+// clicked a link). The +2 stops brand-new visits from dominating with
+// infinitesimal hoursAgo; a linear decay gives ~57x weight to "an hour ago"
+// vs "a week ago" — recent matters, but a hundred visits last week still
+// beats a one-off visit this morning.
+//
+// Pure — no chrome.* refs — so this can ship to both popup (extension page)
+// and modal (content script via UTIL_INLINE) AND be unit-tested headless.
+// ---------------------------------------------------------------------------
+function frecencyScore(item, nowMs = Date.now()) {
+  if (!item) return 0;
+  const visits = (item.visitCount || 0) + 2 * (item.typedCount || 0);
+  if (visits <= 0) return 0;
+  const last = item.lastVisitTime || 0;
+  if (last <= 0) return visits;
+  const hoursAgo = Math.max(0, (nowMs - last) / 3_600_000);
+  return visits / (hoursAgo + 2);
+}
+
   const CATEGORIES = [
     { id: "all",     label: "All Tabs",          key: "⌘1" },
     { id: "current", label: "Current Window",    key: "⌘2" },
@@ -807,12 +831,15 @@ function domainHueFor(url) {
         .filter(matchesLite)
         .map((t) => ({ ...t, kind: "minimap" }));
     } else if (cat.id === "history") {
+      // Already frecency-sorted by background. frecency forwarded for the
+      // fzf tiebreaker below.
       items = state.history.map((h) => ({
         kind: "history",
         url: h.url,
         title: h.title,
         lastVisitTime: h.lastVisitTime,
         visitCount: h.visitCount,
+        frecency: h.frecency,
       }));
     } else {
       items = state.mru.map((t) => ({ ...t, kind: "open" }));
@@ -842,7 +869,8 @@ function domainHueFor(url) {
         _hostHl:  hm?.indices || []
       });
     }
-    scored.sort((a, b) => b._score - a._score);
+    // Primary sort: fzf score. Tiebreaker: frecency (set on history rows).
+    scored.sort((a, b) => (b._score - a._score) || ((b.frecency ?? 0) - (a.frecency ?? 0)));
     return scored;
   }
 

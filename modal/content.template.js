@@ -551,12 +551,15 @@
         .filter(matchesLite)
         .map((t) => ({ ...t, kind: "minimap" }));
     } else if (cat.id === "history") {
+      // Already frecency-sorted by background. frecency forwarded for the
+      // fzf tiebreaker below.
       items = state.history.map((h) => ({
         kind: "history",
         url: h.url,
         title: h.title,
         lastVisitTime: h.lastVisitTime,
         visitCount: h.visitCount,
+        frecency: h.frecency,
       }));
     } else {
       items = state.mru.map((t) => ({ ...t, kind: "open" }));
@@ -586,7 +589,8 @@
         _hostHl:  hm?.indices || []
       });
     }
-    scored.sort((a, b) => b._score - a._score);
+    // Primary sort: fzf score. Tiebreaker: frecency (set on history rows).
+    scored.sort((a, b) => (b._score - a._score) || ((b.frecency ?? 0) - (a.frecency ?? 0)));
     return scored;
   }
 

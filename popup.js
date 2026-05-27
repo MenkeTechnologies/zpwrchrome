@@ -113,15 +113,16 @@ function currentList() {
         _collapsed: n.collapsed,
       }));
   } else if (cat.id === "history") {
-    // Browsing history. Pre-scored against fzf — but chrome.history's own
-    // text-match is cheaper for the no-filter case, so we leave the rows
-    // raw when filter is empty (already lastVisitTime-desc).
+    // state.history arrives already frecency-sorted (recent + frequent first)
+    // from background.js's history-list handler. Carry frecency forward so
+    // the fzf sort below can use it as a tiebreaker.
     items = state.history.map((h) => ({
       kind: "history",
       url: h.url,
       title: h.title,
       lastVisitTime: h.lastVisitTime,
       visitCount: h.visitCount,
+      frecency: h.frecency,
     }));
   } else if (cat.id === "minimap") {
     // Minimap doesn't render titles; filter still helps when user types.
@@ -158,7 +159,9 @@ function currentList() {
       _hostHl:  hm?.indices || []
     });
   }
-  scored.sort((a, b) => b._score - a._score);
+  // Primary sort: fzf score. Tiebreaker: frecency (set on history rows by
+  // background.js; undefined → 0 elsewhere so non-history sorts unchanged).
+  scored.sort((a, b) => (b._score - a._score) || ((b.frecency ?? 0) - (a.frecency ?? 0)));
   return scored;
 }
 

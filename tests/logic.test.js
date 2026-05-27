@@ -14,7 +14,8 @@ import {
   resolveSceneOrdinal,
   buildTabTree,
   flattenTree,
-  domainHueFor
+  domainHueFor,
+  frecencyScore
 } from "../lib/util.js";
 import { fzfMatch, highlightWithIndices } from "../lib/fzf.js";
 
@@ -357,4 +358,67 @@ test("domainHueFor tolerates garbage input", () => {
   // be deterministic.
   assert.equal(domainHueFor(""),      domainHueFor("nope"));
   assert.equal(domainHueFor(undefined), domainHueFor(null));
+});
+
+// ---------------------------------------------------------------------------
+// Frecency — combines recency + frequency for history ranking.
+
+const NOW = 1_700_000_000_000; // fixed reference so the math is deterministic
+const HOUR = 3_600_000;
+
+test("frecencyScore: zero visits → zero score", () => {
+  assert.equal(frecencyScore({ visitCount: 0, typedCount: 0, lastVisitTime: NOW }, NOW), 0);
+  assert.equal(frecencyScore({}, NOW), 0);
+  assert.equal(frecencyScore(null, NOW), 0);
+});
+
+test("frecencyScore: typed visits weight 2x raw visits", () => {
+  // Same hoursAgo, same lastVisitTime — typedCount should double-count.
+  const clicked = frecencyScore({ visitCount: 10, typedCount: 0,  lastVisitTime: NOW - HOUR }, NOW);
+  const typed   = frecencyScore({ visitCount: 0,  typedCount: 10, lastVisitTime: NOW - HOUR }, NOW);
+  // 0 + 2*10 = 20 vs 10 + 2*0 = 10 → typed exactly 2x clicked.
+  assert.ok(Math.abs(typed / clicked - 2) < 1e-9,
+    `typed should weight 2x. typed=${typed}, clicked=${clicked}, ratio=${typed/clicked}`);
+});
+
+test("frecencyScore: recent visits outrank older ones (same visit count)", () => {
+  const recent = frecencyScore({ visitCount: 5, lastVisitTime: NOW - HOUR },        NOW);
+  const old    = frecencyScore({ visitCount: 5, lastVisitTime: NOW - 168 * HOUR },  NOW);
+  assert.ok(recent > old, `1h-ago (${recent}) must outrank 1w-ago (${old})`);
+});
+
+test("frecencyScore: frequent visits outrank infrequent ones (same recency)", () => {
+  const frequent   = frecencyScore({ visitCount: 100, lastVisitTime: NOW - HOUR }, NOW);
+  const infrequent = frecencyScore({ visitCount: 1,   lastVisitTime: NOW - HOUR }, NOW);
+  // Float division can introduce 1-ULP rounding — use a relative tolerance
+  // rather than strictEqual.
+  const ratio = frequent / infrequent;
+  assert.ok(Math.abs(ratio - 100) < 1e-9,
+    `score must scale linearly with visitCount; ratio=${ratio}`);
+});
+
+test("frecencyScore: future visits don't blow up (clamps hoursAgo at 0)", () => {
+  // Clock skew can put lastVisitTime slightly in the future; result should
+  // still be finite and use the same denominator as a now-visit.
+  const future = frecencyScore({ visitCount: 5, lastVisitTime: NOW + HOUR }, NOW);
+  const nowish = frecencyScore({ visitCount: 5, lastVisitTime: NOW         }, NOW);
+  assert.ok(Number.isFinite(future), "future visit must yield a finite score");
+  assert.equal(future, nowish, "future visit collapses to the now case");
+});
+
+test("frecencyScore: missing lastVisitTime → falls back to weighted visit count", () => {
+  // Without time info we still want a non-zero rank for high-visit URLs.
+  const noTime = frecencyScore({ visitCount: 3, typedCount: 1 }, NOW);
+  assert.equal(noTime, 3 + 2 * 1);
+});
+
+test("frecencyScore: linear decay — week-old loses ~57x to one-hour-old", () => {
+  // Same visit count: 1h-ago / 1w-ago ratio is (168+2)/(1+2) ≈ 56.67. Pin
+  // the band so a future tweak to the denominator constant or the decay
+  // exponent is an intentional change rather than accidental.
+  const h1   = frecencyScore({ visitCount: 1, lastVisitTime: NOW - 1   * HOUR },  NOW);
+  const w1   = frecencyScore({ visitCount: 1, lastVisitTime: NOW - 168 * HOUR },  NOW);
+  const ratio = h1 / w1;
+  assert.ok(ratio > 50 && ratio < 65,
+    `decay ratio (1h vs 1w) should sit in [50, 65] band; got ${ratio.toFixed(2)}`);
 });

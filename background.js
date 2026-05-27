@@ -12,7 +12,8 @@ import {
   buildScene,
   upsertScene,
   dropScene,
-  resolveSceneOrdinal
+  resolveSceneOrdinal,
+  frecencyScore
 } from "./lib/util.js";
 import {
   parseMetadata,
@@ -791,7 +792,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!chrome.history) { sendResponse({ ok: false, history: [] }); return true; }
     chrome.history.search(
       { text: "", maxResults: msg.maxResults || 5000, startTime: 0 },
-      (results) => sendResponse({ ok: true, history: results || [] })
+      (results) => {
+        // Re-rank by frecency (recency * frequency). Chrome's native ordering
+        // is lastVisitTime-desc which over-promotes one-off visits. Frecency
+        // surfaces the URLs the user actually lives on. Each item carries
+        // its score so client-side fzf scoring can use it as a tiebreaker.
+        const now = Date.now();
+        const ranked = (results || []).map((h) => ({
+          ...h,
+          frecency: frecencyScore(h, now),
+        }));
+        ranked.sort((a, b) => b.frecency - a.frecency);
+        sendResponse({ ok: true, history: ranked });
+      }
     );
     return true;
   }
