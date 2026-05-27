@@ -8,7 +8,11 @@ import {
   mruStep as mruStepPure,
   mruPrevious,
   hostnameOf,
-  resolveJumpIndex
+  resolveJumpIndex,
+  buildScene,
+  upsertScene,
+  dropScene,
+  resolveSceneOrdinal
 } from "./lib/util.js";
 import {
   parseMetadata,
@@ -21,6 +25,7 @@ import {
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 
 const MRU_KEY = "mru";
+const SCENES_KEY = "scenes";   // chrome.storage.local — survives browser restart
 
 async function readMru() {
   const { [MRU_KEY]: mru } = await chrome.storage.session.get(MRU_KEY);
@@ -88,6 +93,9 @@ async function dispatch(command) {
   if (command === "copy-title-md")        return copyActiveTitleMd();
   if (command === "bookmark-tab")         return bookmarkActive();
   if (command === "manage-scripts")       return openScriptsManager();
+  if (command === "save-scene-prompt")    return chrome.action.openPopup();
+  if (command.startsWith("restore-scene-")) return restoreSceneByOrdinal(command);
+  if (command === "kill-heaviest")        return killHeaviestTab();
 }
 
 async function openScriptsManager() {
@@ -754,4 +762,163 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
     return true;
   }
+
+  // --- Named scenes (save/restore named tab-sets) ---
+  if (msg?.kind === "scenes-list") {
+    readScenes().then((scenes) => sendResponse({ scenes }));
+    return true;
+  }
+  if (msg?.kind === "scenes-save") {
+    saveSceneFromActiveWindow(String(msg.name || ""))
+      .then((scene) => sendResponse({ ok: !!scene, scene }))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+  if (msg?.kind === "scenes-restore") {
+    restoreSceneBySlug(String(msg.slug || ""))
+      .then((winId) => sendResponse({ ok: typeof winId === "number", windowId: winId }))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+  if (msg?.kind === "scenes-delete") {
+    deleteSceneBySlug(String(msg.slug || ""))
+      .then((n) => sendResponse({ ok: true, remaining: n }))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+
+  // --- chrome.processes (dev/canary only) ---
+  if (msg?.kind === "processes-snapshot") {
+    snapshotProcesses()
+      .then((data) => sendResponse(data))
+      .catch((e) => sendResponse({ available: false, error: String(e), perTab: {} }));
+    return true;
+  }
+  if (msg?.kind === "kill-heaviest") {
+    killHeaviestTab()
+      .then((tabId) => sendResponse({ ok: typeof tabId === "number", tabId }))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
 });
+
+// ---------------------------------------------------------------------------
+// Scenes — persisted to chrome.storage.local (survives browser restart).
+
+async function readScenes() {
+  const { [SCENES_KEY]: s } = await chrome.storage.local.get(SCENES_KEY);
+  return Array.isArray(s) ? s : [];
+}
+async function writeScenes(scenes) {
+  await chrome.storage.local.set({ [SCENES_KEY]: scenes });
+}
+
+async function saveSceneFromActiveWindow(name) {
+  const win = await chrome.windows.getLastFocused({ populate: true });
+  if (!win?.tabs?.length) return null;
+  const scene = buildScene(name, win.tabs);
+  if (!scene) return null;
+  const scenes = upsertScene(await readScenes(), scene);
+  await writeScenes(scenes);
+  return scene;
+}
+
+async function restoreSceneByOrdinal(command) {
+  const scenes = await readScenes();
+  const idx = resolveSceneOrdinal(command, scenes.length);
+  if (idx < 0) return;
+  return restoreSceneBySlug(scenes[idx].slug);
+}
+
+async function restoreSceneBySlug(slug) {
+  const scenes = await readScenes();
+  const scene = scenes.find((s) => s.slug === slug);
+  if (!scene || !scene.tabs.length) return undefined;
+  // Open a new window with the first URL, then add the rest. Keeps existing
+  // windows untouched — restore is purely additive, never clobbers state.
+  const [first, ...rest] = scene.tabs;
+  const win = await chrome.windows.create({ url: first.url, focused: true });
+  // Apply pinned on the first tab.
+  if (first.pinned && win.tabs?.[0]?.id != null) {
+    try { await chrome.tabs.update(win.tabs[0].id, { pinned: true }); } catch {}
+  }
+  for (const entry of rest) {
+    try {
+      const tab = await chrome.tabs.create({ windowId: win.id, url: entry.url, active: false });
+      if (entry.pinned && tab?.id != null) {
+        await chrome.tabs.update(tab.id, { pinned: true });
+      }
+    } catch (e) {
+      console.warn("[zpwrchrome] scene restore tab failed:", entry.url, e);
+    }
+  }
+  return win.id;
+}
+
+async function deleteSceneBySlug(slug) {
+  const next = dropScene(await readScenes(), slug);
+  await writeScenes(next);
+  return next.length;
+}
+
+// ---------------------------------------------------------------------------
+// Processes API — Chrome dev/canary only. `chrome.processes` is gated to
+// non-stable channels and is undefined elsewhere. We feature-detect and
+// return { available: false } so the UI can show a graceful "—".
+
+function processesApiAvailable() {
+  return typeof chrome !== "undefined"
+      && typeof chrome.processes === "object"
+      && typeof chrome.processes.getProcessInfo === "function";
+}
+
+// Returns { available, perTab: { [tabId]: { cpu, memoryBytes } }, error? }
+async function snapshotProcesses() {
+  if (!processesApiAvailable()) {
+    return { available: false, reason: "chrome.processes unavailable on this channel", perTab: {} };
+  }
+  // chrome.processes.getProcessInfo(ids, includeMemory, cb)
+  const info = await new Promise((resolve) => {
+    try {
+      chrome.processes.getProcessInfo([], true, (procs) => resolve(procs || {}));
+    } catch { resolve({}); }
+  });
+  // Aggregate per-tab. Each ProcessInfo.tasks[] is { tabId, title }.
+  const perTab = {};
+  for (const pid of Object.keys(info)) {
+    const p = info[pid];
+    const cpu = typeof p.cpu === "number" ? p.cpu : 0;
+    const mem = typeof p.privateMemory === "number" ? p.privateMemory : 0;
+    for (const task of (p.tasks || [])) {
+      const tid = task.tabId;
+      if (typeof tid !== "number" || tid < 0) continue;
+      const cur = perTab[tid] || { cpu: 0, memoryBytes: 0 };
+      cur.cpu += cpu;
+      cur.memoryBytes += mem;
+      perTab[tid] = cur;
+    }
+  }
+  return { available: true, perTab };
+}
+
+async function killHeaviestTab() {
+  const snap = await snapshotProcesses();
+  if (!snap.available) return undefined;
+  let worst = null;
+  for (const [tid, m] of Object.entries(snap.perTab)) {
+    if (!worst || m.memoryBytes > worst.mem) worst = { tabId: Number(tid), mem: m.memoryBytes };
+  }
+  if (!worst) return undefined;
+  // Refuse to kill the active tab; pick the next-heaviest non-active.
+  const active = await getActive();
+  if (active?.id === worst.tabId) {
+    const ranked = Object.entries(snap.perTab)
+      .map(([tid, m]) => ({ tabId: Number(tid), mem: m.memoryBytes }))
+      .sort((a, b) => b.mem - a.mem)
+      .filter((r) => r.tabId !== active.id);
+    if (!ranked.length) return undefined;
+    worst = ranked[0];
+  }
+  try { await chrome.tabs.remove(worst.tabId); return worst.tabId; }
+  catch { return undefined; }
+}

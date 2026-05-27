@@ -9,6 +9,8 @@
   <div class="modal">
     <div class="header">
       <div class="title">zpwrchrome // recent</div>
+      <button id="killHeaviest" class="kill-heaviest hidden"
+              title="Close the most memory-heavy tab (Chrome dev/canary only)">⚡ kill heaviest</button>
       <input class="search" type="search" placeholder="filter // url, title, host" autocomplete="off" autofocus>
       <div class="hint">
         <a href="#" id="open-scripts" title="open userscript dashboard">scripts ▸</a> · Esc close
@@ -21,7 +23,8 @@
     <div class="footer">
       <span><kbd>↑↓</kbd>nav</span>
       <span><kbd>Enter</kbd>switch</span>
-      <span><kbd>⌘1–6</kbd>category</span>
+      <span><kbd>⌘1–9</kbd>category</span>
+      <span><kbd>←→</kbd>tree</span>
       <span><kbd>⌫</kbd>close tab</span>
       <span><kbd>Esc</kbd>cancel</span>
     </div>

@@ -7,11 +7,22 @@ import {
   mruPrevious,
   hostnameOf,
   resolveJumpIndex,
-  MRU_CAP_DEFAULT
+  MRU_CAP_DEFAULT,
+  buildScene,
+  upsertScene,
+  dropScene,
+  resolveSceneOrdinal,
+  buildTabTree,
+  flattenTree,
+  domainHueFor
 } from "../lib/util.js";
 import { fzfMatch, highlightWithIndices } from "../lib/fzf.js";
 
 const escape = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Module-private cap mirrored for test coverage (kept module-private in
+// lib/util.js since background.js doesn't need to reference it).
+const SCENE_CAP_PER_SCENE = 200;
 
 test("mruPush prepends a new id", () => {
   assert.deepEqual(mruPush([2, 3], 1), [1, 2, 3]);
@@ -184,4 +195,166 @@ test("highlightWithIndices escapes HTML in unmatched and matched chars", () => {
 
 test("highlightWithIndices returns empty escaped text when no indices", () => {
   assert.equal(highlightWithIndices("<b>", [], escape), "&lt;b&gt;");
+});
+
+// ---- scenes ---------------------------------------------------------------
+
+test("buildScene slugifies the name to kebab-case", () => {
+  // Indirect coverage of the internal slugify helper.
+  const tabs = [{ url: "https://a.com/" }];
+  assert.equal(buildScene("Research Q4", tabs).slug, "research-q4");
+  assert.equal(buildScene("  client/X — kickoff  ", tabs).slug, "client-x-kickoff");
+  assert.equal(buildScene("__a__b__", tabs).slug, "a-b");
+});
+
+test("buildScene caps slug length at 48 chars", () => {
+  const s = buildScene("a".repeat(200), [{ url: "https://a.com/" }]);
+  assert.equal(s.slug.length, 48);
+});
+
+test("buildScene filters non-restorable URLs and respects per-scene cap", () => {
+  const tabs = [
+    { url: "https://a.com/", title: "A", pinned: true },
+    { url: "chrome://newtab/", title: "skip me", pinned: false },
+    { url: "chrome-extension://abc/x.html", title: "skip ext" },
+    { url: "devtools://devtools/x", title: "skip devtools" },
+    { url: "view-source:https://example.com", title: "skip view-source" },
+    { url: "https://b.com/", title: "B" },
+    { url: "", title: "no url" },
+  ];
+  const s = buildScene("My Scene", tabs, 1700000000000);
+  assert.equal(s.name, "My Scene");
+  assert.equal(s.slug, "my-scene");
+  assert.equal(s.tabs.length, 2);
+  assert.equal(s.tabs[0].pinned, true);
+  assert.equal(s.tabs[1].url, "https://b.com/");
+  assert.equal(s.created_at, 1700000000000);
+
+  // Cap enforcement.
+  const huge = Array.from({ length: SCENE_CAP_PER_SCENE + 50 },
+    (_, i) => ({ url: `https://x${i}.com/`, title: `t${i}` }));
+  const capped = buildScene("big", huge);
+  assert.equal(capped.tabs.length, SCENE_CAP_PER_SCENE);
+});
+
+test("buildScene returns null when name yields empty slug", () => {
+  assert.equal(buildScene("!!!", [{ url: "https://a.com/" }]), null);
+  assert.equal(buildScene("", [{ url: "https://a.com/" }]), null);
+});
+
+test("upsertScene puts new scene at front and replaces by slug", () => {
+  const a = { slug: "a", tabs: [] };
+  const b = { slug: "b", tabs: [] };
+  const after = upsertScene([a, b], { slug: "a", tabs: [{ url: "x" }] });
+  assert.equal(after.length, 2);
+  assert.equal(after[0].slug, "a");
+  assert.equal(after[0].tabs.length, 1);          // replaced
+  assert.equal(after[1].slug, "b");
+});
+
+test("upsertScene is a no-op for null scene", () => {
+  const before = [{ slug: "a" }];
+  const after = upsertScene(before, null);
+  assert.deepEqual(after, before);
+  assert.notEqual(after, before, "must return copy");
+});
+
+test("dropScene removes by slug", () => {
+  assert.deepEqual(dropScene([{ slug: "a" }, { slug: "b" }], "a"), [{ slug: "b" }]);
+  assert.deepEqual(dropScene([{ slug: "a" }], "missing"), [{ slug: "a" }]);
+});
+
+test("resolveSceneOrdinal maps restore-scene-N to ordinal", () => {
+  assert.equal(resolveSceneOrdinal("restore-scene-1", 5), 0);
+  assert.equal(resolveSceneOrdinal("restore-scene-5", 5), 4);
+  assert.equal(resolveSceneOrdinal("restore-scene-6", 5), -1);   // past end
+  assert.equal(resolveSceneOrdinal("restore-scene-1", 0), -1);   // empty list
+  assert.equal(resolveSceneOrdinal("restore-scene-0", 5), -1);   // out of 1..9
+  assert.equal(resolveSceneOrdinal("restore-scene-x", 5), -1);
+  assert.equal(resolveSceneOrdinal("save-scene-prompt", 5), -1);
+});
+
+// ---- tab tree -------------------------------------------------------------
+
+test("buildTabTree nests children under their opener and surfaces orphans as roots", () => {
+  const tabs = [
+    { id: 1, title: "root-a" },                             // root
+    { id: 2, title: "child-a1", openerTabId: 1 },           // child of 1
+    { id: 3, title: "child-a2", openerTabId: 1 },           // child of 1
+    { id: 4, title: "grand", openerTabId: 2 },              // child of 2
+    { id: 5, title: "root-b" },                             // root (no opener)
+    { id: 6, title: "orphan", openerTabId: 999 },           // opener missing → root
+  ];
+  const { roots, byId } = buildTabTree(tabs);
+  assert.equal(byId.size, 6);
+  const ids = (xs) => xs.map((n) => n.tab.id);
+  assert.deepEqual(ids(roots), [1, 5, 6]);
+  const rootA = roots.find((n) => n.tab.id === 1);
+  assert.deepEqual(ids(rootA.children), [2, 3]);
+  const child2 = rootA.children.find((n) => n.tab.id === 2);
+  assert.deepEqual(ids(child2.children), [4]);
+});
+
+test("buildTabTree breaks self-parent cycles by re-rooting", () => {
+  const tabs = [{ id: 1, openerTabId: 1 }];   // pathological self-opener
+  const { roots } = buildTabTree(tabs);
+  assert.equal(roots.length, 1);
+  assert.equal(roots[0].tab.id, 1);
+  assert.equal(roots[0].children.length, 0);
+});
+
+test("flattenTree DFS-orders nodes with depth tags", () => {
+  const tabs = [
+    { id: 1 }, { id: 2, openerTabId: 1 }, { id: 3, openerTabId: 2 }, { id: 4 },
+  ];
+  const { roots } = buildTabTree(tabs);
+  const flat = flattenTree(roots, new Set());
+  assert.deepEqual(flat.map((n) => [n.tab.id, n.depth]),
+    [[1, 0], [2, 1], [3, 2], [4, 0]]);
+  assert.equal(flat[0].hasChildren, true);
+  assert.equal(flat[1].hasChildren, true);
+  assert.equal(flat[2].hasChildren, false);
+  assert.equal(flat[3].hasChildren, false);
+});
+
+test("flattenTree hides descendants of collapsed nodes", () => {
+  const tabs = [
+    { id: 1 }, { id: 2, openerTabId: 1 }, { id: 3, openerTabId: 2 }, { id: 4 },
+  ];
+  const { roots } = buildTabTree(tabs);
+  const flat = flattenTree(roots, new Set([2]));   // collapse subtree rooted at 2
+  // 2's children (just id 3) should be hidden; 2 itself is still visible.
+  assert.deepEqual(flat.map((n) => n.tab.id), [1, 2, 4]);
+  assert.equal(flat.find((n) => n.tab.id === 2).collapsed, true);
+});
+
+test("flattenTree accepts an object-shaped collapsed map (storage round-trip)", () => {
+  const tabs = [{ id: 1 }, { id: 2, openerTabId: 1 }];
+  const { roots } = buildTabTree(tabs);
+  // chrome.storage round-trips Sets as objects; accept { "1": true }.
+  const flat = flattenTree(roots, { "1": true });
+  assert.deepEqual(flat.map((n) => n.tab.id), [1]);
+});
+
+// ---- domain hue (minimap colors) -----------------------------------------
+
+test("domainHueFor is stable per hostname and in [0,360)", () => {
+  const a1 = domainHueFor("https://example.com/foo");
+  const a2 = domainHueFor("https://example.com/bar?q=1");
+  assert.equal(a1, a2, "different paths on same host must collide");
+  assert.ok(Number.isInteger(a1) && a1 >= 0 && a1 < 360);
+});
+
+test("domainHueFor differs across distinct hostnames", () => {
+  // Not strictly guaranteed (it's hashing into 360 buckets), but with
+  // two unrelated hosts collision should be unlikely.
+  assert.notEqual(domainHueFor("https://github.com/"),
+                  domainHueFor("https://news.ycombinator.com/"));
+});
+
+test("domainHueFor tolerates garbage input", () => {
+  // hostnameOf returns "(other)" for unparseable strings; hue must still
+  // be deterministic.
+  assert.equal(domainHueFor(""),      domainHueFor("nope"));
+  assert.equal(domainHueFor(undefined), domainHueFor(null));
 });

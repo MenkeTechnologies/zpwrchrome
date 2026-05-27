@@ -83,12 +83,17 @@ test("every user-dispatched command in manifest has a handler in background.js",
   // chrome.action.openPopup() from the dispatch table.
   const skip = new Set(["_execute_action"]);
   const jumpFamily = /^jump-to-[1-9]$/;
-  let jumpCovered = false;
+  const sceneFamily = /^restore-scene-[1-9]$/;
   for (const name of cmdNames) {
     if (skip.has(name)) continue;
     if (jumpFamily.test(name)) {
-      jumpCovered = bgSrc.includes('command.startsWith("jump-to-")');
-      assert.ok(jumpCovered, "jump-to-* family must be handled via startsWith dispatch");
+      assert.ok(bgSrc.includes('command.startsWith("jump-to-")'),
+        "jump-to-* family must be handled via startsWith dispatch");
+      continue;
+    }
+    if (sceneFamily.test(name)) {
+      assert.ok(bgSrc.includes('command.startsWith("restore-scene-")'),
+        "restore-scene-* family must be handled via startsWith dispatch");
       continue;
     }
     assert.ok(
@@ -206,16 +211,18 @@ test("scripts/gen.sh is syntactically valid bash", () => {
   execFileSync("bash", ["-n", join(ROOT, "scripts/gen.sh")], { stdio: "pipe" });
 });
 
-test("every exported helper in lib/util.js is imported by background.js", () => {
-  // No dead exports: if a helper lives in util.js but background.js doesn't
-  // import it, either it's unused (delete it) or the test was forgotten.
+test("every exported helper in lib/util.js is imported by background.js or popup.js", () => {
+  // No dead exports: if a helper lives in util.js but neither runtime
+  // (background service-worker, popup frontend) references it, either
+  // it's unused (delete it) or the test was forgotten.
   const util = read("lib/util.js");
+  const popupSrc = read("popup.js");
   const exports = [...util.matchAll(/^export (?:const|function)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
   assert.ok(exports.length > 0, "lib/util.js exports nothing");
   for (const name of exports) {
     assert.ok(
-      bgSrc.includes(name),
-      `lib/util.js exports "${name}" but background.js never references it`
+      bgSrc.includes(name) || popupSrc.includes(name),
+      `lib/util.js exports "${name}" but neither background.js nor popup.js references it`
     );
   }
 });

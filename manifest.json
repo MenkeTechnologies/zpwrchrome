@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "zpwrchrome — Hyper Tab Switcher",
   "short_name": "zpwrchrome",
-  "version": "0.4.12",
-  "description": "Recent-tabs switcher (JetBrains-style Cmd+E) + Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
+  "version": "0.4.13",
+  "description": "Recent-tabs switcher (JetBrains-style Cmd+E) with named scenes, opener-tree, minimap + Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
   "minimum_chrome_version": "127",
@@ -18,6 +18,9 @@
     "userScripts",
     "webNavigation",
     "clipboardWrite"
+  ],
+  "optional_permissions": [
+    "processes"
   ],
 
   "options_ui": {
@@ -125,6 +128,15 @@
     "copy-title-md":       { "description": "Copy active tab as Markdown link" },
     "bookmark-tab":        { "description": "Bookmark active tab to Other Bookmarks" },
 
-    "manage-scripts":      { "description": "Open the userscript manager (Tampermonkey-style)" }
+    "manage-scripts":      { "description": "Open the userscript manager (Tampermonkey-style)" },
+
+    "save-scene-prompt":   { "description": "Open popup focused on save-scene input" },
+    "restore-scene-1":     { "description": "Restore scene #1 (newest) — opens a new window with saved tabs" },
+    "restore-scene-2":     { "description": "Restore scene #2" },
+    "restore-scene-3":     { "description": "Restore scene #3" },
+    "restore-scene-4":     { "description": "Restore scene #4" },
+    "restore-scene-5":     { "description": "Restore scene #5" },
+
+    "kill-heaviest":       { "description": "Close the open tab consuming the most memory (Chrome dev/canary only — requires chrome.processes API)" }
   }
 }

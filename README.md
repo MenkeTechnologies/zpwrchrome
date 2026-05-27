@@ -9,22 +9,22 @@
 
 [![CI](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml)
 [![Manifest](https://img.shields.io/badge/manifest-v3-05d9e8.svg)](manifest.json)
-[![Commands](https://img.shields.io/badge/commands-30-ff2a6d.svg)](#0x02-keyboard-commands)
+[![Commands](https://img.shields.io/badge/commands-37-ff2a6d.svg)](#0x02-keyboard-commands)
 [![Theme](https://img.shields.io/badge/companion-theme-d300c5.svg)](theme/)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zpwrchrome/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ### `[THE FASTEST RECENT-TABS SWITCHER WITH THE MOST KEYBOARD SHORTCUTS IN THE WORLD]`
 
-> *"Recent Tabs with one shortcut. zpwrchrome with 30."*
+> *"Recent Tabs with one shortcut. zpwrchrome with 37."*
 >
 > *"MRU is a primitive, not a side panel."*
 >
-> *"30 commands. 4 default-keyed. 26 user-bound. Zero compromises."*
+> *"37 commands. 4 default-keyed. 33 user-bound. Zero compromises."*
 
 ## `[CYBERPUNK HUD]`
 
-The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window MRU stack, 26 user-bindable commands for batch tab ops and clipboard utilities, sub-popup live-filter search, and a companion Chrome theme that paints the rest of the browser with the same strykelang HUD palette. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero runtime dependencies.
+The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window MRU stack, 33 user-bindable commands for batch tab ops and clipboard utilities, sub-popup live-filter search, and a companion Chrome theme that paints the rest of the browser with the same strykelang HUD palette. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero runtime dependencies.
 
 ### [`Live Site`](https://menketechnologies.github.io/zpwrchrome/) &middot; [`Source`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [`Theme`](theme/)
 
@@ -50,13 +50,13 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 
 ## [0x00] OVERVIEW
 
-`zpwrchrome` is a Chrome MV3 extension that replaces [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) with a keyboard-first switcher carrying 29× more commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
+`zpwrchrome` is a Chrome MV3 extension that replaces [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) with a keyboard-first switcher carrying 36× more commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via `chrome.storage.session`, survives service-worker restarts
 - **Alt+Z back** — one-keystroke return to previous tab (matches Recent Tabs’ only shortcut)
 - **Cmd+E / Ctrl+E modal** — JetBrains-style Recent Files overlay: 2-column shadow-DOM modal injected into the active page with categories (All / Current Window / Pinned / Audible / Muted / Recently Closed), Cmd+1–6 category jumps, live filter, hold-cycle on the trigger key
 - **Alt+Shift+T restore** — reopens the most recently closed tab/window from any window
-- **26 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities)
+- **33 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities)
 - **Sub-popup live filter** — type to filter open + closed tabs; `↑`/`↓`/`Enter`/`Delete`/`Esc` nav
 - **Companion Chrome theme** — `theme/` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from `strykelang/docs/hud-static.css` (`--cyan #05d9e8`, `--accent #ff2a6d`, `--magenta #d300c5`, CRT scanlines, neon-border-glow card frames)
@@ -77,7 +77,7 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 1. Open `chrome://extensions`
 2. Enable **Developer mode** (top-right)
 3. Click **Load unpacked**, pick the cloned directory
-4. Open `chrome://extensions/shortcuts` to bind any of the 26 user-configurable commands
+4. Open `chrome://extensions/shortcuts` to bind any of the 33 user-configurable commands
 
 #### Theme
 
@@ -88,7 +88,7 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 
 ## [0x02] KEYBOARD COMMANDS
 
-Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **26** user-bindable, for **30 total** — versus Recent Tabs’ 1.
+Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **33** user-bindable, for **37 total** — versus Recent Tabs’ 1.
 
 | Command | Default | Description |
 | --- | --- | --- |
@@ -122,6 +122,13 @@ Chrome’s MV3 manifest allows at most **4** commands with default-suggested key
 | `copy-title-md` | *(user-set in `chrome://extensions/shortcuts`)* | Copy active tab as Markdown link |
 | `bookmark-tab` | *(user-set in `chrome://extensions/shortcuts`)* | Bookmark active tab to Other Bookmarks |
 | `manage-scripts` | *(user-set in `chrome://extensions/shortcuts`)* | Open the userscript manager (Tampermonkey-style) |
+| `save-scene-prompt` | *(user-set in `chrome://extensions/shortcuts`)* | Open popup focused on save-scene input |
+| `restore-scene-1` | *(user-set in `chrome://extensions/shortcuts`)* | Restore scene #1 (newest) — opens a new window with saved tabs |
+| `restore-scene-2` | *(user-set in `chrome://extensions/shortcuts`)* | Restore scene #2 |
+| `restore-scene-3` | *(user-set in `chrome://extensions/shortcuts`)* | Restore scene #3 |
+| `restore-scene-4` | *(user-set in `chrome://extensions/shortcuts`)* | Restore scene #4 |
+| `restore-scene-5` | *(user-set in `chrome://extensions/shortcuts`)* | Restore scene #5 |
+| `kill-heaviest` | *(user-set in `chrome://extensions/shortcuts`)* | Close the open tab consuming the most memory (Chrome dev/canary only — requires chrome.processes API) |
 
 ---
 
@@ -230,8 +237,8 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 | Feature | `zpwrchrome` | Recent Tabs (Jason Savard) |
 | --- | --- | --- |
 | Default keyboard shortcuts | **4** | 1 (`Alt+Z`) |
-| User-bindable commands | **26** | a few |
-| Total commands | **30** | ~3-5 |
+| User-bindable commands | **33** | a few |
+| Total commands | **37** | ~3-5 |
 | Cross-window MRU | **yes** | yes |
 | In-popup live filter | **yes** | yes |
 | In-popup arrow / Enter / Del nav | **yes** | partial |
@@ -246,7 +253,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 | Companion browser theme | **yes** | no |
 | Manifest version | **MV3** | MV2/MV3 |
 | License | **MIT** | proprietary |
-| Test suite | **176** node:test cases | none public |
+| Test suite | **192** node:test cases | none public |
 | Generator + doc-drift CI | **yes** | n/a |
 
 ---
