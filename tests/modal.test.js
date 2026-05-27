@@ -41,8 +41,15 @@ test("recent-modal command is declared with a default-suggested key", () => {
 test("background.js dispatches recent-modal", () => {
   const bg = read("background.js");
   assert.match(bg, /command === "recent-modal"/, "background.js missing handler");
-  assert.match(bg, /tabs\.sendMessage\([^)]*\{\s*kind:\s*"open-modal"/,
-    "background.js must send open-modal to the active tab");
+  // v0.4.16+: recent-modal goes straight to chrome.action.openPopup() so
+  // Cmd+E anchors to the toolbar icon (top-right), matching every other
+  // command's popup location. The shadow-DOM injection path is retired.
+  const mod = bg.match(/async function openRecentModal\(\)[\s\S]*?\n\}\n/);
+  assert.ok(mod, "openRecentModal body not found");
+  assert.match(mod[0], /chrome\.action\.openPopup/,
+    "openRecentModal must call chrome.action.openPopup()");
+  assert.ok(!/tabs\.sendMessage\([^)]*"open-modal"/.test(mod[0]),
+    "openRecentModal must NOT inject the in-page modal — popup-only now");
 });
 
 test("content script is wrapped in an IIFE and is idempotent", () => {
@@ -249,21 +256,22 @@ test("recent-modal does not break the 4-default-keys ceiling", () => {
     `Chrome MV3 caps suggested_key at 4. Got ${defaults.length}: ${defaults.join(", ")}`);
 });
 
-test("openRecentModal falls back to chrome.action.openPopup() on restricted pages", () => {
-  // chrome.windows.create({ type: "popup" }) created a separate OS window
-  // which felt jarring. Reverted to the toolbar action popup, which
-  // anchors to the extension icon and renders the same 2-column UI via
-  // popup.html.
+test("openRecentModal opens the toolbar popup (top-right anchor)", () => {
+  // v0.4.16: every command's UI must open from the toolbar icon for visual
+  // parity. The in-page shadow-DOM overlay was retired because it landed
+  // center-of-viewport while Cmd+Y / Alt+T / save-scene-prompt all anchored
+  // top-right.
   const bg = readFileSync(join(ROOT, "background.js"), "utf8");
   assert.match(bg, /async function openRecentModal\(\)/, "openRecentModal not defined");
   const mod = bg.match(/async function openRecentModal\(\)[\s\S]*?\n\}\n/);
   assert.ok(mod, "could not locate openRecentModal body");
   assert.match(mod[0], /chrome\.action\.openPopup/,
-    "openRecentModal must fall back to chrome.action.openPopup() on restricted pages");
-  // Make sure we didn't accidentally leave behind a chrome.windows.create
-  // fallback (the v0.2.2 regression).
+    "openRecentModal must call chrome.action.openPopup()");
+  // No content-script injection, no separate-window create.
   assert.ok(!/chrome\.windows\.create/.test(mod[0]),
-    "openRecentModal must NOT use chrome.windows.create — that opens a jarring separate OS window");
+    "openRecentModal must NOT use chrome.windows.create — separate OS window is jarring");
+  assert.ok(!/chrome\.scripting\.executeScript/.test(mod[0]),
+    "openRecentModal must NOT inject content scripts — popup-only now");
 });
 
 test("popup .modal has the cyan border + neon glow to mirror the in-page overlay", () => {

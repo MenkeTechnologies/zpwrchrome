@@ -157,26 +157,13 @@ async function jumpTo(command) {
 }
 
 async function openRecentModal() {
-  // Regular pages: content script renders the shadow-DOM modal overlay.
-  // chrome://, view-source://, web store, extension pages: Chrome blocks
-  // content scripts, so we open the toolbar action popup, which renders
-  // the SAME 2-column layout as the in-page modal (popup.html mirrors
-  // modal/content.js).
-  const t = await getActive();
-  if (!t?.id) return chrome.action.openPopup().catch(() => {});
-  try {
-    await chrome.tabs.sendMessage(t.id, { kind: "open-modal" });
-  } catch {
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: t.id },
-        files: ["modal/content.js"]
-      });
-      await chrome.tabs.sendMessage(t.id, { kind: "open-modal" });
-    } catch {
-      await chrome.action.openPopup().catch(() => {});
-    }
-  }
+  // Always open the toolbar action popup so Cmd+E anchors to the extension
+  // icon (top-right when pinned) — same visual location as Cmd+Y and every
+  // other extension-command popup. The in-page shadow-DOM modal at
+  // modal/content.js used to inject overlay-style on external pages, but it
+  // landed center-of-viewport instead of top-right, breaking visual parity
+  // across the command set.
+  await chrome.action.openPopup().catch(() => {});
 }
 
 async function restoreLastClosed() {
