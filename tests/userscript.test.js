@@ -246,3 +246,123 @@ console.log(1);`;
   assert.equal(m.includes.length, 1);
   assert.equal(m.excludes.length, 1);
 });
+
+test("parseMetadata collects @require, @resource, and @grant arrays", () => {
+  const src = `// ==UserScript==
+// @name x
+// @match https://a/*
+// @require https://cdn.example/lib.js
+// @resource ICON https://cdn.example/icon.png
+// @grant GM_xmlhttpRequest
+// ==/UserScript==`;
+  const m = parseMetadata(src);
+  assert.deepEqual(m.requires,  ["https://cdn.example/lib.js"]);
+  assert.deepEqual(m.resources, ["ICON https://cdn.example/icon.png"]);
+  assert.deepEqual(m.grants,    ["GM_xmlhttpRequest"]);
+});
+
+test("parseMetadata prefers @icon over @iconurl when both are present", () => {
+  const src = `// ==UserScript==
+// @name x
+// @match https://a/*
+// @icon https://primary/icon.png
+// @iconurl https://fallback/icon.png
+// ==/UserScript==`;
+  assert.equal(parseMetadata(src).icon, "https://primary/icon.png");
+});
+
+test("parseMetadata ignores non-directive comment lines inside the block", () => {
+  const src = `// ==UserScript==
+// @name x
+// This is just a comment, not a directive
+// @match https://a/*
+// ==/UserScript==`;
+  const m = parseMetadata(src);
+  assert.equal(m.name, "x");
+  assert.deepEqual(m.matches, ["https://a/*"]);
+});
+
+test("parseMetadata stores @connect entries in raw", () => {
+  const src = `// ==UserScript==
+// @name x
+// @match https://a/*
+// @connect api.example.com
+// @connect cdn.example.com
+// ==/UserScript==`;
+  const m = parseMetadata(src);
+  assert.deepEqual(m.raw.connect, ["api.example.com", "cdn.example.com"]);
+});
+
+test("validateUserscript accepts @include-only scripts (no @match)", () => {
+  const m = parseMetadata(`// ==UserScript==
+// @name Include Only
+// @include https://example.com/*
+// ==/UserScript==`);
+  assert.deepEqual(validateUserscript(m), []);
+});
+
+test("validateUserscript does not validate @include patterns (only @match)", () => {
+  const m = parseMetadata(`// ==UserScript==
+// @name x
+// @include totally-not-a-url
+// ==/UserScript==`);
+  assert.deepEqual(validateUserscript(m), []);
+});
+
+test("includeToMatchPattern returns null for unconvertible glob paths", () => {
+  assert.equal(includeToMatchPattern("/relative/path"), null);
+  assert.equal(includeToMatchPattern("example.com/no-scheme"), null);
+});
+
+test("matchPatternToRegex matches explicit ftp:// URLs", () => {
+  const re = matchPatternToRegex("ftp://files.example.com/*");
+  assert.ok(re.test("ftp://files.example.com/pub/readme.txt"));
+  assert.ok(!re.test("https://files.example.com/pub/readme.txt"));
+});
+
+test("matchPatternToRegex matches file:/// paths", () => {
+  const re = matchPatternToRegex("file:///*");
+  assert.ok(re.test("file:///etc/hosts"));
+  assert.ok(!re.test("https://example.com/"));
+});
+
+test("matchPatternToRegex path * wildcard matches arbitrary suffix segments", () => {
+  const re = matchPatternToRegex("https://example.com/foo*bar");
+  assert.ok(re.test("https://example.com/fooxyzbar"));
+  assert.ok(!re.test("https://example.com/foobaz"));
+});
+
+test("matchPatternToRegex host * matches any host segment", () => {
+  const re = matchPatternToRegex("https://*/*");
+  assert.ok(re.test("https://anything.example/path"));
+  assert.ok(re.test("https://localhost/"));
+});
+
+test("userscriptId replaces unsafe characters with underscores", () => {
+  const id = userscriptId({ name: "My Script!", namespace: "ns://weird" });
+  assert.match(id, /^[A-Za-z0-9_-]+$/);
+  assert.ok(!id.includes(" "));
+  assert.ok(!id.includes("!"));
+  assert.ok(!id.includes(":"));
+});
+
+test("userscriptId truncates to 80 characters", () => {
+  const id = userscriptId({ name: "x".repeat(200), namespace: "y".repeat(200) });
+  assert.equal(id.length, 80);
+});
+
+test("expandMatchPatterns returns [] for non-array input", () => {
+  assert.deepEqual(expandMatchPatterns(null), []);
+  assert.deepEqual(expandMatchPatterns("https://a/*"), []);
+});
+
+test("expandMatchPatterns skips empty string entries", () => {
+  assert.deepEqual(expandMatchPatterns(["", "https://amazon.com/*"]),
+    ["https://amazon.com/*", "https://*.amazon.com/*"]);
+});
+
+test("matchUrl matches <all_urls> against http and https", () => {
+  assert.ok(matchUrl(["<all_urls>"], "https://example.com/x"));
+  assert.ok(matchUrl(["<all_urls>"], "http://intranet.local/"));
+  assert.ok(!matchUrl(["<all_urls>"], "chrome://extensions/"));
+});

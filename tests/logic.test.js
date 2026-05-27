@@ -422,3 +422,133 @@ test("frecencyScore: linear decay — week-old loses ~57x to one-hour-old", () =
   assert.ok(ratio > 50 && ratio < 65,
     `decay ratio (1h vs 1w) should sit in [50, 65] band; got ${ratio.toFixed(2)}`);
 });
+
+test("mruPush honors a custom cap below the default", () => {
+  const next = mruPush([1, 2, 3, 4], 5, 3);
+  assert.deepEqual(next, [5, 1, 2]);
+});
+
+test("mruPush at exact cap evicts the oldest entry", () => {
+  const full = [10, 20, 30];
+  const next = mruPush(full, 40, 3);
+  assert.deepEqual(next, [40, 10, 20]);
+});
+
+test("mruStep on a two-tab stack wraps in both directions", () => {
+  assert.equal(mruStep([1, 2], 1, +1), 2);
+  assert.equal(mruStep([1, 2], 2, +1), 1);
+  assert.equal(mruStep([1, 2], 1, -1), 2);
+  assert.equal(mruStep([1, 2], 2, -1), 1);
+});
+
+test("mruPrevious skips duplicate current ids and returns the next distinct entry", () => {
+  assert.equal(mruPrevious([5, 5, 10, 20], 5), 10);
+});
+
+test("hostnameOf returns (local) for empty hostname URLs", () => {
+  assert.equal(hostnameOf("file:///tmp/x"), "(local)");
+});
+
+test("resolveJumpIndex rejects jump-to-0 and caps jump-to-10 at last tab", () => {
+  assert.equal(resolveJumpIndex("jump-to-0", 5), -1);
+  assert.equal(resolveJumpIndex("jump-to-10", 5), 4);
+});
+
+test("resolveJumpIndex maps jump-to-2 to index 1 on a single-tab window", () => {
+  assert.equal(resolveJumpIndex("jump-to-2", 1), 0);
+});
+
+test("buildScene prefers url over pendingUrl when both are present", () => {
+  const s = buildScene("x", [{ url: "https://primary/", pendingUrl: "https://pending/" }]);
+  assert.equal(s.tabs[0].url, "https://primary/");
+});
+
+test("buildScene falls back to pendingUrl when url is empty", () => {
+  const s = buildScene("x", [{ url: "", pendingUrl: "https://pending/" }]);
+  assert.equal(s.tabs[0].url, "https://pending/");
+});
+
+test("buildScene filters about: URLs as non-restorable", () => {
+  const s = buildScene("x", [{ url: "about:blank" }, { url: "https://ok/" }]);
+  assert.equal(s.tabs.length, 1);
+  assert.equal(s.tabs[0].url, "https://ok/");
+});
+
+test("buildScene truncates display name to 48 chars", () => {
+  const long = "N".repeat(80);
+  const s = buildScene(long, [{ url: "https://a/" }]);
+  assert.equal(s.name.length, 48);
+});
+
+test("buildScene sets updated_at equal to created_at", () => {
+  const ts = 1_700_000_123_456;
+  const s = buildScene("demo", [{ url: "https://a/" }], ts);
+  assert.equal(s.updated_at, ts);
+  assert.equal(s.created_at, ts);
+});
+
+test("upsertScene prepends a brand-new scene before existing ones", () => {
+  const scenes = [{ slug: "a" }, { slug: "b" }, { slug: "c" }];
+  const after = upsertScene(scenes, { slug: "new", tabs: [] });
+  assert.deepEqual(after.map((s) => s.slug), ["new", "a", "b", "c"]);
+});
+
+test("upsertScene with missing slug returns a shallow copy of the list", () => {
+  const before = [{ slug: "a" }];
+  const after = upsertScene(before, { tabs: [] });
+  assert.deepEqual(after, before);
+  assert.notEqual(after, before);
+});
+
+test("upsertScene with non-array input treats scenes as empty", () => {
+  const after = upsertScene(null, { slug: "x", tabs: [] });
+  assert.deepEqual(after, [{ slug: "x", tabs: [] }]);
+});
+
+test("dropScene with non-array input yields an empty list", () => {
+  assert.deepEqual(dropScene(null, "a"), []);
+});
+
+test("buildTabTree with non-array input returns empty roots and byId", () => {
+  const { roots, byId } = buildTabTree(undefined);
+  assert.deepEqual(roots, []);
+  assert.equal(byId.size, 0);
+});
+
+test("buildTabTree skips entries without a numeric id", () => {
+  const { roots, byId } = buildTabTree([{ title: "no id" }, { id: 1 }]);
+  assert.equal(byId.size, 1);
+  assert.deepEqual(roots.map((n) => n.tab.id), [1]);
+});
+
+test("flattenTree with empty roots returns an empty list", () => {
+  assert.deepEqual(flattenTree([], new Set()), []);
+});
+
+test("flattenTree accepts a Set for the collapsed argument", () => {
+  const tabs = [{ id: 1 }, { id: 2, openerTabId: 1 }, { id: 3, openerTabId: 2 }];
+  const { roots } = buildTabTree(tabs);
+  const flat = flattenTree(roots, new Set([2]));
+  assert.deepEqual(flat.map((n) => n.tab.id), [1, 2]);
+});
+
+test("flattenTree collapsing a parent hides the entire subtree", () => {
+  const tabs = [{ id: 1 }, { id: 2, openerTabId: 1 }, { id: 3, openerTabId: 2 }];
+  const { roots } = buildTabTree(tabs);
+  const flat = flattenTree(roots, new Set([1]));
+  assert.deepEqual(flat.map((n) => n.tab.id), [1]);
+});
+
+test("domainHueFor handles internationalized hostnames deterministically", () => {
+  const h1 = domainHueFor("https://münchen.de/path");
+  const h2 = domainHueFor("https://münchen.de/other");
+  assert.equal(h1, h2);
+  assert.ok(h1 >= 0 && h1 < 360);
+});
+
+test("frecencyScore combines visitCount and typedCount in the numerator", () => {
+  const score = frecencyScore({ visitCount: 4, typedCount: 3, lastVisitTime: NOW - HOUR }, NOW);
+  const expectedNumerator = 4 + 2 * 3;
+  const expectedDenominator = 1 + 2; // 1 hour ago + constant
+  assert.ok(Math.abs(score - expectedNumerator / expectedDenominator) < 1e-9);
+});
