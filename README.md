@@ -93,9 +93,9 @@ Chrome’s MV3 manifest allows at most **4** commands with default-suggested key
 | Command | Default | Description |
 | --- | --- | --- |
 | `_execute_action` | Alt+T | Open zpwrchrome popup |
-| `switch-previous-tab` | *(user-set in `chrome://extensions/shortcuts`)* | Switch to the previously active tab (MRU) |
+| `switch-previous-tab` | Ctrl+E | Switch to the previously active tab (MRU) |
 | `restore-last-closed` | *(user-set in `chrome://extensions/shortcuts`)* | Restore the most recently closed tab |
-| `recent-modal` | Ctrl+E | Open the JetBrains-style Recent Tabs modal overlay |
+| `recent-modal` | *(user-set in `chrome://extensions/shortcuts`)* | Open the recent-tabs popup (same as Alt+T — user-bindable) |
 | `open-history` | Ctrl+Y | Open the popup focused on the History category (fzf-search browsing history) |
 | `search-tabs` | *(user-set in `chrome://extensions/shortcuts`)* | Open popup focused on the tab search box |
 | `mru-next` | *(user-set in `chrome://extensions/shortcuts`)* | Cycle forward through MRU stack |

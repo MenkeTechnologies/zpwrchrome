@@ -27,15 +27,21 @@ test("content script is also declared web_accessible_resources (for fallback inj
     "modal/content.js must be in web_accessible_resources so scripting.executeScript can load it");
 });
 
-test("recent-modal command is declared with a default-suggested key", () => {
+test("Cmd+E default binds switch-previous-tab (MRU step) — v0.4.17+", () => {
+  // Prior behavior: Cmd+E opened the recent-tabs popup. New behavior:
+  // Cmd+E switches directly to the previously active tab (the MRU primitive),
+  // matching the original "Recent Tabs" extension's Alt+Z muscle memory but
+  // on Cmd+E. recent-modal stays in the command list as user-bindable.
+  const prev = manifest.commands["switch-previous-tab"];
+  assert.ok(prev, "switch-previous-tab missing");
+  assert.ok(prev.suggested_key, "switch-previous-tab must own a default key");
+  assert.equal(prev.suggested_key.mac,     "Command+E");
+  assert.equal(prev.suggested_key.default, "Ctrl+E");
+  // recent-modal must NOT carry a suggested_key any more (would collide).
   const cmd = manifest.commands["recent-modal"];
   assert.ok(cmd, "recent-modal command missing");
-  assert.ok(cmd.suggested_key, "recent-modal must ship with a default key (this is the headline feature)");
-  // Mac default must be Cmd+E to match JetBrains.
-  assert.equal(cmd.suggested_key.mac, "Command+E",
-    "Mac default key for recent-modal must be Command+E (JetBrains parity)");
-  // Cross-platform default Ctrl+E.
-  assert.equal(cmd.suggested_key.default, "Ctrl+E");
+  assert.ok(!cmd.suggested_key,
+    "recent-modal must be user-bindable — Cmd+E now belongs to switch-previous-tab");
 });
 
 test("background.js dispatches recent-modal", () => {
