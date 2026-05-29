@@ -256,20 +256,28 @@ function buildTabTree(tabs) {
 
 // Flatten a tree to a depth-tagged display list, honoring a collapsed-set
 // (subtrees rooted at any id in `collapsed` hide their descendants).
-// Each entry: { tab, depth, hasChildren, collapsed }
+// Each entry: { tab, depth, hasChildren, collapsed }.
+// Iterative (manual stack) so an N-thousand-deep opener chain can't blow
+// the JS call stack — the recursive form bottomed out around 10k frames.
 function flattenTree(roots, collapsed) {
   const out = [];
   const skip = collapsed instanceof Set ? collapsed
             : new Set(collapsed && typeof collapsed === "object" ? Object.keys(collapsed).map(Number) : []);
-  const walk = (node, depth) => {
+  const stack = [];
+  const rs = roots || [];
+  for (let i = rs.length - 1; i >= 0; i--) stack.push({ node: rs[i], depth: 0 });
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop();
     const hasChildren = node.children.length > 0;
     const isCollapsed = skip.has(node.tab.id);
     out.push({ tab: node.tab, depth, hasChildren, collapsed: isCollapsed });
     if (hasChildren && !isCollapsed) {
-      for (const c of node.children) walk(c, depth + 1);
+      // Push children in reverse so they pop in original order.
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        stack.push({ node: node.children[i], depth: depth + 1 });
+      }
     }
-  };
-  for (const r of roots || []) walk(r, 0);
+  }
   return out;
 }
 
