@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install librsvg (for theme/icon image checks)
         run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
