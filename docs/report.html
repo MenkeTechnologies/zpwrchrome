@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 38 keyboard commands, 10 popup categories, 21 message kinds, 3,490 JS lines, 2,214 tests. Cyberpunk HUD by MenkeTechnologies.">
+  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 38 keyboard commands, 10 popup categories, 21 message kinds, 3,490 JS lines, 2,250 tests. Cyberpunk HUD by MenkeTechnologies.">
   <title>zpwrchrome &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -195,27 +195,27 @@
       <code>chrome.userScripts</code>; and a frecency-ranked
       <code>chrome.history</code> search replaces Chrome's built-in
       <code>chrome://history</code> page on <code>Cmd+Y</code>.
-      <strong>3,490 JS lines + 831 CSS lines + 14,544 test lines &middot; 38 commands &middot; 21 message handlers &middot; 2214 tests passing</strong>.
+      <strong>3,490 JS lines + 831 CSS lines + 14,918 test lines &middot; 38 commands &middot; 21 message handlers &middot; 2250 tests passing</strong>.
     </p>
 
     <div class="stat-grid">
       <div class="stat-card"><div class="v">3,490</div><div class="l">JS Lines</div></div>
       <div class="stat-card"><div class="v">831</div><div class="l">CSS Lines</div></div>
       <div class="stat-card"><div class="v a">38</div><div class="l">Keyboard Commands</div></div>
-      <div class="stat-card"><div class="v g">2214</div><div class="l">Tests Passing</div></div>
+      <div class="stat-card"><div class="v g">2250</div><div class="l">Tests Passing</div></div>
       <div class="stat-card"><div class="v">10</div><div class="l">Popup Categories</div></div>
       <div class="stat-card"><div class="v m">21</div><div class="l">Message Kinds</div></div>
       <div class="stat-card"><div class="v">23</div><div class="l">Dispatch Handlers</div></div>
       <div class="stat-card"><div class="v">10</div><div class="l">Permissions</div></div>
       <div class="stat-card"><div class="v">15</div><div class="l">Pure Helpers</div></div>
-      <div class="stat-card"><div class="v">171</div><div class="l">Repo Files</div></div>
+      <div class="stat-card"><div class="v">174</div><div class="l">Repo Files</div></div>
       <div class="stat-card"><div class="v y">3</div><div class="l">Default-Keyed</div></div>
       <div class="stat-card"><div class="v">v0.4.19</div><div class="l">Version</div></div>
     </div>
 
     <div>
-      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 19,144 total lines</p>
-      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:18.2%;"></div><span class="bar-label">JS &middot; 3,490 lines &middot; 18.2%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:76.0%;"></div><span class="bar-label">Tests &middot; 14,544 lines &middot; 76.0%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:4.3%;"></div><span class="bar-label">CSS &middot; 831 lines &middot; 4.3%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:1.5%;"></div><span class="bar-label">HTML &middot; 279 lines &middot; 1.5%</span></div>
+      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 19,518 total lines</p>
+      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:17.9%;"></div><span class="bar-label">JS &middot; 3,490 lines &middot; 17.9%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:76.4%;"></div><span class="bar-label">Tests &middot; 14,918 lines &middot; 76.4%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:4.3%;"></div><span class="bar-label">CSS &middot; 831 lines &middot; 4.3%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:1.4%;"></div><span class="bar-label">HTML &middot; 279 lines &middot; 1.4%</span></div>
     </div>
 
     <h2 class="section"><span class="hash">~</span>SUBSYSTEM BREAKDOWN</h2>
@@ -385,7 +385,7 @@
     </div>
 
     <h2 class="section"><span class="hash">*</span>TESTS</h2>
-    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>2214</strong> cases across <strong>131</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
+    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>2250</strong> cases across <strong>134</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
     <table class="file-table">
       <thead><tr><th>File</th><th class="num">Tests</th><th class="num">Lines</th></tr></thead>
       <tbody>
@@ -410,6 +410,7 @@
         <tr><td><code>tests/fzf-match-edge.test.js</code></td><td class="num">14</td><td class="num">87</td></tr>
         <tr><td><code>tests/fzf-more.test.js</code></td><td class="num">14</td><td class="num">96</td></tr>
         <tr><td><code>tests/fzf-position-more.test.js</code></td><td class="num">12</td><td class="num">64</td></tr>
+        <tr><td><code>tests/fzf-stability.test.js</code></td><td class="num">13</td><td class="num">123</td></tr>
         <tr><td><code>tests/fzf.test.js</code></td><td class="num">20</td><td class="num">129</td></tr>
         <tr><td><code>tests/gen-pipeline.test.js</code></td><td class="num">15</td><td class="num">90</td></tr>
         <tr><td><code>tests/gm-background.test.js</code></td><td class="num">15</td><td class="num">99</td></tr>
@@ -514,13 +515,15 @@
         <tr><td><code>tests/userscript-edge.test.js</code></td><td class="num">16</td><td class="num">101</td></tr>
         <tr><td><code>tests/userscript-id-edge.test.js</code></td><td class="num">15</td><td class="num">86</td></tr>
         <tr><td><code>tests/userscript-more.test.js</code></td><td class="num">16</td><td class="num">112</td></tr>
+        <tr><td><code>tests/userscript-parse-edge.test.js</code></td><td class="num">12</td><td class="num">116</td></tr>
         <tr><td><code>tests/userscript-regex-more.test.js</code></td><td class="num">18</td><td class="num">107</td></tr>
         <tr><td><code>tests/userscript.test.js</code></td><td class="num">37</td><td class="num">369</td></tr>
+        <tr><td><code>tests/util-buildtree-edge.test.js</code></td><td class="num">11</td><td class="num">135</td></tr>
         <tr><td><code>tests/util-flatten-collapsed-shapes.test.js</code></td><td class="num">11</td><td class="num">86</td></tr>
         <tr><td><code>tests/util-frecency-more.test.js</code></td><td class="num">14</td><td class="num">77</td></tr>
         <tr><td><code>tests/util-mru-cap-edge.test.js</code></td><td class="num">10</td><td class="num">63</td></tr>
         <tr><td><code>tests/validate-userscript-unit.test.js</code></td><td class="num">13</td><td class="num">87</td></tr>
-        <tr><td><code>TOTAL</code></td><td class="num"><strong>2214</strong></td><td class="num"><strong>14,544</strong></td></tr>
+        <tr><td><code>TOTAL</code></td><td class="num"><strong>2250</strong></td><td class="num"><strong>14,918</strong></td></tr>
       </tbody>
     </table>
 
