@@ -45,7 +45,8 @@ test("CI checks out the repo with actions/checkout", () => {
 });
 
 test("CI sets up Node with actions/setup-node", () => {
-  assert.match(src, /uses:\s*actions\/setup-node@v[34]/);
+  // Allow v3..v6 — same Node-runtime ladder as actions/checkout above.
+  assert.match(src, /uses:\s*actions\/setup-node@v[3456]/);
 });
 
 test("CI installs rsvg so theme image regeneration works in CI", () => {

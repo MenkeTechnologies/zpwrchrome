@@ -27,7 +27,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
 
       - name: Setup Node ${{ matrix.node }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
 
