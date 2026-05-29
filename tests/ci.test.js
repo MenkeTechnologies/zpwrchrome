@@ -37,7 +37,11 @@ test("CI tests on multiple Node versions (matrix)", () => {
 });
 
 test("CI checks out the repo with actions/checkout", () => {
-  assert.match(src, /uses:\s*actions\/checkout@v[34]/);
+  // Allow v3..v6 — v3 = Node 16; v4 = Node 20 (deprecated June 2026);
+  // v5 = Node 24; v6 = Node 24 + cred-persist fix. Pin the range to
+  // prevent accidental downgrade to v1/v2 while allowing future-proof
+  // bumps as Node runtime moves forward.
+  assert.match(src, /uses:\s*actions\/checkout@v[3456]/);
 });
 
 test("CI sets up Node with actions/setup-node", () => {
