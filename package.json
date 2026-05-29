@@ -3,7 +3,7 @@
   "version": "0.4.19",
   "private": true,
   "type": "module",
-  "description": "Chrome extension — recent-tabs switcher with 28 keyboard commands",
+  "description": "Chrome extension — recent-tabs switcher with 38 keyboard commands",
   "author": "MenkeTechnologies",
   "license": "MIT",
   "scripts": {
