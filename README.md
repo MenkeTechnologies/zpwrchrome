@@ -254,7 +254,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 | Companion browser theme | **yes** | no |
 | Manifest version | **MV3** | MV2/MV3 |
 | License | **MIT** | proprietary |
-| Test suite | **2581** node:test cases | none public |
+| Test suite | **2587** node:test cases | none public |
 | Generator + doc-drift CI | **yes** | n/a |
 
 ---
@@ -284,7 +284,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2581 tests across 164 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2587 tests across 165 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
