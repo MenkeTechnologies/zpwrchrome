@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload extension artifact
         if: matrix.node == '22'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: zpwrchrome-unpacked
           path: |
