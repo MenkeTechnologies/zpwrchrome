@@ -441,6 +441,83 @@ async function enrichDownloadArgs(url, msg) {
 }
 
 // ---------------------------------------------------------------------------
+// Default-download takeover. Every browser-initiated download (Save link as,
+// click on direct-link, content-disposition: attachment, etc.) is intercepted
+// by chrome.downloads.onCreated, cancelled in Chrome, and reissued through
+// the BP segmented downloader. Files land in ~/Downloads (matching Chrome's
+// default) instead of ~/Downloads/zpwrchrome so the takeover is transparent.
+//
+// blob: and data: URLs are skipped — those are page-generated downloads
+// where Chrome already has the bytes in memory and there's nothing to gain
+// from re-fetching. chrome:// / chrome-extension:// / about: are also
+// skipped — those aren't real network downloads.
+
+const DL_TAKEOVER_KEY = "dl.takeOverDefault";
+
+async function isTakeOverEnabled() {
+  try {
+    const bag = await chrome.storage.local.get(DL_TAKEOVER_KEY);
+    // Default ON: take over by default; user toggles off via storage write.
+    return bag?.[DL_TAKEOVER_KEY] !== false;
+  } catch {
+    return true;
+  }
+}
+
+function shouldInterceptDownload(item) {
+  const url = String(item?.url || "");
+  if (!url) return false;
+  if (url.startsWith("blob:"))            return false;
+  if (url.startsWith("data:"))            return false;
+  if (url.startsWith("chrome:"))          return false;
+  if (url.startsWith("chrome-extension:"))return false;
+  if (url.startsWith("about:"))           return false;
+  // Some extensions (or our own dl.add) hand a finalUrl that's identical to
+  // url; if it ever comes back to us via a redirect chain we'd loop. The
+  // dl.* extension actions never go through chrome.downloads so this won't
+  // happen in practice, but bail just in case.
+  if (url.startsWith("file:"))            return false;
+  return true;
+}
+
+if (chrome.downloads && chrome.downloads.onCreated) {
+  chrome.downloads.onCreated.addListener(async (item) => {
+    if (!shouldInterceptDownload(item))   return;
+    if (!(await isTakeOverEnabled()))     return;
+
+    // Cancel Chrome's download immediately. Erase from history so the
+    // download shelf clears (the shelf may still flash briefly — there's
+    // no MV3 API to suppress that without the deprecated downloads.shelf
+    // permission).
+    try { await chrome.downloads.cancel(item.id); } catch {}
+    try { await chrome.downloads.erase({ id: item.id }); } catch {}
+
+    // Chrome may have picked a filename via its own heuristic — use it
+    // when present so the user-visible name matches what they expected.
+    const suggested = (item.filename || "").split(/[\\/]/).pop();
+    const args = await enrichDownloadArgs(item.url, {
+      dir:  "~/Downloads",
+      name: suggested || undefined,
+    });
+    try {
+      const resp = await bpDlAdd(args);
+      const data = resp.data || {};
+      if (chrome.notifications) {
+        chrome.notifications.create({
+          type: "basic",
+          iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+          title: "zpwrchrome download (intercepted)",
+          message: `gid ${data.gid} → ${data.dest || ""}`,
+        });
+      }
+      bpDlBroadcast();
+    } catch (e) {
+      console.warn("[zpwrchrome] download takeover failed:", e?.message || e);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Right-click "Download with zpwrchrome" on links + media (phase 7 opt-in).
 
 const CTX_DL_LINK  = "zpwrchrome-dl-link";

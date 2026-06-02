@@ -35,9 +35,12 @@ test("README has the strykelang-style backticked tagline header", () => {
     "expected `### \\`[CAPS TAGLINE]\\`` header (strykelang house style)");
 });
 
-test("README has at least 3 blockquote epigraphs after the tagline", () => {
+test("README has epigraph blockquotes after the tagline", () => {
+  // Post-rebrand collapsed the three "MRU is a primitive" / "Recent Tabs
+  // with one shortcut" epigraphs into two broader claims naming the four
+  // capability surfaces. Pin ≥1 so the structure stays, but tolerate fewer.
   const quotes = README.match(/^>\s+\*"[^"]+"\*/gm) || [];
-  assert.ok(quotes.length >= 3, `expected ≥3 epigraph blockquotes, got ${quotes.length}`);
+  assert.ok(quotes.length >= 1, `expected ≥1 epigraph blockquote, got ${quotes.length}`);
 });
 
 test("README has a Table of Contents block with hex-indexed entries", () => {
@@ -68,11 +71,15 @@ test("README ends with the strykelang-style footer block", () => {
   assert.match(README, /TRACK MRU\. SWITCH FAST\./);
 });
 
-test("README has a comparison table vs Recent Tabs", () => {
-  // Pin the comparison row that's the load-bearing marketing claim.
-  // Default-key count is derived from manifest; matches whatever gen.mjs
-  // emits today (Chrome's hard cap is 4).
-  assert.match(README, /\| Default keyboard shortcuts \| \*\*[1-4]\*\* \| 1 \(`Alt\+Z`\) \|/);
+test("README capability surface names each load-bearing tool", () => {
+  // Post-rebrand: zpwrchrome is four tools in one. The capability table
+  // must name `pass`, the download manager, the tab switcher, history
+  // search, and the userscript engine — those are the load-bearing claims.
+  assert.match(README, /UNIX `pass` integration/);
+  assert.match(README, /[Ss]egmented multi-connection download/);
+  assert.match(README, /tab switcher/i);
+  assert.match(README, /[Ff]zf history search/);
+  assert.match(README, /userscript/i);
 });
 
 test("README banner ASCII lines have consistent width", () => {

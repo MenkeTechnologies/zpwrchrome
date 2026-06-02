@@ -14,17 +14,15 @@
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zpwrchrome/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-### `[THE FASTEST RECENT-TABS SWITCHER WITH THE MOST KEYBOARD SHORTCUTS IN THE WORLD]`
+### `[THE BROWSER POWER-TOOL — PASS · DOWNLOADS · TABS · HISTORY · USERSCRIPTS]`
 
-> *"Recent Tabs with one shortcut. zpwrchrome with 48."*
+> *"UNIX `pass` in the browser. Segmented download manager that owns the default. JetBrains-style tab switcher. fzf history. Tampermonkey-equivalent userscripts."*
 >
-> *"MRU is a primitive, not a side panel."*
->
-> *"48 commands. 3 default-keyed. 45 user-bound. Zero compromises."*
+> *"One extension, 48 commands, zero compromises."*
 
 ## `[CYBERPUNK HUD]`
 
-The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window MRU stack, 45 user-bindable commands for batch tab ops and clipboard utilities, sub-popup live-filter search, and a companion Chrome theme that paints the rest of the browser with the same strykelang HUD palette. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero runtime dependencies.
+A Chrome MV3 extension that bundles four daily-driver tools into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, and a Tampermonkey-equivalent userscript engine. 45 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
 
 ### [`Live Site`](https://menketechnologies.github.io/zpwrchrome/) &middot; [`Source`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [`Theme`](theme/)
 
@@ -36,10 +34,10 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 - [\[0x01\] Install](#0x01-install)
 - [\[0x02\] Keyboard Commands](#0x02-keyboard-commands)
 - [\[0x03\] Popup UI](#0x03-popup-ui)
-- [\[0x04\] Recent-Tabs Modal](#0x04-recent-tabs-modal)
+- [\[0x04\] Tab Switcher Modal](#0x04-tab-switcher-modal)
 - [\[0x05\] Companion Theme](#0x05-companion-theme)
 - [\[0x06\] Architecture](#0x06-architecture)
-- [\[0x07\] vs Recent Tabs](#0x07-vs-recent-tabs)
+- [\[0x07\] Capability Surface](#0x07-capability-surface)
 - [\[0x08\] Files](#0x08-files)
 - [\[0x09\] Tests](#0x09-tests)
 - [\[0x0A\] CI](#0x0a-ci)
@@ -50,7 +48,7 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 
 ## [0x00] OVERVIEW
 
-`zpwrchrome` is a Chrome MV3 extension that replaces [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) with a keyboard-first switcher carrying 47× more commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
+`zpwrchrome` is a Chrome MV3 extension that bundles four daily-driver capabilities into one toolbar icon: UNIX `pass` integration, a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher, and fzf history search. 48 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via `chrome.storage.session`, survives service-worker restarts
 - **Alt+T popup** — the cyberpunk HUD with 11 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History / **Pass**), Cmd+1–0 jumps, fzf scoring on every row
@@ -110,7 +108,7 @@ cargo install browserpass-host-rs
 
 ## [0x02] KEYBOARD COMMANDS
 
-Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **3** default-keyed and **45** user-bindable, for **48 total** — versus Recent Tabs’ 1.
+Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **3** default-keyed and **45** user-bindable, for **48 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
 
 | Command | Default | Description |
 | --- | --- | --- |
@@ -186,7 +184,7 @@ Click any row to activate it. Hover reveals a `×` icon to close.
 
 ---
 
-## [0x04] RECENT-TABS MODAL
+## [0x04] TAB SWITCHER MODAL
 
 JetBrains IDEs have a Recent Files modal (`Cmd+E` on Mac). `zpwrchrome` ports the same UX to Chrome: a full-page shadow-DOM overlay injected into the active tab, with categories on the left and the live tab list on the right.
 
@@ -280,31 +278,28 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 
 ---
 
-## [0x07] VS RECENT TABS
+## [0x07] CAPABILITY SURFACE
 
-| Feature | `zpwrchrome` | Recent Tabs (Jason Savard) |
+zpwrchrome is four daily-driver tools in one extension. Each row names a capability and what replaces / supersedes in the typical browser power-user stack.
+
+| Capability | Replaces / supersedes | Implementation |
 | --- | --- | --- |
-| Default keyboard shortcuts | **3** | 1 (`Alt+Z`) |
-| User-bindable commands | **45** | a few |
-| Total commands | **48** | ~3-5 |
-| Cross-window MRU | **yes** | yes |
-| In-popup live filter | **yes** | yes |
-| In-popup arrow / Enter / Del nav | **yes** | partial |
-| JetBrains-style `Cmd+E` modal overlay | **yes** | no |
-| Restore closed tabs | **yes** | yes |
-| Batch tab ops (close-others/right/dupes, reload-all) | **yes** | no |
-| Sort tabs by URL | **yes** | no |
-| Group tabs by domain (Chrome tab groups) | **yes** | no |
-| Numeric jumps (1–9) | **yes** | no |
-| Copy URL / Markdown link | **yes** | no |
-| Bookmark active tab via shortcut | **yes** | no |
-| UNIX `pass` integration (autofill + OTP + clipboard) | **yes (replaces browserpass)** | no |
-| Segmented multi-connection downloader (Cookie/UA forwarded) | **yes (replaces browserpass-style DL extensions)** | no |
-| Companion browser theme | **yes** | no |
-| Manifest version | **MV3** | MV2/MV3 |
-| License | **MIT** | proprietary |
-| Test suite | **2641** node:test cases | none public |
-| Generator + doc-drift CI | **yes** | n/a |
+| UNIX `pass` integration (fill / copy / OTP / open URL / basic-auth injection) | [browserpass-extension](https://github.com/browserpass/browserpass-extension) | client-side eTLD+1 + multi-label PSL match, server-side via the [browserpass-host-rs](https://crates.io/crates/browserpass-host-rs) Rust crate (PROTOCOL.md v3.1.2 compatible — drop-in for the Go binary) |
+| Segmented multi-connection download manager (default-handler takeover) | Chrome's built-in download UI · Chrono / IDM-style extensions · `aria2c` | HEAD probe + N parallel `Range` GETs, cookies + User-Agent forwarded, retry with backoff, file-state worker model, full sidebar-nav queue page |
+| JetBrains-style tab switcher (MRU + scenes + opener-tree + minimap) | [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) · OneTab · Workona | cross-window MRU via `chrome.storage.session`, Alt+T popup with 11 categories, Cmd+E modal overlay, fzf scoring on every row, batch tab ops + clipboard utilities |
+| fzf history search | Chrome's `chrome://history` page · the omnibox | re-ranks `chrome.history.search` results by frecency, up to 5000 entries, Backspace deletes inline |
+| Tampermonkey-equivalent userscript engine | Tampermonkey · Greasemonkey · Violentmonkey | `@metadata` block parser, `@match` pattern compilation, full GM_* shim (getValue/setValue/openInTab/setClipboard/notification), fire-log ring buffer |
+
+### Counts & invariants
+
+| | |
+| --- | --- |
+| Total chrome.commands | **48** (manifest cap on default keys is 4 — this ext ships 3; the other 45 are user-bindable at `chrome://extensions/shortcuts`) |
+| Manifest | **MV3** |
+| License | **MIT** |
+| Test suite | **2645** `node:test` cases (JS) + 74 `cargo test` cases (Rust) |
+| Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
+| Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
 ---
 
@@ -339,7 +334,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2641 tests across 168 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2645 tests across 168 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes

@@ -121,26 +121,76 @@ test("dl.snapshot.cached handler returns the persisted snapshot for re-hydration
 });
 
 test("downloads.js paints from cached snapshot before kicking off live poll", () => {
-  // Look at the bottom-of-file boot sequence — it must hit dl.snapshot.cached
-  // and only then call poll(). This pins the "instant paint" UX guarantee.
+  // Bottom-of-file boot sequence must hit dl.snapshot.cached, paint, and
+  // only then call poll(). Pins the "instant paint" UX guarantee across SW
+  // restarts.
   assert.match(dlJs, /kind: "dl\.snapshot\.cached"/);
   const boot = dlJs.match(/chrome\.runtime\.sendMessage\(\{ kind: "dl\.snapshot\.cached" \}, \(r\) => \{[\s\S]*?poll\(\);\s*\}\);/);
   assert.ok(boot, "downloads.js boot must rehydrate-then-poll");
-  assert.match(boot[0], /render\(r\.snapshot\.jobs\)/);
+  assert.match(boot[0], /state\.jobs = r\.snapshot\.jobs/);
+  assert.match(boot[0], /renderList\(\)/);
 });
 
 test("downloads.js live-update path renders on dl.event push without polling", () => {
   const listener = dlJs.match(/chrome\.runtime\.onMessage\.addListener\(\(msg\) => \{[\s\S]*?\}\);/);
   assert.ok(listener, "downloads.js onMessage listener missing");
-  assert.match(listener[0], /msg\?\.kind (?:===|!==) "dl\.event"/);
-  assert.match(listener[0], /evt\?\.kind === "dl\.progress"/);
-  assert.match(listener[0], /render\(evt\.jobs\)/);
+  assert.match(listener[0], /msg\?\.kind !== "dl\.event"/);
+  assert.match(listener[0], /msg\.event\?\.kind === "dl\.progress"/);
+  assert.match(listener[0], /state\.jobs = msg\.event\.jobs/);
+  assert.match(listener[0], /renderList\(\)/);
 });
 
-test("downloads.html loads downloads.css alongside manager.css for theme", () => {
-  assert.match(dlHtml, /href="manager\.css"/);
+test("downloads.html loads its own downloads.css (standalone manager UI)", () => {
+  // Redesigned as a Chrono-style download manager: own stylesheet, no longer
+  // shares manager.css with the userscript dashboard.
   assert.match(dlHtml, /href="downloads\.css"/);
   assert.match(dlHtml, /src="downloads\.js"/);
+  assert.doesNotMatch(dlHtml, /href="manager\.css"/);
+});
+
+test("downloads.html ships sidebar nav with browserpass-style categories", () => {
+  for (const cat of ["all", "recent", "downloading", "finished", "failed", "trash"]) {
+    assert.match(dlHtml, new RegExp(`data-cat="${cat}"`), `missing sidebar category ${cat}`);
+  }
+  for (const sub of ["finished:image", "finished:video", "finished:audio", "finished:document", "finished:archive", "finished:other"]) {
+    assert.match(dlHtml, new RegExp(`data-cat="${sub.replace(":", "\\:")}"`), `missing finished sub ${sub}`);
+  }
+});
+
+test("default-download takeover: chrome.downloads.onCreated cancels + reissues via BP", () => {
+  // Every browser download gets cancelled in Chrome and reissued through
+  // the segmented downloader by default. blob:/data:/chrome:/file: URLs
+  // are skipped (page-generated or non-network). User can opt out by
+  // setting chrome.storage.local["dl.takeOverDefault"] = false.
+  assert.match(bg, /const DL_TAKEOVER_KEY = "dl\.takeOverDefault"/);
+  assert.match(bg, /chrome\.downloads\.onCreated\.addListener/);
+  assert.match(bg, /shouldInterceptDownload\(item\)/);
+  assert.match(bg, /isTakeOverEnabled\(\)/);
+  assert.match(bg, /chrome\.downloads\.cancel\(item\.id\)/);
+  assert.match(bg, /chrome\.downloads\.erase\(\{ id: item\.id \}\)/);
+  assert.match(bg, /const resp = await bpDlAdd\(args\)/);
+
+  const filter = bg.match(/function shouldInterceptDownload\([\s\S]*?\n\}/);
+  assert.ok(filter);
+  for (const scheme of ["blob:", "data:", "chrome:", "chrome-extension:", "about:", "file:"]) {
+    assert.match(filter[0], new RegExp(`startsWith\\("${scheme.replace(":", "\\:")}"\\)`),
+      `takeover must skip ${scheme} URLs`);
+  }
+});
+
+test("default-download takeover lands files in ~/Downloads (matches Chrome default)", () => {
+  // So the takeover is transparent — same destination Chrome would have
+  // used. Users who want the zpwrchrome subdir can override via
+  // ZPWRCHROME_DL_DIR env var on the host side.
+  const block = bg.match(/chrome\.downloads\.onCreated\.addListener[\s\S]+?bpDlAdd/);
+  assert.ok(block, "takeover block missing");
+  assert.match(block[0], /dir:\s*"~\/Downloads"/);
+});
+
+test("downloads.html toolbar exposes add / pause-all / resume-all / refresh / clear / cancel", () => {
+  for (const id of ["t-add", "t-resume-all", "t-pause-all", "t-refresh", "t-clear-done", "t-cancel-sel"]) {
+    assert.match(dlHtml, new RegExp(`id="${id}"`), `missing toolbar button #${id}`);
+  }
 });
 
 test("downloads.js progress bar uses gradient cyan→magenta fill", () => {

@@ -31,8 +31,10 @@ test("icon PNG files exist on disk for each declared size", () => {
   }
 });
 
-test("manifest action default_title mentions recent tabs", () => {
-  assert.match(manifest.action.default_title, /recent tabs/i);
+test("manifest action default_title names zpwrchrome", () => {
+  // Tooltip on the toolbar icon. After the rebrand it just identifies the
+  // extension by name rather than calling itself a recent-tabs switcher.
+  assert.match(manifest.action.default_title, /zpwrchrome/i);
 });
 
 test("_execute_action command suggests Alt+T on all platforms", () => {
@@ -82,6 +84,13 @@ test("every command except _execute_action has a description string", () => {
   }
 });
 
-test("manifest name includes Hyper Tab Switcher branding", () => {
-  assert.match(manifest.name, /Hyper Tab Switcher/);
+test("manifest name + description cover pass + downloads + tabs + history", () => {
+  // The rebrand: zpwrchrome is no longer a "Hyper Tab Switcher" — it's a
+  // browser power-tool whose surface includes UNIX `pass`, the segmented
+  // download manager, the JetBrains-style tab switcher, and fzf history.
+  assert.equal(manifest.name, "zpwrchrome");
+  assert.match(manifest.description, /pass/i,                 "description should mention UNIX pass integration");
+  assert.match(manifest.description, /download/i,             "description should mention the download manager");
+  assert.match(manifest.description, /tab switcher/i,         "description should mention the tab switcher");
+  assert.match(manifest.description, /history/i,              "description should mention history search");
 });

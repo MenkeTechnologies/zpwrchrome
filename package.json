@@ -1,9 +1,9 @@
 {
   "name": "zpwrchrome",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
-  "description": "Chrome extension — recent-tabs switcher with 48 keyboard commands (incl. UNIX `pass` integration + segmented download manager via native messaging)",
+  "description": "Chrome extension — UNIX `pass` integration (browserpass-compatible), segmented download manager (default Chrome takeover), JetBrains-style tab switcher with scenes + opener-tree + minimap, fzf history search, Tampermonkey-equivalent userscripts. 48 keyboard commands.",
   "author": "MenkeTechnologies",
   "license": "MIT",
   "scripts": {

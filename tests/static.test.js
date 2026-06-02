@@ -545,7 +545,7 @@ test("manifest permissions are all referenced by background.js or popup.js", () 
     webNavigation:  /chrome\.webNavigation\./,
     clipboardWrite: /navigator\.clipboard\.writeText/,
     nativeMessaging:/chrome\.runtime\.sendNativeMessage/,
-    downloads:      /chrome\.downloads\./,
+    downloads:      /chrome\.downloads\.onCreated/,
     contextMenus:   /chrome\.contextMenus\./,
     notifications:  /chrome\.notifications\./,
     cookies:        /chrome\.cookies\./,

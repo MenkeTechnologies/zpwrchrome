@@ -26,8 +26,13 @@ test("package.json description keyboard-command count matches manifest.json comm
   );
 });
 
-test("package.json description mentions Chrome extension and recent-tabs role", () => {
+test("package.json description covers Chrome ext + pass + downloads + tabs + history", () => {
+  // After the rebrand, the description names each load-bearing capability
+  // rather than calling the extension a "recent-tabs switcher".
   const pkg = JSON.parse(read("package.json"));
   assert.match(pkg.description, /Chrome extension/i);
-  assert.match(pkg.description, /recent.tabs/i);
+  assert.match(pkg.description, /pass/i,             "should mention UNIX pass integration");
+  assert.match(pkg.description, /download/i,         "should mention the download manager");
+  assert.match(pkg.description, /tab switcher/i,     "should mention the tab switcher");
+  assert.match(pkg.description, /history/i,          "should mention fzf history search");
 });
