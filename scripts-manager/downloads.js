@@ -4,6 +4,8 @@
 // active, backs off to 1/s when idle. Re-hydrates from the SW's cached
 // snapshot before the first live poll so the list paints instantly.
 
+import { loadSettings, DL_DEFAULTS } from "./dl-settings.js";
+
 const $list   = document.getElementById("list");
 const $search = document.getElementById("search");
 const $count  = document.getElementById("footer-count");
@@ -15,7 +17,15 @@ const state = {
   filter: "",
   selected: null,   // gid of currently selected row (null = none)
   pollTimer: null,
+  settings: { ...DL_DEFAULTS },
 };
+
+loadSettings().then((s) => { state.settings = s; });
+chrome.storage?.onChanged?.addListener?.((changes, area) => {
+  if (area === "local" && changes["dl.settings"]) {
+    state.settings = { ...DL_DEFAULTS, ...(changes["dl.settings"].newValue || {}) };
+  }
+});
 
 // ── classification ───────────────────────────────────────────────────
 
@@ -276,6 +286,10 @@ $list.addEventListener("click", async (e) => {
 document.querySelectorAll(".cat").forEach((el) => {
   el.addEventListener("click", () => {
     state.category = el.dataset.cat;
+    if (state.settings.clearSearchOnFilter && $search.value) {
+      $search.value = "";
+      state.filter = "";
+    }
     renderCats();
     renderList();
   });
@@ -307,11 +321,41 @@ document.getElementById("t-resume-all").addEventListener("click", async () => {
   poll();
 });
 document.getElementById("t-refresh").addEventListener("click", () => poll());
-document.getElementById("t-clear-done").addEventListener("click", () => {
-  // Client-side hide: switch to a category that excludes done.
-  state.category = "downloading";
-  renderCats();
-  renderList();
+
+// Clear menu — overlay panel toggled from the toolbar Clear button.
+const $clearBtn  = document.getElementById("t-clear");
+const $clearMenu = document.getElementById("clear-menu");
+const $clearDisk = document.getElementById("cm-disk");
+
+$clearBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  $clearMenu.hidden = !$clearMenu.hidden;
+});
+document.addEventListener("click", (e) => {
+  if (!$clearMenu.hidden && !$clearMenu.contains(e.target) && e.target !== $clearBtn) {
+    $clearMenu.hidden = true;
+  }
+});
+$clearMenu.querySelectorAll(".tmenu-item").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const scope = btn.dataset.scope;
+    const deleteFromDisk = $clearDisk.checked;
+    if (scope === "all") {
+      const ok = confirm(`Clear ALL ${state.jobs.length} downloads?${deleteFromDisk ? "\nAlso delete the destination files from disk." : ""}`);
+      if (!ok) { $clearMenu.hidden = true; return; }
+    }
+    chrome.runtime.sendMessage({ kind: "dl.clear", scope, deleteFromDisk }, (r) => {
+      $clearMenu.hidden = true;
+      if (chrome.runtime.lastError || !r?.ok) {
+        $status.textContent = `clear failed: ${r?.err || chrome.runtime.lastError?.message || "unknown"}`;
+        return;
+      }
+      const n = (r.cleared || []).length;
+      const d = (r.deletedOnDisk || []).length;
+      $status.textContent = `cleared ${n} task${n === 1 ? "" : "s"}${d ? `, deleted ${d} file${d === 1 ? "" : "s"}` : ""}`;
+      poll();
+    });
+  });
 });
 document.getElementById("t-cancel-sel").addEventListener("click", async () => {
   if (state.selected != null) {

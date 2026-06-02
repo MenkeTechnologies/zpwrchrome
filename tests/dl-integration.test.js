@@ -180,17 +180,39 @@ test("default-download takeover: chrome.downloads.onCreated cancels + reissues v
 
 test("default-download takeover lands files in ~/Downloads (matches Chrome default)", () => {
   // So the takeover is transparent — same destination Chrome would have
-  // used. Users who want the zpwrchrome subdir can override via
-  // ZPWRCHROME_DL_DIR env var on the host side.
+  // used. The lastDir setting can override the default when
+  // saveToLastUsedLocation is on; both literals must appear in the block.
   const block = bg.match(/chrome\.downloads\.onCreated\.addListener[\s\S]+?bpDlAdd/);
   assert.ok(block, "takeover block missing");
-  assert.match(block[0], /dir:\s*"~\/Downloads"/);
+  assert.match(block[0], /"~\/Downloads"/);
 });
 
 test("downloads.html toolbar exposes add / pause-all / resume-all / refresh / clear / cancel", () => {
-  for (const id of ["t-add", "t-resume-all", "t-pause-all", "t-refresh", "t-clear-done", "t-cancel-sel"]) {
+  for (const id of ["t-add", "t-resume-all", "t-pause-all", "t-refresh", "t-clear", "t-cancel-sel"]) {
     assert.match(dlHtml, new RegExp(`id="${id}"`), `missing toolbar button #${id}`);
   }
+});
+
+test("downloads.html Clear menu exposes 4 scopes + Delete-from-disk checkbox", () => {
+  // Chrono-style submenu: missing-files / completed / failed / all, plus a
+  // delete-from-disk checkbox that applies to the chosen scope.
+  for (const scope of ["missing", "done", "failed", "all"]) {
+    assert.match(dlHtml, new RegExp(`data-scope="${scope}"`),
+      `Clear menu must offer scope=${scope}`);
+  }
+  assert.match(dlHtml, /id="cm-disk"/, "Delete-from-disk checkbox missing");
+  assert.match(dlHtml, /id="clear-menu"/, "Clear menu container missing");
+});
+
+test("dl.clear handler forwards scope + deleteFromDisk to the BP host", () => {
+  // The clear msg.kind must reach bpSend with action:"dl.clear" and pass
+  // through the user's scope choice + delete-from-disk toggle. Anything
+  // else and the host can't differentiate "completed tasks" from "all".
+  const block = bg.match(/msg\?\.kind === "dl\.clear"[\s\S]*?return true;/);
+  assert.ok(block, "dl.clear handler missing");
+  assert.match(block[0], /action: "dl\.clear"/);
+  assert.match(block[0], /scope: String\(msg\.scope/);
+  assert.match(block[0], /deleteFromDisk: !!msg\.deleteFromDisk/);
 });
 
 test("downloads.js progress bar uses gradient cyan→magenta fill", () => {
@@ -207,4 +229,88 @@ test("dl.add wire-up forwards segments + dir + name + cookies + userAgent to hos
   for (const field of ["url", "dir", "name", "segments", "cookies", "userAgent"]) {
     assert.match(enrich[0], new RegExp(`\\b${field}\\b`), `enrichDownloadArgs missing field "${field}"`);
   }
+});
+
+// ── settings page (Chrono-equivalent General/Network/Misc) ──────────────
+
+const setHtml = read("scripts-manager/dl-settings.html");
+const setJs   = read("scripts-manager/dl-settings.js");
+
+test("settings page DL_DEFAULTS covers every Chrono General field we adopted", () => {
+  for (const key of [
+    "overrideDownloadsPage", "hideBuiltInUI",
+    "saveToLastUsedLocation", "addToFrontOfQueue", "addPaused",
+    "oneClickEnabled",
+    "maxConcurrent", "maxPerServer",
+    "conflictAction", "onDirUnsavable",
+    "urlFromClipboard", "clearSearchOnFilter", "cancelOnTrash",
+    "lastDir",
+  ]) {
+    assert.match(setJs, new RegExp(`\\b${key}\\b`), `DL_DEFAULTS missing "${key}"`);
+  }
+});
+
+test("settings page binds an input[data-key] for every persisted user-editable setting", () => {
+  for (const key of [
+    "overrideDownloadsPage", "hideBuiltInUI",
+    "saveToLastUsedLocation", "addToFrontOfQueue", "addPaused",
+    "oneClickEnabled",
+    "maxConcurrent", "maxPerServer",
+    "conflictAction", "onDirUnsavable",
+    "urlFromClipboard", "clearSearchOnFilter", "cancelOnTrash",
+  ]) {
+    assert.match(setHtml, new RegExp(`data-key="${key}"`), `settings HTML missing data-key="${key}"`);
+  }
+});
+
+test("settings page hooks numeric ranges that match Chrono (1-20 concurrent, 1-5 per-server)", () => {
+  assert.match(setHtml, /data-key="maxConcurrent"[^>]*min="1"[^>]*max="20"/);
+  assert.match(setHtml, /data-key="maxPerServer"[^>]*min="1"[^>]*max="5"/);
+});
+
+test("downloads.html toolbar includes the ⚙ link to dl-settings.html", () => {
+  assert.match(dlHtml, /id="t-settings"[^>]*href="dl-settings.html"/);
+});
+
+test("background.js takeover handler reads lastDir + addPaused + addToFrontOfQueue from dl.settings", () => {
+  const block = bg.match(/chrome\.downloads\.onCreated\.addListener[\s\S]*?\n  \}\);\n\}/);
+  assert.ok(block, "chrome.downloads.onCreated handler not found");
+  assert.match(block[0], /loadDlSettings\(\)/);
+  assert.match(block[0], /saveToLastUsedLocation/);
+  assert.match(block[0], /addToFrontOfQueue/);
+  assert.match(block[0], /addPaused/);
+  assert.match(block[0], /"dl\.pause"/);
+});
+
+test("background.js redirects chrome://downloads/ to our manager when overrideDownloadsPage is on", () => {
+  const block = bg.match(/chrome\.tabs\?\.onUpdated\?\.addListener[\s\S]*?\}\);\n/);
+  assert.ok(block, "chrome.tabs.onUpdated listener for chrome://downloads/ not found");
+  assert.match(block[0], /overrideDownloadsPage/);
+  assert.match(block[0], /scripts-manager\/downloads\.html/);
+});
+
+test("background.js applies hideBuiltInUI via setUiOptions on install + startup", () => {
+  assert.match(bg, /async function applyDownloadsUiVisibility/);
+  assert.match(bg, /chrome\.downloads\?\.setUiOptions/);
+  assert.match(bg, /onInstalled\.addListener\(applyDownloadsUiVisibility\)/);
+  assert.match(bg, /onStartup\.addListener\(applyDownloadsUiVisibility\)/);
+});
+
+test("background.js re-applies UI visibility on dl.settings.changed messages from the settings page", () => {
+  const block = bg.match(/msg\?\.kind === "dl\.settings\.changed"[\s\S]*?return true;/);
+  assert.ok(block, "dl.settings.changed handler not registered");
+  assert.match(block[0], /applyDownloadsUiVisibility\(\)/);
+});
+
+test("downloads.js applies clearSearchOnFilter when the user changes category", () => {
+  const dljs = read("scripts-manager/downloads.js");
+  assert.match(dljs, /state\.settings\.clearSearchOnFilter/);
+});
+
+test("isTakeOverEnabled now reads dl.settings.oneClickEnabled with back-compat to dl.takeOverDefault", () => {
+  const fn = bg.match(/async function isTakeOverEnabled\(\)[\s\S]*?\n\}/);
+  assert.ok(fn, "isTakeOverEnabled not found");
+  assert.match(fn[0], /loadDlSettings\(\)/);
+  assert.match(fn[0], /oneClickEnabled/);
+  assert.match(fn[0], /DL_TAKEOVER_KEY/);   // legacy fallback still consulted
 });

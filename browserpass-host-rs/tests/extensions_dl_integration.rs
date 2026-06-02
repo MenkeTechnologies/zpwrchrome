@@ -262,6 +262,126 @@ fn dl_pause_on_unknown_gid_returns_code_20() {
 }
 
 #[test]
+fn dl_clear_scope_done_removes_only_done_state_files() {
+    let cache = tempdir("dl-clear-done");
+    let dlroot = tempdir("dl-clear-dest");
+    for (gid, status) in [(1u64, "done"), (2u64, "failed"), (3u64, "cancelled")] {
+        let dest = dlroot.join(format!("file{gid}.bin"));
+        fs::write(&dest, b"x").unwrap();
+        let st = json!({
+            "gid": gid, "url": format!("https://x/{gid}"), "dest": dest.to_string_lossy(),
+            "total": 1, "done": 1, "status": status, "err": null,
+            "segments": 1, "started_at": 1, "elapsed_ms": 0,
+            "paused": false, "cancelled": status == "cancelled",
+            "cookies": "", "userAgent": ""
+        });
+        fs::write(cache.join(format!("gid_{gid:06}.json")), serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+    }
+    let resp = run_with_env(
+        &json!({ "action": "dl.clear", "scope": "done", "deleteFromDisk": false }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "ok");
+    let cleared = resp["data"]["cleared"].as_array().unwrap();
+    assert_eq!(cleared.len(), 1);
+    assert_eq!(cleared[0], 1);
+    assert!(!cache.join("gid_000001.json").exists());
+    assert!( cache.join("gid_000002.json").exists());
+    assert!( cache.join("gid_000003.json").exists());
+    assert!(dlroot.join("file1.bin").exists(), "deleteFromDisk=false → dest must remain");
+    let _ = fs::remove_dir_all(&cache);
+    let _ = fs::remove_dir_all(&dlroot);
+}
+
+#[test]
+fn dl_clear_with_delete_from_disk_unlinks_done_dest_files() {
+    let cache = tempdir("dl-clear-disk");
+    let dlroot = tempdir("dl-clear-disk-dest");
+    let dest = dlroot.join("kill.bin");
+    fs::write(&dest, b"trash").unwrap();
+    let st = json!({
+        "gid": 42, "url": "https://x/42", "dest": dest.to_string_lossy(),
+        "total": 5, "done": 5, "status": "done", "err": null,
+        "segments": 1, "started_at": 1, "elapsed_ms": 0,
+        "paused": false, "cancelled": false, "cookies": "", "userAgent": ""
+    });
+    fs::write(cache.join("gid_000042.json"), serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+    let resp = run_with_env(
+        &json!({ "action": "dl.clear", "scope": "done", "deleteFromDisk": true }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "ok");
+    let deleted = resp["data"]["deletedOnDisk"].as_array().unwrap();
+    assert_eq!(deleted.len(), 1);
+    assert!(!dest.exists());
+    let _ = fs::remove_dir_all(&cache);
+    let _ = fs::remove_dir_all(&dlroot);
+}
+
+#[test]
+fn dl_clear_scope_failed_removes_failed_and_cancelled() {
+    let cache = tempdir("dl-clear-failed");
+    for (gid, status) in [(1u64, "done"), (2u64, "failed"), (3u64, "cancelled")] {
+        let st = json!({
+            "gid": gid, "url": format!("https://x/{gid}"), "dest": format!("/tmp/{gid}"),
+            "total": 1, "done": 1, "status": status, "err": null,
+            "segments": 1, "started_at": 1, "elapsed_ms": 0,
+            "paused": false, "cancelled": status == "cancelled",
+            "cookies": "", "userAgent": ""
+        });
+        fs::write(cache.join(format!("gid_{gid:06}.json")), serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+    }
+    let resp = run_with_env(
+        &json!({ "action": "dl.clear", "scope": "failed" }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    let gids: Vec<u64> = resp["data"]["cleared"].as_array().unwrap()
+        .iter().map(|v| v.as_u64().unwrap()).collect();
+    assert_eq!(gids, vec![2, 3]);
+    let _ = fs::remove_dir_all(&cache);
+}
+
+#[test]
+fn dl_clear_scope_missing_targets_done_jobs_whose_dest_vanished() {
+    let cache = tempdir("dl-clear-missing");
+    let st = json!({
+        "gid": 99, "url": "https://x/99",
+        "dest": "/tmp/zp-dl-clear-vanished-on-disk-xyz.bin",
+        "total": 1, "done": 1, "status": "done", "err": null,
+        "segments": 1, "started_at": 1, "elapsed_ms": 0,
+        "paused": false, "cancelled": false, "cookies": "", "userAgent": ""
+    });
+    fs::write(cache.join("gid_000099.json"), serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+    let resp = run_with_env(
+        &json!({ "action": "dl.clear", "scope": "missing" }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    let cleared = resp["data"]["cleared"].as_array().unwrap();
+    assert_eq!(cleared.len(), 1);
+    let _ = fs::remove_dir_all(&cache);
+}
+
+#[test]
+fn dl_clear_scope_all_wipes_every_state_file() {
+    let cache = tempdir("dl-clear-all");
+    for gid in [1u64, 2u64, 3u64, 4u64] {
+        let st = json!({
+            "gid": gid, "url": format!("https://x/{gid}"), "dest": format!("/tmp/{gid}"),
+            "total": 1, "done": 1, "status": "done", "err": null,
+            "segments": 1, "started_at": 1, "elapsed_ms": 0,
+            "paused": false, "cancelled": false, "cookies": "", "userAgent": ""
+        });
+        fs::write(cache.join(format!("gid_{gid:06}.json")), serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+    }
+    let resp = run_with_env(
+        &json!({ "action": "dl.clear", "scope": "all" }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["data"]["cleared"].as_array().unwrap().len(), 4);
+    let _ = fs::remove_dir_all(&cache);
+}
+
+#[test]
 fn dl_add_with_missing_url_returns_code_12() {
     let cache = tempdir("dl-add-bad");
     fs::create_dir_all(&cache).unwrap();

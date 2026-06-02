@@ -25,8 +25,10 @@ import {
 } from "./lib/userscript.js";
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath } from "./lib/bp-pass.js";
+import { loadSettings as loadDlSettings, DL_DEFAULTS as DL_SETTINGS_DEFAULTS, saveSettings as saveDlSettings } from "./scripts-manager/dl-settings.js";
 
 const MRU_KEY = "mru";
+const DL_SETTINGS_KEY = "dl.settings";
 const SCENES_KEY = "scenes";   // chrome.storage.local — survives browser restart
 
 async function readMru() {
@@ -452,12 +454,15 @@ async function enrichDownloadArgs(url, msg) {
 // from re-fetching. chrome:// / chrome-extension:// / about: are also
 // skipped — those aren't real network downloads.
 
-const DL_TAKEOVER_KEY = "dl.takeOverDefault";
+const DL_TAKEOVER_KEY = "dl.takeOverDefault";  // legacy back-compat key
 
 async function isTakeOverEnabled() {
+  // New canonical setting lives in dl.settings.oneClickEnabled. Fall back
+  // to the legacy DL_TAKEOVER_KEY for users upgrading from < 0.8.0.
   try {
+    const s = await loadDlSettings();
+    if (typeof s.oneClickEnabled === "boolean") return s.oneClickEnabled;
     const bag = await chrome.storage.local.get(DL_TAKEOVER_KEY);
-    // Default ON: take over by default; user toggles off via storage write.
     return bag?.[DL_TAKEOVER_KEY] !== false;
   } catch {
     return true;
@@ -495,13 +500,32 @@ if (chrome.downloads && chrome.downloads.onCreated) {
     // Chrome may have picked a filename via its own heuristic — use it
     // when present so the user-visible name matches what they expected.
     const suggested = (item.filename || "").split(/[\\/]/).pop();
+    const settings  = await loadDlSettings();
+    const dir       = settings.saveToLastUsedLocation && settings.lastDir
+      ? settings.lastDir
+      : "~/Downloads";
     const args = await enrichDownloadArgs(item.url, {
-      dir:  "~/Downloads",
+      dir,
       name: suggested || undefined,
+      priority:        settings.addToFrontOfQueue ? "front" : "back",
+      conflictAction:  settings.conflictAction,
+      onDirUnsavable:  settings.onDirUnsavable,
     });
     try {
       const resp = await bpDlAdd(args);
       const data = resp.data || {};
+
+      // Remember the directory used for the next takeover.
+      if (settings.saveToLastUsedLocation && data.dest) {
+        const usedDir = String(data.dest).replace(/\/[^/]+$/, "");
+        if (usedDir && usedDir !== settings.lastDir) {
+          await saveDlSettings({ ...settings, lastDir: usedDir });
+        }
+      }
+      // "Add paused" — immediately pause the freshly-enqueued job.
+      if (settings.addPaused && data.gid) {
+        try { await bpDlGid("dl.pause", data.gid); } catch {}
+      }
       if (chrome.notifications) {
         chrome.notifications.create({
           type: "basic",
@@ -516,6 +540,35 @@ if (chrome.downloads && chrome.downloads.onCreated) {
     }
   });
 }
+
+// chrome://downloads/ override — when "Override browser's downloads page"
+// is enabled, redirect navigations to chrome://downloads/ into our manager.
+chrome.tabs?.onUpdated?.addListener(async (tabId, change, tab) => {
+  if (!change?.url) return;
+  if (!change.url.startsWith("chrome://downloads")) return;
+  try {
+    const s = await loadDlSettings();
+    if (!s.overrideDownloadsPage) return;
+    await chrome.tabs.update(tabId, {
+      url: chrome.runtime.getURL("scripts-manager/downloads.html"),
+    });
+  } catch {}
+});
+
+// Hide / show the built-in download shelf+UI per settings. Re-applied on
+// SW startup and when settings change (dl.settings.changed message).
+async function applyDownloadsUiVisibility() {
+  try {
+    const s = await loadDlSettings();
+    if (chrome.downloads?.setUiOptions) {
+      await chrome.downloads.setUiOptions({ enabled: !s.hideBuiltInUI });
+    } else if (chrome.downloads?.setShelfEnabled) {
+      chrome.downloads.setShelfEnabled(!s.hideBuiltInUI);
+    }
+  } catch {}
+}
+chrome.runtime.onInstalled.addListener(applyDownloadsUiVisibility);
+chrome.runtime.onStartup.addListener(applyDownloadsUiVisibility);
 
 // ---------------------------------------------------------------------------
 // Right-click "Download with zpwrchrome" on links + media (phase 7 opt-in).
@@ -1383,6 +1436,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     bpDlGid("dl.cancel", Number(msg.gid))
       .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "dl.clear") {
+    // scope: done | failed | missing | all; deleteFromDisk: bool
+    bpSend({ action: "dl.clear", scope: String(msg.scope || "done"), deleteFromDisk: !!msg.deleteFromDisk })
+      .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "dl.settings.changed") {
+    applyDownloadsUiVisibility();
+    sendResponse({ ok: true });
     return true;
   }
   if (msg?.kind === "host.meta") {

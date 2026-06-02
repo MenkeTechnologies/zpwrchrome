@@ -224,6 +224,12 @@ pub struct DlRequest {
     #[serde(rename = "userAgent")]
     pub userAgent: String,
     pub gid:      u64,
+    // Clear-action args:
+    //   scope: "done" | "failed" | "missing" | "all"
+    //   deleteFromDisk: also unlink the dest file for cleared `done` jobs
+    pub scope: String,
+    #[serde(rename = "deleteFromDisk")]
+    pub deleteFromDisk: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -235,6 +241,12 @@ pub struct DlListResponse   { pub jobs: Vec<JobState> }
 #[derive(Serialize, Debug)]
 pub struct DlActionResponse { pub gid: u64, pub status: String }
 
+#[derive(Serialize, Debug)]
+pub struct DlClearResponse {
+    pub cleared:        Vec<u64>,
+    pub deletedOnDisk:  Vec<String>,
+}
+
 pub fn dispatch_dl(action: &str, value: &Value) {
     let req: DlRequest = serde_json::from_value(value.clone()).unwrap_or_default();
     match action {
@@ -243,6 +255,7 @@ pub fn dispatch_dl(action: &str, value: &Value) {
         "dl.pause"  => dl_pause(&req),
         "dl.resume" => dl_resume(&req),
         "dl.cancel" => dl_cancel(&req),
+        "dl.clear"  => dl_clear(&req),
         _ => {
             response::SendErrorAndExit(
                 errors::Code::InvalidRequestAction,
@@ -384,6 +397,45 @@ pub fn dl_cancel(req: &DlRequest) {
         s.status = "cancelled".into();
     });
     response::SendOk(DlActionResponse { gid: req.gid, status: "cancelled".into() });
+}
+
+// Clear state files in bulk. scope picks which jobs:
+//   "done"    — successfully finished
+//   "failed"  — status=failed OR status=cancelled
+//   "missing" — done job whose dest no longer exists on disk
+//   "all"     — every state file
+// deleteFromDisk additionally unlinks the dest file for any "done" job
+// being cleared (redundant for the other scopes — cancelled jobs already
+// unlinked, failed never finished writing).
+pub fn dl_clear(req: &DlRequest) {
+    let jobs = list_all_jobs().unwrap_or_default();
+    let scope = req.scope.as_str();
+    let mut cleared:        Vec<u64>    = Vec::new();
+    let mut deleted_on_disk: Vec<String> = Vec::new();
+
+    for job in jobs {
+        let dest_exists = std::path::Path::new(&job.dest).exists();
+        let matches = match scope {
+            "done"    => job.status == "done",
+            "failed"  => job.status == "failed" || job.status == "cancelled",
+            "missing" => job.status == "done" && !dest_exists,
+            "all"     => true,
+            _         => false,
+        };
+        if !matches { continue; }
+
+        if req.deleteFromDisk && job.status == "done" && dest_exists {
+            if std::fs::remove_file(&job.dest).is_ok() {
+                deleted_on_disk.push(job.dest.clone());
+            }
+        }
+        if let Ok(path) = state_path(job.gid) {
+            let _ = std::fs::remove_file(path);
+        }
+        cleared.push(job.gid);
+    }
+
+    response::SendOk(DlClearResponse { cleared, deletedOnDisk: deleted_on_disk });
 }
 
 fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {

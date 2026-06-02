@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // download settings</title>
+  <link rel="stylesheet" href="dl-settings.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="downloads.html">‹ Back</a>
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <h1>zpwrchrome <span class="dim">download settings</span></h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <nav class="cats">
+      <a class="cat active" href="#general">General</a>
+      <a class="cat"        href="#interface">Interface</a>
+      <a class="cat"        href="#extfilter">Extension Filter</a>
+      <a class="cat"        href="#rules">Rule System</a>
+      <span class="sep"></span>
+      <a class="cat" href="#help">Help</a>
+      <a class="cat" href="#about">About</a>
+    </nav>
+  </aside>
+
+  <section class="content" id="content">
+    <h2 id="general">General</h2>
+
+    <fieldset>
+      <legend>Chrome</legend>
+      <label class="opt">
+        <input type="checkbox" data-key="overrideDownloadsPage">
+        <span>Override browser's downloads page and enable <kbd>⇧</kbd><kbd>⌘</kbd><kbd>J</kbd> keyboard shortcut</span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-key="hideBuiltInUI">
+        <span>Hide browser's built-in downloads UI</span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>New Task Defaults <span class="help" title="Applied to every new download (browser-initiated takeovers + extension-added URLs)">?</span></legend>
+      <label class="opt">
+        <input type="checkbox" data-key="saveToLastUsedLocation">
+        <span>Save file to last used location</span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-key="addToFrontOfQueue">
+        <span>Add to front of the queue</span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-key="addPaused">
+        <span>Add paused</span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>One-click Download</legend>
+      <label class="opt">
+        <input type="checkbox" data-key="oneClickEnabled">
+        <span>Enable <span class="help" title="Intercept every browser-initiated download (link clicks, Save As, content-disposition) and reissue through the segmented downloader">?</span></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Network</legend>
+      <label class="opt inline">
+        <span class="lbl">Concurrent downloads</span>
+        <input type="number" data-key="maxConcurrent" min="1" max="20" step="1">
+        <span class="hint">(1-20)</span>
+      </label>
+      <label class="opt inline">
+        <span class="lbl">Downloads per server</span>
+        <input type="number" data-key="maxPerServer" min="1" max="5" step="1">
+        <span class="hint">(1-5)</span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Miscellaneous</legend>
+      <label class="opt inline">
+        <span class="lbl">When filename conflicts</span>
+        <select data-key="conflictAction">
+          <option value="prompt">Prompt</option>
+          <option value="overwrite">Overwrite</option>
+          <option value="rename">Auto-rename</option>
+        </select>
+      </label>
+      <label class="opt inline">
+        <span class="lbl">When unable to save to the destination folder</span>
+        <select data-key="onDirUnsavable">
+          <option value="default">Download to default folder</option>
+          <option value="fail">Fail the download</option>
+        </select>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-key="urlFromClipboard">
+        <span>Download URL from clipboard</span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-key="clearSearchOnFilter">
+        <span>Clear search box when filter changes</span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-key="cancelOnTrash">
+        <span>Cancel the task when it's moved to trash</span>
+      </label>
+    </fieldset>
+
+    <div class="actions">
+      <button id="reset" class="btn-ghost">Reset to defaults</button>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
+</div>
+
+<script src="dl-settings.js" type="module"></script>
+</body>
+</html>
