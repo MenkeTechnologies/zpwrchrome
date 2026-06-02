@@ -237,7 +237,7 @@ function renderList() {
     if (cat.id === "pass") {
       let passMsg;
       if (!state.pass.loaded)  passMsg = `searching ${escapeHtml(state.pass.host || "…")}`;
-      else if (state.pass.err) passMsg = `native host: ${escapeHtml(state.pass.err)} — run host/install.sh &lt;ext-id&gt;`;
+      else if (state.pass.err) passMsg = `native host: ${escapeHtml(state.pass.err)} — run browserpass-host-rs/install-browserpass.sh &lt;ext-id&gt;`;
       else                     passMsg = `no pass entries match ${escapeHtml(state.pass.host || "(no host)")}`;
       $list.innerHTML = `<div class="empty">${passMsg}</div>`;
       return;

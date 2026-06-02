@@ -35,10 +35,21 @@ test("manifest declares all four dl-* commands", () => {
   }
 });
 
-test("background dl.* message handlers all delegate through nmCall", () => {
-  for (const kind of ["dl.add", "dl.list", "dl.pause", "dl.resume", "dl.cancel"]) {
-    const re = new RegExp(`msg\\?\\.kind === "${kind.replace(".", "\\.")}"[\\s\\S]*?nmCall\\("dl"`);
-    assert.match(bg, re, `background handler for "${kind}" must call nmCall("dl", ...)`);
+test("background dl.* message handlers all delegate through BP helpers", () => {
+  // The BP rewrite: dl.add → bpDlAdd, dl.list → bpDlList, dl.{pause,resume,cancel}
+  // → bpDlGid("dl.X", gid). Each helper does a one-shot sendNativeMessage.
+  const cases = {
+    "dl.add":    /bpDlAdd\(args\)/,
+    "dl.list":   /bpDlList\(\)/,
+    "dl.pause":  /bpDlGid\("dl\.pause"/,
+    "dl.resume": /bpDlGid\("dl\.resume"/,
+    "dl.cancel": /bpDlGid\("dl\.cancel"/,
+  };
+  for (const [kind, expected] of Object.entries(cases)) {
+    const re = new RegExp(
+      `msg\\?\\.kind === "${kind.replace(".", "\\.")}"[\\s\\S]{0,400}${expected.source}`
+    );
+    assert.match(bg, re, `background handler for "${kind}" must use ${expected}`);
   }
 });
 
@@ -73,15 +84,15 @@ test("dl-paste-url reads clipboard via injected navigator.clipboard.readText", (
   assert.match(fn[0], /\/\^https\?:\\\/\\\/\/i/);
 });
 
-test("dl-pause-all and dl-resume-all enumerate via dl.list then bulk-call", () => {
+test("dl-pause-all and dl-resume-all enumerate via bpDlList then bulk-call", () => {
   const pause = bg.match(/async function dlPauseAll\([\s\S]*?\n\}/);
-  assert.match(pause[0], /nmCall\("dl", "list"/);
+  assert.match(pause[0], /bpDlList\(\)/);
   assert.match(pause[0], /j\.status === "active"/);
-  assert.match(pause[0], /nmCall\("dl", "pause"/);
+  assert.match(pause[0], /bpDlGid\("dl\.pause"/);
 
   const resume = bg.match(/async function dlResumeAll\([\s\S]*?\n\}/);
   assert.match(resume[0], /j\.status === "paused"/);
-  assert.match(resume[0], /nmCall\("dl", "resume"/);
+  assert.match(resume[0], /bpDlGid\("dl\.resume"/);
 });
 
 test("context menu registers for link + image/video/audio (not just link)", () => {
@@ -91,14 +102,16 @@ test("context menu registers for link + image/video/audio (not just link)", () =
   assert.match(bg, /contexts: \["image", "video", "audio"\]/);
 });
 
-test("SW mirrors dl.progress to chrome.storage.local under DL_SNAPSHOT_KEY", () => {
-  // Required so downloads.html paints the queue instantly across SW restarts
-  // even before the NM port reconnects.
+test("SW mirrors dl.list snapshots to chrome.storage.local via bpDlBroadcast", () => {
+  // BP one-shot: there are no host push events. After every dl.{add,pause,
+  // resume,cancel} round-trip the SW polls dl.list and broadcasts the result
+  // to any open downloads.html page + caches it for fast paint on next open.
   assert.match(bg, /const DL_SNAPSHOT_KEY = "dl\.snapshot"/);
-  const listener = bg.match(/nmAddEventListener\(\(evt\) => \{[\s\S]*?\n\}\);/);
-  assert.ok(listener, "missing nmAddEventListener handler");
-  assert.match(listener[0], /evt\.kind === "dl\.progress"/);
-  assert.match(listener[0], /chrome\.storage\.local\.set\(\{ \[DL_SNAPSHOT_KEY\]: \{ jobs: evt\.jobs, ts: Date\.now\(\) \} \}\)/);
+  const fn = bg.match(/async function bpDlBroadcast\([\s\S]*?\n\}/);
+  assert.ok(fn, "bpDlBroadcast helper missing");
+  assert.match(fn[0], /bpDlList\(\)/);
+  assert.match(fn[0], /chrome\.storage\.local\.set\(\{ \[DL_SNAPSHOT_KEY\]: \{ jobs, ts: Date\.now\(\) \} \}\)/);
+  assert.match(fn[0], /chrome\.runtime\.sendMessage\(\{ kind: "dl\.event", event: \{ kind: "dl\.progress", jobs \} \}\)/);
 });
 
 test("dl.snapshot.cached handler returns the persisted snapshot for re-hydration", () => {

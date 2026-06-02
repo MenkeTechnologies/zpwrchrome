@@ -62,7 +62,7 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 - **Sub-popup live filter** — type to filter open + closed tabs; `↑`/`↓`/`Enter`/`Delete`/`Esc` nav
 - **Companion Chrome theme** — `theme/` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from `strykelang/docs/hud-static.css` (`--cyan #05d9e8`, `--accent #ff2a6d`, `--magenta #d300c5`, CRT scanlines, neon-border-glow card frames)
-- **Pure-helper test surface** — MRU stack semantics, hostname parsing, jump-index resolution in `lib/util.js` + pass match/parse + dl filename/collision helpers in `host/src/{pass,dl}.rs` all unit-tested without a Chrome runtime
+- **Pure-helper test surface** — MRU stack semantics, hostname parsing, jump-index resolution in `lib/util.js` + pass match/parse + dl filename/collision helpers in `browserpass-host-rs/src/{ported,extensions}/` all unit-tested without a Chrome runtime
 - **Single source of truth** — `README.md`, `docs/index.html`, and command counts are all generated from `manifest.json` by `scripts/gen.sh`; CI guards against drift
 - **Zero JS runtime dependencies** — no bundler, no transpiler, no npm modules at runtime; pure ES module service worker. The native host adds `serde`/`serde_json`/`ureq` (foundational pure-Rust crates) and ships as a single static binary
 
@@ -87,18 +87,18 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 2. Build + register the host (writes the NM manifest for Chrome / Chromium / Brave / Edge):
 
 ```sh
-cd host
-./install.sh <extension-id>     # find the ID at chrome://extensions
+cd browserpass-host-rs
+./install-browserpass.sh        # writes the NM manifest for every browser
 ```
 
-The `<extension-id>` is the 32-character string shown under the extension after enabling Developer mode. The script lays down `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.menketechnologies.zpwrchrome.json` (macOS) or `~/.config/google-chrome/NativeMessagingHosts/…` (Linux), pointing at the freshly-built `host/target/debug/zpwr-chrome-host`. Reload the extension after running it.
+The installer writes `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.github.browserpass.native.json` (macOS) or `~/.config/google-chrome/NativeMessagingHosts/…` (Linux), pointing at the freshly-built `browserpass-host-rs/target/debug/browserpass-host-rs`. Reload the extension after running it.
 
-Alternatively, install via Homebrew tap:
+Alternatively, install via crates.io:
 
 ```sh
-brew tap MenkeTechnologies/zpwrchrome
-brew install zpwr-chrome-host
-zpwr-chrome-host-register <extension-id>
+cargo install browserpass-host-rs
+# then register the NM manifest from the repo:
+./browserpass-host-rs/install-browserpass.sh --binary $(which browserpass-host-rs)
 ```
 
 #### Theme
@@ -276,7 +276,7 @@ Color anchors (RGB triplets in `theme/manifest.json`):
                                                      └──────────────────┘
 ```
 
-The service worker holds no globals — MRU lives in `chrome.storage.session`. Pure helpers in `lib/util.js` (JS) and `host/src/{pass,dl}.rs` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / `cargo test`. The native host is one long-lived Rust process per Chrome session, multiplexing `pass` and `dl` channels over the same length-prefixed stdio port.
+The service worker holds no globals — MRU lives in `chrome.storage.session`. Pure helpers in `lib/util.js` (JS) and `browserpass-host-rs/src/{ported,extensions}/` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / `cargo test`. The native host is the Rust port of `browserpass-native` v3.1.2 plus three extension actions (`otp`, `search`, `dl.*`); each request spawns a fresh process (BP protocol) with download workers detaching to keep state under `$XDG_CACHE_HOME/zpwrchrome/dl/`.
 
 ---
 
@@ -303,7 +303,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 | Companion browser theme | **yes** | no |
 | Manifest version | **MV3** | MV2/MV3 |
 | License | **MIT** | proprietary |
-| Test suite | **2640** node:test cases | none public |
+| Test suite | **2641** node:test cases | none public |
 | Generator + doc-drift CI | **yes** | n/a |
 
 ---
@@ -319,10 +319,9 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 | `modal/content.js` | JetBrains-style Recent Tabs modal — content script, shadow DOM, 2-column layout |
 | `scripts-manager/manager.{html,css,js}` | Userscript engine dashboard (Tampermonkey-equivalent) |
 | `scripts-manager/downloads.{html,css,js}` | Live download queue UI — push-event subscription + cached snapshot rehydration |
-| `host/Cargo.toml` / `host/src/{lib,main,frame,proto,dispatch,pass,dl}.rs` | Rust native messaging host — pass channel (`list`/`match`/`fetch`/`otp`) + dl channel (`add`/`list`/`pause`/`resume`/`cancel`) over length-prefixed JSON on stdio |
-| `host/install.sh` | Writes `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.menketechnologies.zpwrchrome.json` (Chrome / Chromium / Brave / Edge on macOS + Linux) |
-| `host/Formula/zpwr-chrome-host.rb` | Homebrew formula for the `MenkeTechnologies/zpwrchrome` tap |
-| `host/tests/{frame_roundtrip,echo_integration,pass_unit,dl_unit,dl_integration}.rs` | `cargo test` suite — framing, dispatch, pass match + parse, dl filename helpers, end-to-end segmented download against a Rust HTTP fixture (cookie gate + retry recovery + cancel) |
+| `browserpass-host-rs/Cargo.toml` / `browserpass-host-rs/src/{lib,frame}.rs` + `src/ported/**` + `src/extensions/**` + `src/bin/browserpass_host_rs.rs` | Rust port of `browserpass-native` v3.1.2 + extension actions (`otp`, `search`, `dl.*`) over length-prefixed JSON on stdio. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see `browserpass-host-rs/docs/port_report.html` |
+| `browserpass-host-rs/install-browserpass.sh` | Writes `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.github.browserpass.native.json` (Chrome / Chromium / Brave / Edge / Firefox on macOS + Linux) so a browser will spawn the binary |
+| `browserpass-host-rs/tests/ported_*.rs` + `extensions_*.rs` | `cargo test` suite — per-fn pins for the port + extensions, end-to-end binary spawn tests, segmented download against a local HTTP fixture |
 | `docs/index.html` | GitHub-Pages landing page (regenerated from manifest) |
 | `docs/report.html` | Strykelang-style engineering report (regenerated from repo stats) |
 | `theme/` | Companion Chrome theme — separate unpacked extension |
@@ -340,7 +339,7 @@ The service worker holds no globals — MRU lives in `chrome.storage.session`. P
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2640 tests across 168 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2641 tests across 168 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes

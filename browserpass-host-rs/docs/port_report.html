@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<!--PORT-REPORT-SCHEMA
+This file is the definitive Go→Rust port mapping for browserpass-host-rs.
+
+Machine-readable surface: JSON dataset in <script id="port-report-data"
+type="application/json">. Schema:
+  {
+    "generated": ISO-8601 timestamp,
+    "upstream":  { repo, tag/sha, version_string, version_code },
+    "stats":     { go_files, go_lines, go_fns, rust_files, rust_lines,
+                   ported, unported, coverage_pct, error_codes_pinned },
+    "files":     [ { go: "errors/errors.go", go_lines, go_fns,
+                     rust: "src/ported/errors/errors.rs", rust_lines,
+                     status: "complete" } ],
+    "symbols":   [ { name, status, go_file, go_line,
+                     rust_file, rust_line, citation, kind } ],
+    "extensions":[ { name, rust_file, rust_lines, purpose, fns: [...] } ]
+  }
+
+Excluded from this report by design:
+  * src/extensions/  — additive features upstream does NOT have
+  * src/frame.rs     — shared NM framing (not in upstream Go source)
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>browserpass-host-rs — Port Report</title>
+<meta name="description" content="Go→Rust port mapping for browserpass-host-rs. 30 Go functions, 13 files, 100% coverage, all 23 PROTOCOL.md error codes pinned.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { color-scheme: dark; }
+  ::selection { background: rgba(5,217,232,0.3); color: #fff; }
+  :root {
+    --bg-primary: #05050a; --bg-secondary: #0a0a14; --bg-card: #0d0d1a; --bg-hover: #12122a;
+    --accent: #ff2a6d; --accent-light: #ff6b9d; --accent-glow: rgba(255,42,109,0.4);
+    --cyan: #05d9e8; --cyan-glow: rgba(5,217,232,0.4); --cyan-dim: rgba(5,217,232,0.15);
+    --magenta: #d300c5; --magenta-glow: rgba(211,0,197,0.3);
+    --green: #39ff14; --red: #ff073a; --yellow: #ffb800;
+    --text: #e0f0ff; --text-dim: #7a8ba8; --text-muted: #3d4f6a;
+    --border: #1a1a3e;
+  }
+  body {
+    font-family: 'Share Tech Mono', 'SF Mono', 'Fira Code', monospace;
+    background: var(--bg-primary);
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(5,217,232,0.045) 0%, transparent 52%),
+      radial-gradient(ellipse at 80% 20%, rgba(211,0,197,0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 82%, rgba(255,42,109,0.035) 0%, transparent 48%),
+      linear-gradient(rgba(5,217,232,0.042) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(5,217,232,0.034) 1px, transparent 1px);
+    background-size: auto, auto, auto, 52px 52px, 52px 52px;
+    background-attachment: fixed;
+    color: var(--text);
+    line-height: 1.55;
+    padding: 1.5rem;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(5,217,232,.015) 2px, rgba(5,217,232,.015) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: rgba(5,5,10,.5); }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan), var(--magenta)); border-radius: 4px; }
+
+  main { max-width: 1280px; margin: 0 auto; position: relative; z-index: 1; }
+
+  header { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+  h1 { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.6rem; color: var(--cyan); text-shadow: 0 0 16px var(--cyan-glow); letter-spacing: 2px; }
+  h1 small { display: block; font-family: 'Share Tech Mono', monospace; font-weight: 400; font-size: 0.78rem; color: var(--text-muted); margin-top: 0.4rem; letter-spacing: 0.5px; }
+  h2 { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin: 1.6rem 0 0.8rem; padding-bottom: 0.4rem; border-bottom: 2px solid var(--accent); }
+  h2 .hash { color: var(--magenta); margin-right: 0.4rem; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.6rem; margin: 1rem 0 1.5rem; }
+  .stat-card { border: 1px solid var(--border); border-top: 3px solid var(--cyan); background: var(--bg-card); padding: 0.7rem 0.9rem; text-align: center; }
+  .stat-card .v { font-family: 'Orbitron', sans-serif; font-size: 1.6rem; font-weight: 900; color: var(--cyan); line-height: 1.1; text-shadow: 0 0 14px var(--cyan-glow); }
+  .stat-card .v.green   { color: var(--green); text-shadow: 0 0 14px rgba(57,255,20,.35); }
+  .stat-card .v.magenta { color: var(--magenta); text-shadow: 0 0 14px var(--magenta-glow); }
+  .stat-card .v.yellow  { color: var(--yellow); text-shadow: 0 0 14px rgba(255,184,0,.35); }
+  .stat-card .l { font-family: 'Orbitron', sans-serif; font-size: 0.62rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); margin-top: 0.4rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 0.6rem 0 1.2rem; }
+  th { background: var(--bg-secondary); color: var(--cyan); font-family: 'Orbitron', sans-serif; font-size: 0.66rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; text-align: left; padding: 0.5rem 0.7rem; border: 1px solid var(--border); }
+  td { padding: 0.45rem 0.7rem; border: 1px solid var(--border); color: var(--text-dim); vertical-align: top; }
+  tr:hover td { background: var(--bg-hover); }
+  td.right { text-align: right; font-variant-numeric: tabular-nums; }
+  td.center { text-align: center; }
+  code { font-size: 0.75rem; color: var(--accent-light); background: var(--bg-primary); padding: 1px 6px; border-radius: 2px; }
+  td a { color: var(--cyan); text-decoration: none; }
+  td a:hover { text-decoration: underline; color: #fff; }
+  .ok { color: var(--green); font-weight: 700; }
+  .mag { color: var(--magenta); font-weight: 700; }
+
+  p.lead { font-size: 0.88rem; color: var(--text-dim); margin: 0.4rem 0 1rem; max-width: 60rem; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .pill.green { background: rgba(57,255,20,0.15); color: var(--green); border: 1px solid var(--green); }
+  .pill.cyan  { background: var(--cyan-dim);       color: var(--cyan);  border: 1px solid var(--cyan); }
+  .pill.mag   { background: rgba(211,0,197,0.15);  color: var(--magenta); border: 1px solid var(--magenta); }
+  .pill.yel   { background: rgba(255,184,0,0.15);  color: var(--yellow); border: 1px solid var(--yellow); }
+
+  footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.75rem; }
+  footer a { color: var(--cyan); }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>browserpass-host-rs &mdash; Port Report
+    <small>Strict 1:1 Go→Rust port of <code>browserpass/browserpass-native</code> v3.1.2 &middot; per-function mapping</small>
+  </h1>
+</header>
+
+<p class="lead">
+Every function declared in upstream <code>browserpass-native</code>'s Go source has a Rust counterpart in <code>src/ported/</code> at the matching subpath, with citation doc-comments and per-statement <code>// go:NN</code> line markers. Go inline comments carry over verbatim. Discipline rules borrowed from <a href="https://github.com/MenkeTechnologies/zshrs/blob/main/docs/PORT.md" target="_blank">zshrs/docs/PORT.md</a>.
+</p>
+
+<h2><span class="hash">&gt;_</span>EXECUTIVE SUMMARY</h2>
+<div class="stat-grid">
+  <div class="stat-card"><div class="v">13</div><div class="l">Go files</div></div>
+  <div class="stat-card"><div class="v">1,272</div><div class="l">Go lines</div></div>
+  <div class="stat-card"><div class="v">30</div><div class="l">Go functions</div></div>
+  <div class="stat-card"><div class="v green">30</div><div class="l">Ported</div></div>
+  <div class="stat-card"><div class="v">0</div><div class="l">Unported</div></div>
+  <div class="stat-card"><div class="v green">100%</div><div class="l">Coverage</div></div>
+  <div class="stat-card"><div class="v">1,751</div><div class="l">Rust lines</div></div>
+  <div class="stat-card"><div class="v magenta">23</div><div class="l">Error codes pinned</div></div>
+  <div class="stat-card"><div class="v">7</div><div class="l">BP actions</div></div>
+  <div class="stat-card"><div class="v cyan">3</div><div class="l" style="color:var(--cyan)">Extension actions</div></div>
+  <div class="stat-card"><div class="v yellow">69</div><div class="l">Rust tests</div></div>
+  <div class="stat-card"><div class="v">3.1.2</div><div class="l">Upstream version pinned</div></div>
+</div>
+
+<h2><span class="hash">~</span>PER-FILE MAPPING</h2>
+<p class="lead">Every Go source file maps to a single Rust file by stem + relative subpath. <code>request/configure.go</code> grows under port because Go's terse <code>if err != nil { … }</code> chains become explicit <code>match</code> ladders in Rust, plus we carry over every Go inline comment with a <code>// go:NN</code> citation on the corresponding Rust statement.</p>
+<table>
+  <thead><tr>
+    <th>Upstream Go file</th><th class="right">Go LOC</th><th class="right">Fns</th>
+    <th>Rust port</th><th class="right">Rust LOC</th><th class="center">Status</th>
+  </tr></thead>
+  <tbody>
+    <tr><td><code>errors/errors.go</code></td><td class="right">58</td><td class="right">1</td><td><code>src/ported/errors/errors.rs</code></td><td class="right">73</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>helpers/helpers.go</code></td><td class="right">114</td><td class="right">6</td><td><code>src/ported/helpers/helpers.rs</code></td><td class="right">170</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>main.go</code></td><td class="right">38</td><td class="right">1</td><td><code>src/bin/browserpass_host_rs.rs</code></td><td class="right">174</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/common.go</code></td><td class="right">34</td><td class="right">1</td><td><code>src/ported/request/common.rs</code></td><td class="right">70</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/configure.go</code></td><td class="right">169</td><td class="right">3</td><td><code>src/ported/request/configure.rs</code></td><td class="right">227</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/delete.go</code></td><td class="right">132</td><td class="right">1</td><td><code>src/ported/request/delete.rs</code></td><td class="right">145</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/fetch.go</code></td><td class="right">123</td><td class="right">1</td><td><code>src/ported/request/fetch.rs</code></td><td class="right">138</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/list.go</code></td><td class="right">86</td><td class="right">1</td><td><code>src/ported/request/list.rs</code></td><td class="right">109</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/process.go</code></td><td class="right">109</td><td class="right">3</td><td><code>src/ported/request/process.rs</code></td><td class="right">145</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/save.go</code></td><td class="right">153</td><td class="right">1</td><td><code>src/ported/request/save.rs</code></td><td class="right">162</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/tree.go</code></td><td class="right">112</td><td class="right">1</td><td><code>src/ported/request/tree.rs</code></td><td class="right">106</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>response/response.go</code></td><td class="right">129</td><td class="right">9</td><td><code>src/ported/response/response.rs</code></td><td class="right">211</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>version/version.go</code></td><td class="right">15</td><td class="right">1</td><td><code>src/ported/version/version.rs</code></td><td class="right">21</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr style="background:var(--bg-secondary);font-weight:700;color:var(--cyan)">
+      <td>TOTAL (13 files)</td><td class="right">1,272</td><td class="right">30</td>
+      <td>13 ported files</td><td class="right">1,751</td><td class="center"><span class="pill green">100%</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2><span class="hash">$</span>PER-FUNCTION MAPPING</h2>
+<p class="lead">Every function has a <code>/// Port of &lt;name&gt;() from &lt;go_file&gt;:&lt;line&gt;</code> doc-comment in the Rust port. Names preserve Go's PascalCase / camelCase exactly (file-level <code>#![allow(non_snake_case)]</code> makes this an explicit, audited decision rather than a style accident).</p>
+<table>
+  <thead><tr>
+    <th>Function</th><th>Kind</th><th>Go origin</th><th>Rust port</th><th class="center">Status</th>
+  </tr></thead>
+  <tbody>
+    <tr><td><code>ExitWithCode</code></td><td>fn</td><td><code>errors/errors.go:59</code></td><td><code>ported/errors/errors.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>DetectGpgBinary</code></td><td>fn</td><td><code>helpers/helpers.go:15</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>ValidateGpgBinary</code></td><td>fn</td><td><code>helpers/helpers.go:33</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>GpgDecryptFile</code></td><td>fn</td><td><code>helpers/helpers.go:37</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>GpgEncryptFile</code></td><td>fn</td><td><code>helpers/helpers.go:58</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>DetectGpgRecipients</code></td><td>fn</td><td><code>helpers/helpers.go:82</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>IsDirectoryEmpty</code></td><td>fn</td><td><code>helpers/helpers.go:104</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>main</code></td><td>fn</td><td><code>main.go:11</code></td><td><code>bin/browserpass_host_rs.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>normalizePasswordStorePath</code></td><td>fn</td><td><code>request/common.go:11</code></td><td><code>ported/request/common.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>configure</code></td><td>fn</td><td><code>request/configure.go:14</code></td><td><code>ported/request/configure.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>getDefaultPasswordStorePath</code></td><td>fn</td><td><code>request/configure.go:150</code></td><td><code>ported/request/configure.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>readDefaultSettings</code></td><td>fn</td><td><code>request/configure.go:165</code></td><td><code>ported/request/configure.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>deleteFile</code></td><td>fn</td><td><code>request/delete.go:13</code></td><td><code>ported/request/delete.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>fetchDecryptedContents</code></td><td>fn</td><td><code>request/fetch.go:13</code></td><td><code>ported/request/fetch.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>listFiles</code></td><td>fn</td><td><code>request/list.go:14</code></td><td><code>ported/request/list.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>Process</code></td><td>fn</td><td><code>request/process.go:38</code></td><td><code>ported/request/process.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>parseRequestLength</code></td><td>fn</td><td><code>request/process.go:94</code></td><td><code>ported/request/process.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>parseRequest</code></td><td>fn</td><td><code>request/process.go:103</code></td><td><code>ported/request/process.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>saveEncryptedContents</code></td><td>fn</td><td><code>request/save.go:13</code></td><td><code>ported/request/save.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>listDirectories</code></td><td>fn</td><td><code>request/tree.go:18</code></td><td><code>ported/request/tree.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>MakeConfigureResponse</code></td><td>fn</td><td><code>response/response.go:35</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>MakeListResponse</code></td><td>fn</td><td><code>response/response.go:48</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>MakeTreeResponse</code></td><td>fn</td><td><code>response/response.go:61</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>MakeFetchResponse</code></td><td>fn</td><td><code>response/response.go:74</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>MakeSaveResponse</code></td><td>fn</td><td><code>response/response.go:85</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>MakeDeleteResponse</code></td><td>fn</td><td><code>response/response.go:96</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>SendOk</code></td><td>fn</td><td><code>response/response.go:101</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>SendErrorAndExit</code></td><td>fn</td><td><code>response/response.go:110</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>SendRaw</code></td><td>fn</td><td><code>response/response.go:122</code></td><td><code>ported/response/response.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>String</code></td><td>fn</td><td><code>version/version.go:12</code></td><td><code>ported/version/version.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+  </tbody>
+</table>
+
+<h2><span class="hash">#</span>ERROR CODE PINS</h2>
+<p class="lead">All 23 numeric error codes from <code>errors/errors.go</code> pin to their PROTOCOL.md values. Exit code equals error code (matches Go's <code>errors.ExitWithCode</code>). Pinned by <code>tests/ported_errors.rs::every_error_code_pins_to_protocol_md_value</code> &mdash; drift here is a protocol break.</p>
+<table>
+  <thead><tr><th class="right">Code</th><th>Name</th><th>Triggered by</th></tr></thead>
+  <tbody>
+    <tr><td class="right mag">10</td><td><code>ParseRequestLength</code></td><td><code>Process</code> — malformed length prefix</td></tr>
+    <tr><td class="right mag">11</td><td><code>ParseRequest</code></td><td><code>Process</code> — malformed JSON body</td></tr>
+    <tr><td class="right mag">12</td><td><code>InvalidRequestAction</code></td><td><code>Process</code> — unknown action</td></tr>
+    <tr><td class="right mag">13</td><td><code>InaccessiblePasswordStore</code></td><td>5 actions on path failure</td></tr>
+    <tr><td class="right mag">14</td><td><code>InaccessibleDefaultPasswordStore</code></td><td><code>configure</code> w/o stores</td></tr>
+    <tr><td class="right mag">15</td><td><code>UnknownDefaultPasswordStoreLocation</code></td><td><code>configure</code> w/o HOME/PASSWORD_STORE_DIR</td></tr>
+    <tr><td class="right mag">16</td><td><code>UnreadablePasswordStoreDefaultSettings</code></td><td><code>configure</code> — bad .browserpass.json</td></tr>
+    <tr><td class="right mag">17</td><td><code>UnreadableDefaultPasswordStoreDefaultSettings</code></td><td><code>configure</code> — bad default-store .browserpass.json</td></tr>
+    <tr><td class="right mag">18</td><td><code>UnableToListFilesInPasswordStore</code></td><td><code>list</code> — walker failure</td></tr>
+    <tr><td class="right mag">19</td><td><code>UnableToDetermineRelativeFilePathInPasswordStore</code></td><td><code>list</code> — strip_prefix failure</td></tr>
+    <tr><td class="right mag">20</td><td><code>InvalidPasswordStore</code></td><td><code>fetch/save/delete</code> — unknown storeId</td></tr>
+    <tr><td class="right mag">21</td><td><code>InvalidGpgPath</code></td><td><code>configure/fetch/save</code> — bad gpgPath</td></tr>
+    <tr><td class="right mag">22</td><td><code>UnableToDetectGpgPath</code></td><td><code>fetch/save</code> — no gpg in $PATH</td></tr>
+    <tr><td class="right mag">23</td><td><code>InvalidPasswordFileExtension</code></td><td><code>fetch/save/delete</code> — non-.gpg file</td></tr>
+    <tr><td class="right mag">24</td><td><code>UnableToDecryptPasswordFile</code></td><td><code>fetch</code> + extension <code>otp</code></td></tr>
+    <tr><td class="right mag">25</td><td><code>UnableToListDirectoriesInPasswordStore</code></td><td><code>tree</code> — walker failure</td></tr>
+    <tr><td class="right mag">26</td><td><code>UnableToDetermineRelativeDirectoryPathInPasswordStore</code></td><td><code>tree</code> — strip_prefix failure</td></tr>
+    <tr><td class="right mag">27</td><td><code>EmptyContents</code></td><td><code>save</code> — empty contents</td></tr>
+    <tr><td class="right mag">28</td><td><code>UnableToDetermineGpgRecipients</code></td><td><code>save</code> — no .gpg-id in chain</td></tr>
+    <tr><td class="right mag">29</td><td><code>UnableToEncryptPasswordFile</code></td><td><code>save</code> — gpg exit nonzero</td></tr>
+    <tr><td class="right mag">30</td><td><code>UnableToDeletePasswordFile</code></td><td><code>delete</code> — fs::remove_file failure</td></tr>
+    <tr><td class="right mag">31</td><td><code>UnableToDetermineIsDirectoryEmpty</code></td><td><code>delete</code> — read_dir failure on parent</td></tr>
+    <tr><td class="right mag">32</td><td><code>UnableToDeleteEmptyDirectory</code></td><td><code>delete</code> — fs::remove_dir failure on parent</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="hash">+</span>EXTENSIONS (NOT IN UPSTREAM)</h2>
+<p class="lead">Three additive modules live under <code>src/extensions/</code> — features <code>browserpass-native</code> does not have. <code>browserpass-extension</code> never sends these action names, so wire compat with upstream is preserved. Each is dispatched by <code>bin/browserpass_host_rs.rs</code> before falling through to the ported BP dispatcher.</p>
+<table>
+  <thead><tr>
+    <th>Module</th><th>Rust LOC</th><th>Action(s)</th><th>Purpose</th>
+  </tr></thead>
+  <tbody>
+    <tr><td><code>src/extensions/otp.rs</code></td><td class="right">120</td><td><code>otp</code></td><td>Shells <code>pass otp &lt;entry&gt;</code> with the matching store's <code>PASSWORD_STORE_DIR</code>. Upstream v3 dropped OTP; we add it back because zpwrchrome's PASS popup needs it.</td></tr>
+    <tr><td><code>src/extensions/search.rs</code></td><td class="right">175</td><td><code>search</code></td><td>Host-side fuzzy + substring scoring across every configured store. Faster than client-side scoring for large stores. Pure scorer pinned by <code>tests/extensions_search.rs</code>.</td></tr>
+    <tr><td><code>src/extensions/dl.rs</code></td><td class="right">793</td><td><code>dl.add</code> / <code>dl.list</code> / <code>dl.pause</code> / <code>dl.resume</code> / <code>dl.cancel</code></td><td>File-backed segmented HTTP/HTTPS downloader. <code>dl.add</code> detaches a worker (<code>browserpass-host-rs --dl-worker &lt;gid&gt;</code>); state persists at <code>$XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json</code>. HEAD probe → N parallel Range GETs → atomic state-file rewrites; pause/cancel via state-file flags polled by the worker between chunks. Retry 200ms × 3ⁿ on transient errors. End-to-end verified by <code>tests/extensions_dl_integration.rs</code> against a Range-aware HTTP fixture.</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="hash">@</span>DISCIPLINE NOTES</h2>
+<table>
+  <thead><tr><th style="width:30%">Rule</th><th>How applied to this port</th></tr></thead>
+  <tbody>
+    <tr><td>1:1 file mapping</td><td>Every <code>src/ported/</code> file mirrors one Go source file by stem + relative subpath. No file merging. Verified: 13 Go files ↔ 13 Rust files.</td></tr>
+    <tr><td>Per-fn citation</td><td>Every <code>fn</code> under <code>src/ported/</code> carries <code>/// Port of &lt;name&gt;() from &lt;go_file&gt;:&lt;line&gt;</code> doc-comment. Verified by audit.</td></tr>
+    <tr><td>Identifier preservation</td><td>Go's <code>PascalCase</code> / <code>camelCase</code> names preserved verbatim (<code>DetectGpgBinary</code>, <code>MakeConfigureResponse</code>, <code>parseRequestLength</code>). File-level <code>#![allow(non_snake_case)]</code> opts in.</td></tr>
+    <tr><td>Inline comment carry-over</td><td>Every Go inline comment ports as a Rust <code>// ...</code> at the matching position with a <code>// go:NN</code> line citation.</td></tr>
+    <tr><td>Local variable names</td><td>Loop and local names match Go's (<code>gpgPath</code>, <code>normalizedStorePath</code>, <code>parentDir</code>, <code>responseData</code>).</td></tr>
+    <tr><td>Control flow shape</td><td>Go's <code>if err != nil { … }</code> chains become explicit Rust <code>match</code> ladders that <code>SendErrorAndExit</code> on the error arm — no iterator fold or Result chaining.</td></tr>
+    <tr><td>No invented helpers</td><td>One maintainer-approved Rust-only inline pattern: env-var expansion inside <code>normalize_password_store_path</code> (Go uses <code>os.ExpandEnv</code> stdlib; Rust stdlib has none, so the expander is inlined at the call site, not factored out).</td></tr>
+    <tr><td>External Go deps inlined</td><td><code>mattn/go-zglob</code> (used by <code>list.go</code>) and <code>mattn/go-zglob/fastwalk</code> (used by <code>tree.go</code>) are replaced by inline <code>std::fs::read_dir</code> walkers in <code>list.rs</code> and <code>tree.rs</code> respectively. The inline walkers are file-private fns at the call site, not separately-named helpers.</td></tr>
+    <tr><td>Extensions segregated</td><td>Non-port code lives under <code>src/extensions/</code>. Extensions never edit <code>ported/</code>. The bin's dispatch hook routes extension actions before falling through to the ported BP switch.</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  Generated for <code>browserpass-host-rs</code> v0.3.0 · Upstream pinned to <code>browserpass/browserpass-native</code> v3.1.2 (packed int <code>3_001_002</code>).
+  Repository: <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a>
+</footer>
+
+<script id="port-report-data" type="application/json">
+{
+  "generated": "2026-06-02T00:00:00Z",
+  "upstream": {
+    "repo": "https://github.com/browserpass/browserpass-native",
+    "version_string": "3.1.2",
+    "version_code": 3001002
+  },
+  "stats": {
+    "go_files": 13,
+    "go_lines": 1272,
+    "go_fns": 30,
+    "rust_files": 13,
+    "rust_lines": 1751,
+    "ported": 30,
+    "unported": 0,
+    "coverage_pct": 100,
+    "error_codes_pinned": 23,
+    "bp_actions": 7,
+    "extension_actions": 3,
+    "rust_tests": 69
+  },
+  "files": [
+    { "go": "errors/errors.go",       "go_lines": 58,  "go_fns": 1, "rust": "src/ported/errors/errors.rs",      "rust_lines": 73,  "status": "complete" },
+    { "go": "helpers/helpers.go",     "go_lines": 114, "go_fns": 6, "rust": "src/ported/helpers/helpers.rs",    "rust_lines": 170, "status": "complete" },
+    { "go": "main.go",                "go_lines": 38,  "go_fns": 1, "rust": "src/bin/browserpass_host_rs.rs",   "rust_lines": 174, "status": "complete" },
+    { "go": "request/common.go",      "go_lines": 34,  "go_fns": 1, "rust": "src/ported/request/common.rs",     "rust_lines": 70,  "status": "complete" },
+    { "go": "request/configure.go",   "go_lines": 169, "go_fns": 3, "rust": "src/ported/request/configure.rs",  "rust_lines": 227, "status": "complete" },
+    { "go": "request/delete.go",      "go_lines": 132, "go_fns": 1, "rust": "src/ported/request/delete.rs",     "rust_lines": 145, "status": "complete" },
+    { "go": "request/fetch.go",       "go_lines": 123, "go_fns": 1, "rust": "src/ported/request/fetch.rs",      "rust_lines": 138, "status": "complete" },
+    { "go": "request/list.go",        "go_lines": 86,  "go_fns": 1, "rust": "src/ported/request/list.rs",       "rust_lines": 109, "status": "complete" },
+    { "go": "request/process.go",     "go_lines": 109, "go_fns": 3, "rust": "src/ported/request/process.rs",    "rust_lines": 145, "status": "complete" },
+    { "go": "request/save.go",        "go_lines": 153, "go_fns": 1, "rust": "src/ported/request/save.rs",       "rust_lines": 162, "status": "complete" },
+    { "go": "request/tree.go",        "go_lines": 112, "go_fns": 1, "rust": "src/ported/request/tree.rs",       "rust_lines": 106, "status": "complete" },
+    { "go": "response/response.go",   "go_lines": 129, "go_fns": 9, "rust": "src/ported/response/response.rs",  "rust_lines": 211, "status": "complete" },
+    { "go": "version/version.go",     "go_lines": 15,  "go_fns": 1, "rust": "src/ported/version/version.rs",    "rust_lines": 21,  "status": "complete" }
+  ],
+  "symbols": [
+    { "name": "ExitWithCode",                "kind": "fn", "go_file": "errors/errors.go",     "go_line": 59,  "rust_file": "src/ported/errors/errors.rs",    "status": "ported" },
+    { "name": "DetectGpgBinary",             "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 15,  "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
+    { "name": "ValidateGpgBinary",           "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 33,  "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
+    { "name": "GpgDecryptFile",              "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 37,  "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
+    { "name": "GpgEncryptFile",              "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 58,  "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
+    { "name": "DetectGpgRecipients",         "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 82,  "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
+    { "name": "IsDirectoryEmpty",            "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 104, "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
+    { "name": "main",                        "kind": "fn", "go_file": "main.go",              "go_line": 11,  "rust_file": "src/bin/browserpass_host_rs.rs", "status": "ported" },
+    { "name": "normalizePasswordStorePath",  "kind": "fn", "go_file": "request/common.go",    "go_line": 11,  "rust_file": "src/ported/request/common.rs",   "status": "ported" },
+    { "name": "configure",                   "kind": "fn", "go_file": "request/configure.go", "go_line": 14,  "rust_file": "src/ported/request/configure.rs","status": "ported" },
+    { "name": "getDefaultPasswordStorePath", "kind": "fn", "go_file": "request/configure.go", "go_line": 150, "rust_file": "src/ported/request/configure.rs","status": "ported" },
+    { "name": "readDefaultSettings",         "kind": "fn", "go_file": "request/configure.go", "go_line": 165, "rust_file": "src/ported/request/configure.rs","status": "ported" },
+    { "name": "deleteFile",                  "kind": "fn", "go_file": "request/delete.go",    "go_line": 13,  "rust_file": "src/ported/request/delete.rs",   "status": "ported" },
+    { "name": "fetchDecryptedContents",      "kind": "fn", "go_file": "request/fetch.go",     "go_line": 13,  "rust_file": "src/ported/request/fetch.rs",    "status": "ported" },
+    { "name": "listFiles",                   "kind": "fn", "go_file": "request/list.go",      "go_line": 14,  "rust_file": "src/ported/request/list.rs",     "status": "ported" },
+    { "name": "Process",                     "kind": "fn", "go_file": "request/process.go",   "go_line": 38,  "rust_file": "src/ported/request/process.rs",  "status": "ported" },
+    { "name": "parseRequestLength",          "kind": "fn", "go_file": "request/process.go",   "go_line": 94,  "rust_file": "src/ported/request/process.rs",  "status": "ported" },
+    { "name": "parseRequest",                "kind": "fn", "go_file": "request/process.go",   "go_line": 103, "rust_file": "src/ported/request/process.rs",  "status": "ported" },
+    { "name": "saveEncryptedContents",       "kind": "fn", "go_file": "request/save.go",      "go_line": 13,  "rust_file": "src/ported/request/save.rs",     "status": "ported" },
+    { "name": "listDirectories",             "kind": "fn", "go_file": "request/tree.go",      "go_line": 18,  "rust_file": "src/ported/request/tree.rs",     "status": "ported" },
+    { "name": "MakeConfigureResponse",       "kind": "fn", "go_file": "response/response.go", "go_line": 35,  "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "MakeListResponse",            "kind": "fn", "go_file": "response/response.go", "go_line": 48,  "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "MakeTreeResponse",            "kind": "fn", "go_file": "response/response.go", "go_line": 61,  "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "MakeFetchResponse",           "kind": "fn", "go_file": "response/response.go", "go_line": 74,  "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "MakeSaveResponse",            "kind": "fn", "go_file": "response/response.go", "go_line": 85,  "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "MakeDeleteResponse",          "kind": "fn", "go_file": "response/response.go", "go_line": 96,  "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "SendOk",                      "kind": "fn", "go_file": "response/response.go", "go_line": 101, "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "SendErrorAndExit",            "kind": "fn", "go_file": "response/response.go", "go_line": 110, "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "SendRaw",                     "kind": "fn", "go_file": "response/response.go", "go_line": 122, "rust_file": "src/ported/response/response.rs","status": "ported" },
+    { "name": "String",                      "kind": "fn", "go_file": "version/version.go",   "go_line": 12,  "rust_file": "src/ported/version/version.rs",  "status": "ported" }
+  ],
+  "extensions": [
+    {
+      "name": "otp",
+      "rust_file": "src/extensions/otp.rs",
+      "rust_lines": 120,
+      "purpose": "Shells `pass otp <entry>` with the matching store's PASSWORD_STORE_DIR. Upstream v3 dropped OTP; this restores it for zpwrchrome's PASS popup.",
+      "actions": ["otp"]
+    },
+    {
+      "name": "search",
+      "rust_file": "src/extensions/search.rs",
+      "rust_lines": 175,
+      "purpose": "Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores.",
+      "actions": ["search"]
+    },
+    {
+      "name": "dl",
+      "rust_file": "src/extensions/dl.rs",
+      "rust_lines": 793,
+      "purpose": "File-backed segmented HTTP/HTTPS downloader. dl.add detaches a worker process; state persists in JSON files under $XDG_CACHE_HOME/zpwrchrome/dl/. Pause/cancel via atomic state-file flags. Retry 200ms × 3^n on transient errors.",
+      "actions": ["dl.add", "dl.list", "dl.pause", "dl.resume", "dl.cancel"]
+    }
+  ]
+}
+</script>
+
+</main>
+</body>
+</html>

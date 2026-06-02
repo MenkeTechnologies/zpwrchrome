@@ -24,6 +24,7 @@ import {
   expandMatchPatterns
 } from "./lib/userscript.js";
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
+import { matchIn, parseEntry, fallbackUsernameFromPath } from "./lib/bp-pass.js";
 
 const MRU_KEY = "mru";
 const SCENES_KEY = "scenes";   // chrome.storage.local — survives browser restart
@@ -120,8 +121,8 @@ async function passMatchActive() {
   const h = hostnameOf(t?.url || "");
   if (!h) return { matches: [] };
   try {
-    const data = await nmCall("pass", "match", { host: h });
-    return { matches: Array.isArray(data?.matches) ? data.matches : [] };
+    const matches = await bpMatchByHost(h);
+    return { matches };
   } catch (e) {
     console.warn("[zpwrchrome] pass.match:", e?.message || e);
     return { matches: [] };
@@ -131,15 +132,15 @@ async function passMatchActive() {
 async function passCopyForActive(field) {
   const { matches } = await passMatchActive();
   if (!matches.length) return;
-  const m = matches[0];  // {store, path}
+  const m = matches[0];
   try {
     if (field === "otp") {
-      const data = await nmCall("pass", "otp", { path: m.path, store: m.store });
-      if (data?.otp) await passClipboardCopy(data.otp);
+      const code = await bpOtpCode(m.path);
+      if (code) await passClipboardCopy(code);
       return;
     }
-    const data = await nmCall("pass", "fetch", { path: m.path, store: m.store });
-    const text = field === "user" ? data?.username : data?.password;
+    const entry = await bpFetchParsed(m.path);
+    const text = field === "user" ? entry.username : entry.password;
     if (text) await passClipboardCopy(text);
   } catch (e) {
     console.warn("[zpwrchrome] pass copy", field, "failed:", e?.message || e);
@@ -169,8 +170,8 @@ async function passOpenUrlForActive() {
   if (!matches.length) return;
   const m = matches[0];
   try {
-    const data = await nmCall("pass", "fetch", { path: m.path, store: m.store });
-    const url = String(data?.url || "").trim();
+    const entry = await bpFetchParsed(m.path);
+    const url = String(entry.url || "").trim();
     if (!url) return;
     const t = await getActive();
     if (t?.id) await chrome.tabs.update(t.id, { url });
@@ -179,10 +180,10 @@ async function passOpenUrlForActive() {
   }
 }
 
-async function passOpenUrlFromPath(path, newTab, store) {
+async function passOpenUrlFromPath(path, newTab, _store) {
   try {
-    const data = await nmCall("pass", "fetch", { path, store });
-    const url = String(data?.url || "").trim();
+    const entry = await bpFetchParsed(path);
+    const url = String(entry.url || "").trim();
     if (!url) return false;
     if (newTab) {
       await chrome.tabs.create({ url });
@@ -222,13 +223,13 @@ async function setPassSettings(patch) {
   return next;
 }
 
-async function passFillFromPath(path, store) {
+async function passFillFromPath(path, _store) {
   if (!path) return false;
   const t = await getActive();
   if (!t?.id) return false;
-  let creds;
+  let entry;
   try {
-    creds = await nmCall("pass", "fetch", { path, store });
+    entry = await bpFetchParsed(path);
   } catch (e) {
     console.warn("[zpwrchrome] pass.fill fetch:", e?.message || e);
     return false;
@@ -238,7 +239,7 @@ async function passFillFromPath(path, store) {
     const results = await chrome.scripting.executeScript({
       target: { tabId: t.id, allFrames: true },
       func: fillLoginForm,
-      args: [String(creds?.username || ""), String(creds?.password || ""), !!settings.autoSubmit],
+      args: [String(entry.username || ""), String(entry.password || ""), !!settings.autoSubmit],
     });
     return Array.isArray(results) && results.some((r) => r?.result === true);
   } catch (e) {
@@ -254,20 +255,18 @@ async function passFillActive() {
   if (!h) return;
   let matches;
   try {
-    const r = await nmCall("pass", "match", { host: h });
-    matches = Array.isArray(r?.matches) ? r.matches : [];
+    matches = await bpMatchByHost(h);
   } catch (e) {
     console.warn("[zpwrchrome] pass-fill match:", e?.message || e);
     return;
   }
   if (!matches.length) return;
   if (matches.length > 1) {
-    // Ambiguous — hand off to the popup so the user picks the entry.
     return openPassInPopup();
   }
-  let creds;
+  let entry;
   try {
-    creds = await nmCall("pass", "fetch", { path: matches[0].path, store: matches[0].store });
+    entry = await bpFetchParsed(matches[0].path);
   } catch (e) {
     console.warn("[zpwrchrome] pass-fill fetch:", e?.message || e);
     return;
@@ -277,7 +276,7 @@ async function passFillActive() {
     await chrome.scripting.executeScript({
       target: { tabId: t.id, allFrames: true },
       func: fillLoginForm,
-      args: [String(creds?.username || ""), String(creds?.password || ""), !!settings.autoSubmit],
+      args: [String(entry.username || ""), String(entry.password || ""), !!settings.autoSubmit],
     });
   } catch (e) {
     console.warn("[zpwrchrome] pass-fill inject:", e?.message || e);
@@ -370,17 +369,19 @@ async function dlPasteUrl() {
   }
   try {
     const args = await enrichDownloadArgs(url, {});
-    const data = await nmCall("dl", "add", args);
+    const resp = await bpDlAdd(args);
+    const data = resp.data || {};
     if (chrome.notifications) {
       chrome.notifications.create({
         type: "basic",
         iconUrl: chrome.runtime.getURL("icons/icon128.png"),
         title: "zpwrchrome download queued",
-        message: `gid ${data?.gid} → ${data?.dest || ""}`,
+        message: `gid ${data.gid} → ${data.dest || ""}`,
       });
     }
+    bpDlBroadcast();
   } catch (e) {
-    console.warn("[zpwrchrome] dl-paste-url: nmCall failed:", e?.message || e);
+    console.warn("[zpwrchrome] dl-paste-url:", e?.message || e);
   }
 }
 
@@ -391,9 +392,10 @@ async function dlShowQueue() {
 
 async function dlPauseAll() {
   try {
-    const list = await nmCall("dl", "list", {});
-    const active = (list?.jobs || []).filter((j) => j.status === "active");
-    await Promise.all(active.map((j) => nmCall("dl", "pause", { gid: j.gid }).catch(() => null)));
+    const resp = await bpDlList();
+    const active = (resp.data?.jobs || []).filter((j) => j.status === "active");
+    await Promise.all(active.map((j) => bpDlGid("dl.pause", j.gid).catch(() => null)));
+    bpDlBroadcast();
   } catch (e) {
     console.warn("[zpwrchrome] dl-pause-all:", e?.message || e);
   }
@@ -401,9 +403,10 @@ async function dlPauseAll() {
 
 async function dlResumeAll() {
   try {
-    const list = await nmCall("dl", "list", {});
-    const paused = (list?.jobs || []).filter((j) => j.status === "paused");
-    await Promise.all(paused.map((j) => nmCall("dl", "resume", { gid: j.gid }).catch(() => null)));
+    const resp = await bpDlList();
+    const paused = (resp.data?.jobs || []).filter((j) => j.status === "paused");
+    await Promise.all(paused.map((j) => bpDlGid("dl.resume", j.gid).catch(() => null)));
+    bpDlBroadcast();
   } catch (e) {
     console.warn("[zpwrchrome] dl-resume-all:", e?.message || e);
   }
@@ -463,15 +466,17 @@ if (chrome.contextMenus) {
     if (!url) return;
     try {
       const args = await enrichDownloadArgs(url, {});
-      const data = await nmCall("dl", "add", args);
+      const resp = await bpDlAdd(args);
+      const data = resp.data || {};
       if (chrome.notifications) {
         chrome.notifications.create({
           type: "basic",
           iconUrl: chrome.runtime.getURL("icons/icon128.png"),
           title: "zpwrchrome download queued",
-          message: `gid ${data?.gid} → ${data?.dest || ""}`,
+          message: `gid ${data.gid} → ${data.dest || ""}`,
         });
       }
+      bpDlBroadcast();
     } catch (e) {
       console.warn("[zpwrchrome] right-click download:", e?.message || e);
     }
@@ -1206,34 +1211,39 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  // --- Native messaging host: pass + downloads ---
+  // --- Native messaging host: pass + downloads (BP envelope) ---
   if (msg?.kind === "pass.match") {
-    nmCall("pass", "match", { host: String(msg.host || "") })
-      .then((data) => sendResponse({ ok: true, ...data }))
+    bpMatchByHost(String(msg.host || ""))
+      .then((matches) => sendResponse({ ok: true, matches }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
   if (msg?.kind === "pass.list") {
-    nmCall("pass", "list", {})
-      .then((data) => sendResponse({ ok: true, ...data }))
+    bpListEntries()
+      .then((entries) => sendResponse({ ok: true, entries: entries.map((p) => ({ path: p, store: "default" })) }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
   if (msg?.kind === "pass.search") {
-    nmCall("pass", "search", { query: String(msg.query || ""), limit: Number(msg.limit) || 200 })
-      .then((data) => sendResponse({ ok: true, ...data }))
+    const query = String(msg.query || "");
+    bpSend({
+      action: "search",
+      settings: { stores: bpStores() },
+      echoResponse: query,
+    })
+      .then((resp) => sendResponse({ ok: true, matches: resp.data?.matches || [] }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
   if (msg?.kind === "pass.fetch") {
-    nmCall("pass", "fetch", { path: String(msg.path || ""), store: msg.store || undefined })
-      .then((data) => sendResponse({ ok: true, data }))
+    bpFetchParsed(String(msg.path || ""))
+      .then((entry) => sendResponse({ ok: true, data: entry }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
   if (msg?.kind === "pass.otp") {
-    nmCall("pass", "otp", { path: String(msg.path || ""), store: msg.store || undefined })
-      .then((data) => sendResponse({ ok: true, ...data }))
+    bpOtpCode(String(msg.path || ""))
+      .then((otp) => sendResponse({ ok: true, otp }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
@@ -1262,15 +1272,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "dl.add") {
     const url = String(msg.url || "");
     enrichDownloadArgs(url, msg).then((args) =>
-      nmCall("dl", "add", args)
-        .then((data) => sendResponse({ ok: true, ...data }))
+      bpDlAdd(args)
+        .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
         .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }))
     );
     return true;
   }
   if (msg?.kind === "dl.list") {
-    nmCall("dl", "list", {})
-      .then((data) => sendResponse({ ok: true, ...data }))
+    bpDlList()
+      .then((resp) => sendResponse({ ok: true, jobs: resp.data?.jobs || [] }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
@@ -1281,26 +1291,28 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg?.kind === "dl.pause") {
-    nmCall("dl", "pause", { gid: Number(msg.gid) })
-      .then((data) => sendResponse({ ok: true, ...data }))
+    bpDlGid("dl.pause", Number(msg.gid))
+      .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
   if (msg?.kind === "dl.resume") {
-    nmCall("dl", "resume", { gid: Number(msg.gid) })
-      .then((data) => sendResponse({ ok: true, ...data }))
+    bpDlGid("dl.resume", Number(msg.gid))
+      .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
   if (msg?.kind === "dl.cancel") {
-    nmCall("dl", "cancel", { gid: Number(msg.gid) })
-      .then((data) => sendResponse({ ok: true, ...data }))
+    bpDlGid("dl.cancel", Number(msg.gid))
+      .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
   if (msg?.kind === "host.meta") {
-    nmCall("meta", "", {})
-      .then((data) => sendResponse({ ok: true, ...data }))
+    // BP `echo` round-trip — confirms the host is reachable and returns the
+    // sentinel verbatim. Used by the popup as a liveness probe.
+    bpSend({ action: "echo", echoResponse: { ping: "zpwrchrome" } })
+      .then((resp) => sendResponse({ ok: true, alive: true, echo: resp }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
@@ -1436,35 +1448,18 @@ async function killHeaviestTab() {
 if (chrome.webRequest && chrome.webRequest.onAuthRequired) {
   chrome.webRequest.onAuthRequired.addListener(
     async (details, callback) => {
-      if (details.isProxy) {
-        callback({});
-        return;
-      }
+      if (details.isProxy) { callback({}); return; }
       try {
         const settings = await getPassSettings();
-        if (!settings.basicAuthEnabled) {
-          callback({});
-          return;
-        }
+        if (!settings.basicAuthEnabled) { callback({}); return; }
         const host = hostnameOf(details.url || "");
-        if (!host) {
-          callback({});
-          return;
-        }
-        const r = await nmCall("pass", "match", { host });
-        const matches = Array.isArray(r?.matches) ? r.matches : [];
-        if (matches.length !== 1) {
-          callback({});
-          return;
-        }
-        const m = matches[0];
-        const creds = await nmCall("pass", "fetch", { path: m.path, store: m.store });
-        const username = String(creds?.username || "");
-        const password = String(creds?.password || "");
-        if (!username || !password) {
-          callback({});
-          return;
-        }
+        if (!host) { callback({}); return; }
+        const matches = await bpMatchByHost(host);
+        if (matches.length !== 1) { callback({}); return; }
+        const entry = await bpFetchParsed(matches[0].path);
+        const username = String(entry.username || "");
+        const password = String(entry.password || "");
+        if (!username || !password) { callback({}); return; }
         callback({ authCredentials: { username, password } });
       } catch (e) {
         console.warn("[zpwrchrome] basic auth lookup:", e?.message || e);
@@ -1477,89 +1472,111 @@ if (chrome.webRequest && chrome.webRequest.onAuthRequired) {
 }
 
 // ---------------------------------------------------------------------------
-// Native messaging host port (com.menketechnologies.zpwrchrome)
+// Native messaging — BP (browserpass-host-rs) protocol over chrome.runtime
+//                    .sendNativeMessage (one-shot per request).
 //
-// Single long-lived port across all pass/dl calls. Lazily opened on first
-// call, reopened on disconnect. Each request gets a monotonic id; the
-// response with matching id resolves the pending promise.
+// Wire shape (every action shares this envelope):
+//   request:  { action, settings: { stores: { storeId: {id,name,path} } }, ...args }
+//   response: { status: "ok"|"error", version, data?, code?, params? }
 //
-// Push events (download progress, etc.) arrive with id=0 and are fanned
-// out to subscribers via nmEventListeners.
+// The host (browserpass-host-rs) speaks PROTOCOL.md v3.1.2 plus three
+// extension actions (otp, search, dl.*). Each call spawns a fresh host
+// process — there is no long-lived port. Pause/resume/cancel + live queue
+// updates for downloads are surfaced via the host's file-state at
+// $XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json (read by `dl.list`).
 
 const NATIVE_HOST = "com.menketechnologies.zpwrchrome";
-let nmPort = null;
-let nmNextId = 1;
-const nmPending = new Map();
-const nmEventListeners = new Set();
-
-function nmAddEventListener(fn) { nmEventListeners.add(fn); }
-function nmRemoveEventListener(fn) { nmEventListeners.delete(fn); }
-
-// Fan out host push events (id=0) to any open extension page (downloads.html,
-// popup, etc.). Pages listen with chrome.runtime.onMessage for kind:"dl.event"
-// and get live updates without polling.
-//
-// Also mirror dl.progress to chrome.storage.local so downloads.html can show
-// the queue immediately on open even if the service worker is currently
-// asleep — re-hydration happens before the NM port reconnects.
 const DL_SNAPSHOT_KEY = "dl.snapshot";
-nmAddEventListener((evt) => {
-  if (!evt) return;
-  try {
-    chrome.runtime.sendMessage({ kind: "dl.event", event: evt }).catch(() => {});
-  } catch { /* no listeners — fine */ }
-  if (evt.kind === "dl.progress" && Array.isArray(evt.jobs)) {
-    chrome.storage.local.set({ [DL_SNAPSHOT_KEY]: { jobs: evt.jobs, ts: Date.now() } })
-      .catch(() => {});
-  }
-});
 
-function nmEnsurePort() {
-  if (nmPort) return nmPort;
-  try {
-    nmPort = chrome.runtime.connectNative(NATIVE_HOST);
-  } catch (e) {
-    console.warn("[zpwrchrome] connectNative failed:", e?.message || e);
-    nmPort = null;
-    return null;
-  }
-  nmPort.onMessage.addListener((msg) => {
-    if (!msg || typeof msg !== "object") return;
-    if (msg.id === 0) {
-      for (const fn of nmEventListeners) {
-        try { fn(msg); } catch (e) { console.warn("[zpwrchrome] nm listener:", e); }
-      }
-      return;
-    }
-    const p = nmPending.get(msg.id);
-    if (!p) return;
-    nmPending.delete(msg.id);
-    if (msg.ok) p.resolve(msg.data ?? null);
-    else p.reject(new Error(msg.err || "native host error"));
-  });
-  nmPort.onDisconnect.addListener(() => {
-    const err = chrome.runtime.lastError?.message || "native host disconnected";
-    nmPort = null;
-    for (const [, p] of nmPending) p.reject(new Error(err));
-    nmPending.clear();
-  });
-  return nmPort;
-}
+// Default password store; `~/` is expanded by the host's
+// normalizePasswordStorePath at request time, so no env lookup is needed here.
+const PASS_STORE = { id: "default", name: "Default", path: "~/.password-store" };
+function bpStores() { return { default: PASS_STORE }; }
 
-function nmCall(kind, op, args) {
+// Send one BP envelope. Returns a Promise resolving to the full response
+// object on `status:"ok"`, rejecting with an Error (carrying `code` +
+// `params` properties) on `status:"error"`. Transport failures throw.
+function bpSend(req) {
   return new Promise((resolve, reject) => {
-    const port = nmEnsurePort();
-    if (!port) {
-      reject(new Error("native host unavailable — install via host/install.sh"));
-      return;
-    }
-    const id = nmNextId++;
-    nmPending.set(id, { resolve, reject });
     try {
-      port.postMessage({ id, kind, op: op || "", args: args || {} });
+      chrome.runtime.sendNativeMessage(NATIVE_HOST, req, (resp) => {
+        const last = chrome.runtime.lastError;
+        if (last) { reject(new Error(last.message)); return; }
+        if (!resp || typeof resp !== "object") { reject(new Error("native host: empty response")); return; }
+        if (resp.status === "error") {
+          const msg = resp.params?.message || `error code ${resp.code}`;
+          const e = new Error(msg);
+          e.code = resp.code;
+          e.params = resp.params;
+          reject(e);
+          return;
+        }
+        resolve(resp);
+      });
     } catch (e) {
-      nmPending.delete(id);
       reject(e);
     }
   });
+}
+
+// BP `list` → all `.gpg` entries in the default store. Returns the
+// extension-side path representation (no `.gpg` suffix) to match the
+// shape the popup PASS category expects.
+async function bpListEntries() {
+  const resp = await bpSend({ action: "list", settings: { stores: bpStores() } });
+  const files = resp.data?.files?.default || [];
+  return files.map((f) => f.replace(/\.gpg$/, ""));
+}
+
+// Client-side eTLD+1 match for the active tab's host. Returns
+// `[{path, store}, ...]` so the popup PASS rows can render store badges
+// (single-store today, but the shape is multi-store-ready).
+async function bpMatchByHost(host) {
+  const entries = await bpListEntries();
+  return matchIn(entries, host).map((path) => ({ path, store: "default" }));
+}
+
+// BP `fetch` + client-side parse. Returns the parsed entry with username
+// fallback to the entry's basename (browserpass convention).
+async function bpFetchParsed(path) {
+  const file = path.endsWith(".gpg") ? path : `${path}.gpg`;
+  const resp = await bpSend({
+    action: "fetch",
+    storeId: "default",
+    file,
+    settings: { stores: bpStores() },
+  });
+  const raw = resp.data?.contents || "";
+  return fallbackUsernameFromPath(parseEntry(raw), path);
+}
+
+// `otp` extension action — host shells `pass otp` and returns the code.
+async function bpOtpCode(path) {
+  const file = path.endsWith(".gpg") ? path : `${path}.gpg`;
+  const resp = await bpSend({
+    action: "otp",
+    storeId: "default",
+    file,
+    settings: { stores: bpStores() },
+  });
+  return resp.data?.code || "";
+}
+
+// dl.* extension actions — one round-trip each.
+async function bpDlAdd(args)       { return bpSend({ action: "dl.add",    ...args }); }
+async function bpDlList()          { return bpSend({ action: "dl.list" }); }
+async function bpDlGid(action, gid){ return bpSend({ action, gid }); }
+
+// Mirror dl.list snapshots to chrome.storage.local so downloads.html can
+// paint instantly on open. Background polls dl.list whenever something is
+// known to be active (after dl.add) and broadcasts to any open page.
+async function bpDlBroadcast() {
+  try {
+    const resp = await bpDlList();
+    const jobs = resp.data?.jobs || [];
+    await chrome.storage.local.set({ [DL_SNAPSHOT_KEY]: { jobs, ts: Date.now() } });
+    chrome.runtime.sendMessage({ kind: "dl.event", event: { kind: "dl.progress", jobs } }).catch(() => {});
+  } catch (e) {
+    // worker process not registered → silently skip
+  }
 }

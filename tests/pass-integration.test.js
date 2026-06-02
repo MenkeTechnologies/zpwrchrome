@@ -35,22 +35,40 @@ test("manifest declares all five pass-* commands", () => {
   }
 });
 
-test("background.js opens the named native messaging port", () => {
-  assert.match(bg, /chrome\.runtime\.connectNative\(\s*NATIVE_HOST\s*\)/);
+test("background.js talks to the BP host via sendNativeMessage (one-shot)", () => {
+  assert.match(bg, /chrome\.runtime\.sendNativeMessage\(NATIVE_HOST/);
   assert.match(bg, /const NATIVE_HOST = "com\.menketechnologies\.zpwrchrome"/);
 });
 
-test("background.js routes id=0 push events to nmEventListeners", () => {
-  // Hand-rolled NM port wrapper: id=0 is reserved for host-initiated push
-  // events (download progress, etc.). Phase 6 download UI subscribes here.
-  assert.match(bg, /msg\.id === 0/);
-  assert.match(bg, /nmEventListeners/);
+test("bpSend wraps sendNativeMessage in a Promise + BP error handling", () => {
+  const fn = bg.match(/function bpSend\([\s\S]*?\n\}/);
+  assert.ok(fn, "bpSend helper missing");
+  assert.match(fn[0], /chrome\.runtime\.sendNativeMessage\(NATIVE_HOST/);
+  assert.match(fn[0], /resp\.status === "error"/);
+  assert.match(fn[0], /resolve\(resp\)/);
 });
 
-test("nmCall posts the id+kind+op+args envelope on the port", () => {
-  const m = bg.match(/function nmCall\([\s\S]*?\n\}/);
-  assert.ok(m, "nmCall helper missing");
-  assert.match(m[0], /port\.postMessage\(\{[\s\S]*\bid\b[\s\S]*\bkind\b[\s\S]*\bop:[\s\S]*\bargs:[\s\S]*\}\)/);
+test("bpListEntries strips .gpg suffix from BP list response", () => {
+  const fn = bg.match(/async function bpListEntries\([\s\S]*?\n\}/);
+  assert.ok(fn);
+  assert.match(fn[0], /action: "list"/);
+  assert.match(fn[0], /\.replace\(\/\\\.gpg\$\/, ""\)/);
+});
+
+test("bpMatchByHost defers to lib/bp-pass.js client-side matcher", () => {
+  // The browserpass protocol does matching client-side; the helper just
+  // wraps lib/bp-pass.js matchIn + tags with {store:"default"}.
+  const fn = bg.match(/async function bpMatchByHost\([\s\S]*?\n\}/);
+  assert.ok(fn);
+  assert.match(fn[0], /matchIn\(entries, host\)/);
+  assert.match(fn[0], /store: "default"/);
+});
+
+test("bpFetchParsed runs BP fetch + parseEntry + filename-username fallback", () => {
+  const fn = bg.match(/async function bpFetchParsed\([\s\S]*?\n\}/);
+  assert.ok(fn);
+  assert.match(fn[0], /action: "fetch"/);
+  assert.match(fn[0], /fallbackUsernameFromPath\(parseEntry\(raw\), path\)/);
 });
 
 test("dispatch routes all five pass-* commands", () => {
@@ -155,10 +173,21 @@ test("popup pass copy buttons use callback form (not bare await) on sendMessage"
   }
 });
 
-test("background pass.* message handlers all delegate through nmCall", () => {
-  for (const kind of ["pass.match", "pass.list", "pass.search", "pass.fetch", "pass.otp"]) {
-    const re = new RegExp(`msg\\?\\.kind === "${kind.replace(".", "\\.")}"[\\s\\S]*?nmCall\\("pass"`);
-    assert.match(bg, re, `background handler for "${kind}" must call nmCall("pass", ...)`);
+test("background pass.* message handlers all delegate through BP helpers", () => {
+  // pass.match → bpMatchByHost, pass.list → bpListEntries, pass.search →
+  // bpSend({action:"search"}), pass.fetch → bpFetchParsed, pass.otp → bpOtpCode.
+  const cases = {
+    "pass.match":  /bpMatchByHost/,
+    "pass.list":   /bpListEntries/,
+    "pass.search": /action: "search"/,
+    "pass.fetch":  /bpFetchParsed/,
+    "pass.otp":    /bpOtpCode/,
+  };
+  for (const [kind, expected] of Object.entries(cases)) {
+    const re = new RegExp(
+      `msg\\?\\.kind === "${kind.replace(".", "\\.")}"[\\s\\S]{0,400}${expected.source}`
+    );
+    assert.match(bg, re, `background handler for "${kind}" must use ${expected}`);
   }
 });
 
@@ -206,25 +235,14 @@ test("settings read/write exposed via pass.settings.get / pass.settings.set", ()
   assert.match(bg, /msg\?\.kind === "pass\.settings\.set"/);
 });
 
-test("multi-store: fetch/otp forward store name as nmCall arg literal", () => {
-  // Direct nmCall paths — must build {path, store} object explicitly.
-  for (const kind of ["pass.fetch", "pass.otp"]) {
-    const re = new RegExp(`msg\\?\\.kind === "${kind.replace(".", "\\.")}"[\\s\\S]{0,400}store:\\s*msg\\.store`);
-    assert.match(bg, re, `${kind} handler must forward args.store to nmCall`);
-  }
-});
-
-test("multi-store: fill/openUrl forward store via positional helper arg", () => {
-  // These routes go through helper functions that then build the nmCall
-  // object. Verify the helper signatures accept store + the inner nmCall
-  // forwards it.
-  const fillFromPath = bg.match(/async function passFillFromPath\(path, store\)[\s\S]*?\n\}/);
-  assert.ok(fillFromPath);
-  assert.match(fillFromPath[0], /nmCall\("pass", "fetch", \{ path, store \}\)/);
-
-  const openUrlFromPath = bg.match(/async function passOpenUrlFromPath\(path, newTab, store\)[\s\S]*?\n\}/);
-  assert.ok(openUrlFromPath);
-  assert.match(openUrlFromPath[0], /nmCall\("pass", "fetch", \{ path, store \}\)/);
+test("single-store BP path uses default store id throughout", () => {
+  // The BP rewrite collapses multi-store back to one (default at ~/.password-store).
+  // The host's normalize_password_store_path expands `~/` at request time, so
+  // the extension hardcodes the alias rather than reading env.
+  assert.match(bg, /const PASS_STORE = \{ id: "default", name: "Default", path: "~\/\.password-store" \}/);
+  const fn = bg.match(/function bpStores\([\s\S]*?\n\}/);
+  assert.ok(fn);
+  assert.match(fn[0], /default: PASS_STORE/);
 });
 
 test("popup pass row carries store badge + data-store attribute", () => {

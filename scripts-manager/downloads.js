@@ -143,7 +143,7 @@ let pollTimer = null;
 function poll() {
   chrome.runtime.sendMessage({ kind: "dl.list" }, (r) => {
     if (chrome.runtime.lastError) {
-      $status.textContent = `native host: ${chrome.runtime.lastError.message} — run host/install.sh <ext-id>`;
+      $status.textContent = `native host: ${chrome.runtime.lastError.message} — run browserpass-host-rs/install-browserpass.sh <ext-id>`;
       return;
     }
     if (!r?.ok) {

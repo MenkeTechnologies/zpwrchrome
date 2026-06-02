@@ -1,0 +1,44 @@
+[package]
+name = "browserpass-host-rs"
+version = "0.4.0"
+edition = "2021"
+authors = ["MenkeTechnologies <linux.dev25@gmail.com>"]
+description = "Rust port of browserpass-native (PROTOCOL.md v3.1.2) + extension actions for OTP, whole-store search, and a file-state segmented download manager."
+license = "MIT"
+repository = "https://github.com/MenkeTechnologies/zpwrchrome"
+homepage = "https://github.com/MenkeTechnologies/zpwrchrome"
+documentation = "https://docs.rs/browserpass-host-rs"
+readme = "README.md"
+keywords = ["browserpass", "pass", "password-manager", "chrome", "native-messaging"]
+categories = ["command-line-utilities", "web-programming"]
+rust-version = "1.70"
+exclude = [
+    "/target",
+    "/install*.sh",
+    "/Formula",
+    "/.gitignore",
+]
+
+[lib]
+name = "browserpass_host_rs"
+path = "src/lib.rs"
+
+# Single binary — Rust port of browserpass-native (PROTOCOL.md compatible),
+# wire-registers as `com.github.browserpass.native`. See install-browserpass.sh.
+[[bin]]
+name = "browserpass-host-rs"
+path = "src/bin/browserpass_host_rs.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP/HTTPS for the segmented download manager extension. ureq 2.x is the
+# smallest foundational pure-Rust HTTP/1.1 client; rustls feature avoids OS
+# TLS (works on macOS, Linux, future archs without recompile). Vendorable.
+ureq = { version = "2.10", default-features = false, features = ["tls", "native-certs"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
