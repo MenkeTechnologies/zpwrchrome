@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // extension filter</title>
+  <link rel="stylesheet" href="dl-settings.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="downloads.html">‹ Back</a>
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <h1>zpwrchrome <span class="dim">extension filter</span></h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <nav class="cats">
+      <a class="cat"        href="dl-settings.html">General</a>
+      <a class="cat"        href="dl-interface.html">Interface</a>
+      <a class="cat active" href="dl-extfilter.html">Extension Filter</a>
+      <a class="cat"        href="dl-rules.html">Rule System</a>
+      <span class="sep"></span>
+      <a class="cat" href="dl-help.html">Help</a>
+      <a class="cat" href="dl-about.html">About</a>
+    </nav>
+  </aside>
+
+  <section class="content">
+    <h2>Extension Filter</h2>
+    <p class="dt-hint">
+      Buckets that classify finished downloads into Image / Video / Audio / Document / Archive / Application.
+      Edit any cell to retune. The Rule System (next page) references these by Internal name.
+    </p>
+
+    <table class="dt" id="ext-table">
+      <thead>
+        <tr>
+          <th style="width: 80px;">Enable</th>
+          <th style="width: 140px;">Display name</th>
+          <th style="width: 140px;">Internal name</th>
+          <th>File extensions</th>
+        </tr>
+      </thead>
+      <tbody id="ext-rows"></tbody>
+    </table>
+
+    <p class="dt-hint">
+      * Type extensions as a pipe-separated list — e.g. <code>png|jpg|gif</code>.<br>
+      * Double-click any cell to edit; clear the row to remove it on save.<br>
+      * <code>ext_all</code> is a meta-bucket — its extensions field is auto-derived from the others.
+    </p>
+
+    <div class="actions">
+      <button id="add-row" class="btn-ghost">+ Add bucket</button>
+      <button id="reset"   class="btn-ghost">Reset to defaults</button>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
+</div>
+
+<script src="dl-extfilter.js" type="module"></script>
+</body>
+</html>

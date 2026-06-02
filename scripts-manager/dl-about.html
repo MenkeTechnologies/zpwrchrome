@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // about</title>
+  <link rel="stylesheet" href="dl-settings.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="downloads.html">‹ Back</a>
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <h1>zpwrchrome <span class="dim">about</span></h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <nav class="cats">
+      <a class="cat"        href="dl-settings.html">General</a>
+      <a class="cat"        href="dl-interface.html">Interface</a>
+      <a class="cat"        href="dl-extfilter.html">Extension Filter</a>
+      <a class="cat"        href="dl-rules.html">Rule System</a>
+      <span class="sep"></span>
+      <a class="cat"        href="dl-help.html">Help</a>
+      <a class="cat active" href="dl-about.html">About</a>
+    </nav>
+  </aside>
+
+  <section class="content about">
+    <h2>About</h2>
+
+    <div class="about-hero">
+      <span class="ico">⬇</span>
+      <div>
+        <h3>zpwrchrome</h3>
+        <div class="tag">UNIX <code>pass</code> · Segmented Download Manager · Tab Switcher · Userscripts · History fzf</div>
+        <div class="ver">Version <span id="ver">…</span></div>
+      </div>
+    </div>
+
+    <p>
+      <strong>zpwrchrome</strong> is a browser power-tool by
+      <a href="https://github.com/MenkeTechnologies" target="_blank" rel="noopener">MenkeTechnologies</a> —
+      built around four pillars: a browserpass-compatible <code>pass</code> integration,
+      a Chrono-inspired segmented download manager that takes over Chrome's default downloader,
+      a JetBrains-style MRU tab switcher with scenes + opener-tree + minimap, and a
+      Tampermonkey-equivalent userscript host with a GM_* shim.
+    </p>
+
+    <p>
+      The download-manager surface (this Settings UI, the queue manager,
+      Rule System, Extension Filter) is a homage to
+      <a href="https://chrome.google.com/webstore/detail/chrono-download-manager/mciiogijehkdemklbdcbfkefimifhecn"
+         target="_blank" rel="noopener">Chrono Download Manager</a> —
+      reimplemented for Manifest V3 with a native Rust segmented downloader
+      (<a href="https://crates.io/crates/browserpass-host-rs" target="_blank" rel="noopener">browserpass-host-rs</a>)
+      that handles HTTP Range requests, cookie / user-agent forwarding,
+      detached worker processes, and a file-state model surviving SW restarts.
+    </p>
+
+    <p>
+      <strong>Source / Issues:</strong>
+      <a href="https://github.com/MenkeTechnologies/zpwrchrome" target="_blank" rel="noopener">github.com/MenkeTechnologies/zpwrchrome</a><br>
+      <strong>Native host crate:</strong>
+      <a href="https://crates.io/crates/browserpass-host-rs" target="_blank" rel="noopener">crates.io/crates/browserpass-host-rs</a><br>
+      <strong>License:</strong> MIT
+    </p>
+
+    <p>
+      Brand stack:
+      <a href="https://github.com/MenkeTechnologies/zpwr" target="_blank" rel="noopener">zpwr</a> ·
+      <a href="https://github.com/MenkeTechnologies/zsh-more-completions" target="_blank" rel="noopener">zsh-more-completions</a> ·
+      zshrs · stryke.
+    </p>
+  </section>
+</div>
+
+<script src="dl-about.js" type="module"></script>
+</body>
+</html>

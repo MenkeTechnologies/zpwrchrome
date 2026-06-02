@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // help</title>
+  <link rel="stylesheet" href="dl-settings.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="downloads.html">‹ Back</a>
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <h1>zpwrchrome <span class="dim">help</span></h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <nav class="cats">
+      <a class="cat"        href="dl-settings.html">General</a>
+      <a class="cat"        href="dl-interface.html">Interface</a>
+      <a class="cat"        href="dl-extfilter.html">Extension Filter</a>
+      <a class="cat"        href="dl-rules.html">Rule System</a>
+      <span class="sep"></span>
+      <a class="cat active" href="dl-help.html">Help</a>
+      <a class="cat"        href="dl-about.html">About</a>
+    </nav>
+  </aside>
+
+  <section class="content doc">
+    <h2>Help</h2>
+
+    <h3>Batch Descriptors</h3>
+    <p>
+      Used to expand a URL pattern into multiple downloads.
+      Defined as <code>[start:end]</code> or <code>[start:end:step]</code>.
+    </p>
+    <p>Examples:</p>
+    <ul>
+      <li><code>https://site.com/img[1:100].jpg</code> → 100 URLs, <code>img1.jpg</code> through <code>img100.jpg</code></li>
+      <li><code>https://site.com/img[01:99].jpg</code> → 99 URLs, padded (<code>img01.jpg</code> through <code>img99.jpg</code>)</li>
+      <li><code>https://site.com/p[0:200:10].html</code> → 21 URLs, stepping by 10</li>
+      <li><code>https://site.com/[a:f].txt</code> → <code>a.txt</code>, <code>b.txt</code>, …, <code>f.txt</code></li>
+    </ul>
+
+    <h3>Naming Masks</h3>
+    <p>
+      A naming mask is a template that produces the saved filename. Tokens are
+      <code>*name*</code>, <code>*ext*</code>, <code>*url*</code>, <code>*host*</code>,
+      <code>*date*</code>, <code>*time*</code>, <code>*size*</code>, and
+      <code>*subdirs*</code>. Tokens not in square brackets are required.
+    </p>
+    <ul>
+      <li><code>*name*.*ext*</code> → keep original name + extension (default)</li>
+      <li><code>*host*/*name*.*ext*</code> → group by source host</li>
+      <li><code>*date*-*name*.*ext*</code> → prepend YYYY-MM-DD</li>
+      <li><code>*flat*</code> → like <code>*url*</code> but slashes become underscores</li>
+    </ul>
+    <p>File names can include sub-folders (<code>dir1/dir2/*name*.*ext*</code>).</p>
+
+    <h3>Rule System</h3>
+    <p>
+      Rules combine <strong>conditions</strong> over a job's metadata with an
+      optional <strong>naming mask</strong>. A condition is a boolean expression
+      with star-bracketed identifiers as variables and square-bracketed
+      identifiers as constants.
+    </p>
+    <p>Condition syntax:</p>
+    <ul>
+      <li><code>*field*</code> — variable from a job (<code>*name*</code>, <code>*ext*</code>, <code>*url*</code>, <code>*host*</code>, <code>*state*</code>, <code>*size*</code>, <code>*time_add*</code>, <code>*time_done*</code>)</li>
+      <li><code>[constant]</code> — pre-defined constant (<code>[finished]</code>, <code>[interrupted]</code>, <code>[3_days_ago]</code>, <code>[ext_image]</code>, …)</li>
+      <li><code>{r_name}</code> — reference another rule by internal name</li>
+      <li><code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code> — comparison</li>
+      <li><code>&amp;&amp;</code> <code>||</code> <code>!</code> — logical</li>
+      <li><code>*ext*.is([ext_image])</code> — extension-filter membership</li>
+    </ul>
+
+    <p>Useful functions inside <code>[…]</code>:</p>
+    <ul>
+      <li><code>[kb(N)]</code>, <code>[mb(N)]</code>, <code>[gb(N)]</code> — size constants in bytes</li>
+      <li><code>[N_days_ago]</code>, <code>[N_hours_ago]</code> — timestamps</li>
+      <li><code>[regex("…")]</code> — compile a regular expression</li>
+    </ul>
+
+    <div class="danger">
+      <h3>Panic Button</h3>
+      <p>
+        If the extension is misbehaving, click below to wipe all download-manager
+        state (settings, interface prefs, extension filters, rules, last-dir).
+        It will reload to defaults on the next open.
+      </p>
+      <button id="panic">Reset all download-manager state</button>
+      <span id="panic-status" class="status" style="margin-left: 10px;"></span>
+    </div>
+  </section>
+</div>
+
+<script src="dl-help.js" type="module"></script>
+</body>
+</html>

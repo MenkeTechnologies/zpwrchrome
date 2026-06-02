@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // rule system</title>
+  <link rel="stylesheet" href="dl-settings.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="downloads.html">‹ Back</a>
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <h1>zpwrchrome <span class="dim">rule system</span></h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <nav class="cats">
+      <a class="cat"        href="dl-settings.html">General</a>
+      <a class="cat"        href="dl-interface.html">Interface</a>
+      <a class="cat"        href="dl-extfilter.html">Extension Filter</a>
+      <a class="cat active" href="dl-rules.html">Rule System</a>
+      <span class="sep"></span>
+      <a class="cat" href="dl-help.html">Help</a>
+      <a class="cat" href="dl-about.html">About</a>
+    </nav>
+  </aside>
+
+  <section class="content">
+    <h2>Rule System</h2>
+    <p class="dt-hint">
+      Each rule combines a <strong>condition</strong> over a job's fields with an optional <strong>naming mask</strong>.
+      Conditions can reference Extension Filter buckets in <code>[ext_*]</code> form.
+      Active rules drive the sidebar categories on the manager page.
+    </p>
+
+    <table class="dt" id="rule-table">
+      <thead>
+        <tr>
+          <th style="width: 70px;">Active</th>
+          <th style="width: 100px;">As Tasks Filter</th>
+          <th style="width: 130px;">Display name</th>
+          <th style="width: 140px;">Internal name</th>
+          <th>Condition</th>
+          <th style="width: 180px;">Naming mask</th>
+        </tr>
+      </thead>
+      <tbody id="rule-rows"></tbody>
+    </table>
+
+    <p class="dt-hint">
+      * Examples: <code>*time_add* &gt;= [3_days_ago]</code>,
+                  <code>*state* == [finished]</code>,
+                  <code>{r_done} &amp;&amp; *ext*.is([ext_image])</code>,
+                  <code>*size* &gt; 0 &amp;&amp; *size* &lt; [kb(1024)]</code>.
+    </p>
+
+    <div class="dt-foot">
+      <label class="opt inline" style="padding:0;">
+        <span class="lbl">Match mode</span>
+        <select id="match-mode">
+          <option value="first">First match</option>
+          <option value="all">All matches</option>
+        </select>
+      </label>
+      <label class="opt inline" style="padding:0;">
+        <span class="lbl">Default naming mask</span>
+        <input type="text" id="default-mask" style="width: 200px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: 13px; padding: 4px 8px; border-radius: 2px;">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="add-row" class="btn-ghost">+ Add rule</button>
+      <button id="reset"   class="btn-ghost">Reset to defaults</button>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
+</div>
+
+<script src="dl-rules.js" type="module"></script>
+</body>
+</html>

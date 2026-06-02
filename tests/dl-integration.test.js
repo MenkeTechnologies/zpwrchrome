@@ -314,3 +314,116 @@ test("isTakeOverEnabled now reads dl.settings.oneClickEnabled with back-compat t
   assert.match(fn[0], /oneClickEnabled/);
   assert.match(fn[0], /DL_TAKEOVER_KEY/);   // legacy fallback still consulted
 });
+
+// ── Chrono-port: Interface / Extension Filter / Rule System / Help / About ──
+
+const ifaceHtml = read("scripts-manager/dl-interface.html");
+const ifaceJs   = read("scripts-manager/dl-interface.js");
+const extHtml   = read("scripts-manager/dl-extfilter.html");
+const extJs     = read("scripts-manager/dl-extfilter.js");
+const ruleHtml  = read("scripts-manager/dl-rules.html");
+const ruleJs    = read("scripts-manager/dl-rules.js");
+const helpHtml  = read("scripts-manager/dl-help.html");
+const aboutHtml = read("scripts-manager/dl-about.html");
+
+test("every settings page links to the same six-tab sidebar (General/Interface/Extension Filter/Rule System/Help/About)", () => {
+  for (const page of [setHtml, ifaceHtml, extHtml, ruleHtml, helpHtml, aboutHtml]) {
+    for (const href of ["dl-settings.html", "dl-interface.html", "dl-extfilter.html", "dl-rules.html", "dl-help.html", "dl-about.html"]) {
+      assert.match(page, new RegExp(`href="${href}"`), `sidebar missing href="${href}" in one of the settings pages`);
+    }
+  }
+});
+
+test("Interface page exposes every Chrono General/Interface section we adopted", () => {
+  for (const key of [
+    "openAsStandalone", "startButtonRetriesFailed", "slideInDetailsOnClick", "doubleClickAction", "filePreviewAutoplay",
+    "popupShowDownloadingFirst", "popupCloseAfterClear", "popupMaxItems", "popupDeleteClickAction",
+    "newTaskFolderPicker",
+    "menuDownloadAllResources", "menuSaveLinkAs", "menuOneClickDownload",
+    "notifyOnOneClick", "notifyOnComplete", "notifyOnError", "soundOnComplete", "soundOnError", "largeImagePreview", "notificationClickAction",
+    "badgeShowCount", "fontSize",
+  ]) {
+    assert.match(ifaceHtml, new RegExp(`data-key="${key}"`), `Interface HTML missing data-key="${key}"`);
+    assert.match(ifaceJs,   new RegExp(`\\b${key}\\b`),     `DL_INTERFACE_DEFAULTS missing "${key}"`);
+  }
+});
+
+test("background.js wires badge text + completion/error notifications off dl.interface flags", () => {
+  assert.match(bg, /async function applyToolbarBadge/);
+  assert.match(bg, /chrome\.action\?\.setBadgeText/);
+  assert.match(bg, /async function notifyJobTransitions/);
+  assert.match(bg, /notifyOnComplete/);
+  assert.match(bg, /notifyOnError/);
+});
+
+test("Extension Filter ships the seven Chrono buckets as defaults", () => {
+  for (const internal of ["ext_image", "ext_video", "ext_audio", "ext_doc", "ext_arch", "ext_app", "ext_all"]) {
+    assert.match(extJs, new RegExp(`internal: "${internal}"`), `Extension Filter missing default bucket "${internal}"`);
+  }
+});
+
+test("Extension Filter page has an editable rows table + Reset/Add buttons", () => {
+  assert.match(extHtml, /id="ext-rows"/);
+  assert.match(extHtml, /id="add-row"/);
+  assert.match(extHtml, /id="reset"/);
+  for (const col of ["Enable", "Display name", "Internal name", "File extensions"]) {
+    assert.match(extHtml, new RegExp(`>${col}<`), `Extension Filter table missing column "${col}"`);
+  }
+});
+
+test("bucketFor() resolves a filename to its enabled extension bucket", async () => {
+  const mod = await import("../scripts-manager/dl-extfilter.js");
+  const cfg = JSON.parse(JSON.stringify(mod.DL_EXTFILTER_DEFAULTS));
+  assert.equal(mod.bucketFor("a.png", cfg), "ext_image");
+  assert.equal(mod.bucketFor("vid.mp4", cfg), "ext_video");
+  assert.equal(mod.bucketFor("song.flac", cfg), "ext_audio");
+  assert.equal(mod.bucketFor("notes.md", cfg), "ext_doc");
+  assert.equal(mod.bucketFor("pkg.tar.gz", cfg), "ext_arch");
+  assert.equal(mod.bucketFor("setup.exe", cfg), "ext_app");
+  assert.equal(mod.bucketFor("noext", cfg), null);
+});
+
+test("Rule System ships the ten Chrono seed rules with conditions", () => {
+  for (const internal of [
+    "r_recent", "r_downloading", "r_done",
+    "r_done_image", "r_done_video", "r_done_audio", "r_done_doc", "r_done_other",
+    "r_failed", "r_smallf",
+  ]) {
+    assert.match(ruleJs, new RegExp(`internal: "${internal}"`), `Rule System default rule "${internal}" missing`);
+  }
+});
+
+test("Rule System page exposes Match mode dropdown + Default naming mask", () => {
+  assert.match(ruleHtml, /id="match-mode"/);
+  assert.match(ruleHtml, /id="default-mask"/);
+  for (const col of ["Active", "As Tasks Filter", "Display name", "Internal name", "Condition", "Naming mask"]) {
+    assert.match(ruleHtml, new RegExp(`>${col}<`), `Rule System table missing column "${col}"`);
+  }
+});
+
+test("Rule System defaultMask is the canonical *name*.*ext* template", () => {
+  assert.match(ruleJs, /defaultMask: "\*name\*\.\*ext\*"/);
+});
+
+test("Help page covers Batch Descriptors + Naming Masks + Rule System + Panic button", () => {
+  for (const heading of ["Batch Descriptors", "Naming Masks", "Rule System", "Panic Button"]) {
+    assert.match(helpHtml, new RegExp(heading.replace(/\s+/g, "\\s+")), `Help page missing section "${heading}"`);
+  }
+  assert.match(helpHtml, /id="panic"/);
+});
+
+test("About page surfaces version from runtime manifest + MenkeTechnologies branding + crate link", () => {
+  assert.match(aboutHtml, /id="ver"/);
+  assert.match(aboutHtml, /MenkeTechnologies/);
+  assert.match(aboutHtml, /crates\.io\/crates\/browserpass-host-rs/);
+  const aboutJs = read("scripts-manager/dl-about.js");
+  assert.match(aboutJs, /chrome\.runtime\.getManifest/);
+});
+
+test("popup.html exposes a quick 'downloads ▸' link in the header next to scripts ▸", () => {
+  const popupHtml = read("popup.html");
+  const popupJs   = read("popup.js");
+  assert.match(popupHtml, /id="open-downloads"/);
+  assert.match(popupJs, /open-downloads/);
+  assert.match(popupJs, /scripts-manager\/downloads\.html/);
+});

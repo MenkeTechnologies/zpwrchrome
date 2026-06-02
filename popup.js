@@ -753,4 +753,10 @@ document.getElementById("open-scripts").addEventListener("click", (e) => {
   window.close();
 });
 
+document.getElementById("open-downloads").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/downloads.html") });
+  window.close();
+});
+
 refresh();

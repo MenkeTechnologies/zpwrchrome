@@ -186,6 +186,115 @@ kbd {
 }
 .status.show { opacity: 1; }
 
+/* ── editable table (Extension Filter, Rule System) ────────────────── */
+.dt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: var(--bg-card);
+  margin: 8px 0 16px;
+}
+.dt th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  background: var(--bg-secondary);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+}
+.dt td {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+.dt td.ck  { text-align: center; }
+.dt td input[type="text"] {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  width: 100%;
+  padding: 2px 4px;
+}
+.dt td input[type="text"]:focus {
+  outline: none;
+  border-color: var(--cyan);
+  background: var(--bg-primary);
+}
+.dt td input[type="checkbox"] { accent-color: var(--cyan); }
+.dt-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 10px;
+  line-height: 1.6;
+}
+.dt-foot {
+  display: flex; gap: 18px; align-items: center;
+  margin-top: 14px;
+}
+.dt-foot .lbl { color: var(--text-dim); font-size: 12px; }
+
+/* ── help page ──────────────────────────────────────────────────────── */
+.doc h3 {
+  color: var(--magenta);
+  font-size: 13px;
+  letter-spacing: 1px;
+  margin: 18px 0 8px;
+}
+.doc p { color: var(--text); font-size: 13px; line-height: 1.6; margin: 6px 0; }
+.doc code, .doc kbd {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--cyan);
+  font-family: inherit;
+}
+.doc ul { color: var(--text); font-size: 13px; line-height: 1.7; margin: 6px 0 12px 20px; }
+.doc .danger {
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 14px;
+  margin: 18px 0;
+}
+.doc .danger h3 { color: var(--accent); margin-top: 0; }
+.doc .danger button {
+  margin-top: 6px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 3px;
+  font-family: inherit;
+}
+.doc .danger button:hover { background: var(--accent); color: var(--bg-primary); }
+
+/* ── about page ─────────────────────────────────────────────────────── */
+.about-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 18px;
+}
+.about-hero .ico { font-size: 40px; color: var(--orange); text-shadow: 0 0 16px rgba(255,140,26,.6); }
+.about-hero h3 { color: var(--cyan); font-size: 18px; letter-spacing: 1px; margin-bottom: 4px; }
+.about-hero .tag { color: var(--text-dim); font-size: 12px; }
+.about-hero .ver { color: var(--magenta); font-size: 12px; margin-top: 6px; font-family: inherit; }
+.about p { color: var(--text); font-size: 13px; line-height: 1.6; margin: 6px 0; }
+.about a { color: var(--cyan); text-decoration: none; }
+.about a:hover { color: var(--accent); text-decoration: underline; }
+
 /* scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: rgba(5,5,10,.5); }

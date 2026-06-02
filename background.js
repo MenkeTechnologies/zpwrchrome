@@ -26,9 +26,11 @@ import {
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath } from "./lib/bp-pass.js";
 import { loadSettings as loadDlSettings, DL_DEFAULTS as DL_SETTINGS_DEFAULTS, saveSettings as saveDlSettings } from "./scripts-manager/dl-settings.js";
+import { loadInterface as loadDlInterface, DL_INTERFACE_DEFAULTS } from "./scripts-manager/dl-interface.js";
 
 const MRU_KEY = "mru";
 const DL_SETTINGS_KEY = "dl.settings";
+const DL_INTERFACE_KEY = "dl.interface";
 const SCENES_KEY = "scenes";   // chrome.storage.local — survives browser restart
 
 async function readMru() {
@@ -1718,7 +1720,50 @@ async function bpDlBroadcast() {
     const jobs = resp.data?.jobs || [];
     await chrome.storage.local.set({ [DL_SNAPSHOT_KEY]: { jobs, ts: Date.now() } });
     chrome.runtime.sendMessage({ kind: "dl.event", event: { kind: "dl.progress", jobs } }).catch(() => {});
+    await applyToolbarBadge(jobs);
+    await notifyJobTransitions(jobs);
   } catch (e) {
     // worker process not registered → silently skip
   }
+}
+
+// Toolbar badge — "Show number of downloading tasks over toolbar icon"
+async function applyToolbarBadge(jobs) {
+  try {
+    const ifc = await loadDlInterface();
+    if (!ifc.badgeShowCount) {
+      await chrome.action?.setBadgeText?.({ text: "" });
+      return;
+    }
+    const active = jobs.filter((j) => j.status === "active" || j.status === "pending").length;
+    await chrome.action?.setBadgeBackgroundColor?.({ color: "#05d9e8" });
+    await chrome.action?.setBadgeText?.({ text: active > 0 ? String(active) : "" });
+  } catch {}
+}
+
+// Last-seen-status cache for completion / error notifications.
+let _dlLastStatus = new Map();
+async function notifyJobTransitions(jobs) {
+  const ifc = await loadDlInterface();
+  if (!ifc.notifyOnComplete && !ifc.notifyOnError) { _dlLastStatus = new Map(jobs.map((j) => [j.gid, j.status])); return; }
+  for (const j of jobs) {
+    const prev = _dlLastStatus.get(j.gid);
+    if (prev === j.status) continue;
+    if (ifc.notifyOnComplete && j.status === "done" && prev && prev !== "done") {
+      chrome.notifications?.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: "zpwrchrome — download complete",
+        message: (j.dest || "").split(/[\\/]/).pop() || `gid ${j.gid}`,
+      });
+    } else if (ifc.notifyOnError && j.status === "failed" && prev && prev !== "failed") {
+      chrome.notifications?.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: "zpwrchrome — download failed",
+        message: j.err || `gid ${j.gid}`,
+      });
+    }
+  }
+  _dlLastStatus = new Map(jobs.map((j) => [j.gid, j.status]));
 }
