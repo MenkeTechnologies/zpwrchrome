@@ -251,6 +251,40 @@ mark.fzf-hl {
   background: var(--accent); color: var(--bg-primary);
 }
 
+/* ----- pass rows (UNIX `pass` matches for the active tab) ----- */
+.row.pass-row .pass-glyph {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--cyan); font-size: 16px;
+  text-shadow: 0 0 6px var(--cyan-glow, var(--cyan));
+}
+.row.pass-row .pass-badges button.badge {
+  background: transparent; cursor: pointer;
+  font-family: inherit;
+  color: var(--cyan); border: 1px solid var(--cyan);
+  min-width: 38px;
+}
+.row.pass-row .pass-badges button.badge:hover {
+  background: var(--cyan); color: var(--bg-primary);
+}
+.row.pass-row .pass-badges button.badge.pass-ok {
+  color: var(--green); border-color: var(--green);
+  background: transparent;
+}
+.row.pass-row .pass-badges button.badge.pass-err {
+  color: var(--accent); border-color: var(--accent);
+  background: transparent;
+}
+.pass-store-badge {
+  display: inline-block;
+  padding: 0 4px;
+  margin-right: 6px;
+  border: 1px solid var(--magenta);
+  color: var(--magenta);
+  font-size: 10px;
+  text-transform: lowercase;
+  background: transparent;
+}
+
 /* ----- tree view (rows indented by parent depth) ----- */
 .tree-toggle {
   display: inline-flex; align-items: center; justify-content: center;

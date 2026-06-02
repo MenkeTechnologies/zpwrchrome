@@ -1,0 +1,80 @@
+.queue { display: flex; flex-direction: column; gap: 8px; }
+
+.dl-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-family: inherit;
+}
+
+.dl-row .url {
+  color: var(--cyan);
+  font-size: 12px;
+  word-break: break-all;
+  font-family: "Share Tech Mono", monospace;
+}
+.dl-row .meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dl-row .meta .status-tag {
+  text-transform: uppercase;
+  font-weight: bold;
+  padding: 0 4px;
+}
+.dl-row .meta .status-tag.active    { color: var(--cyan);    border: 1px solid var(--cyan); }
+.dl-row .meta .status-tag.paused    { color: var(--accent);  border: 1px solid var(--accent); }
+.dl-row .meta .status-tag.done      { color: var(--green);   border: 1px solid var(--green); }
+.dl-row .meta .status-tag.failed    { color: var(--accent);  border: 1px solid var(--accent); }
+.dl-row .meta .status-tag.cancelled { color: var(--text-muted); border: 1px solid var(--border); }
+.dl-row .meta .status-tag.pending   { color: var(--magenta); border: 1px solid var(--magenta); }
+
+.dl-row .actions {
+  display: flex;
+  gap: 4px;
+  align-self: start;
+}
+.dl-row .actions button {
+  background: transparent;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.dl-row .actions button.danger { color: var(--accent); border-color: var(--accent); }
+.dl-row .actions button:hover  { background: var(--cyan); color: var(--bg-primary); }
+.dl-row .actions button.danger:hover { background: var(--accent); color: var(--bg-primary); }
+
+.dl-bar {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+}
+.dl-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--magenta), var(--cyan));
+  transition: width 200ms linear;
+}
+
+.queue .empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 16px;
+  text-align: center;
+}
+
+.dl-row .err {
+  grid-column: 1 / -1;
+  color: var(--accent);
+  font-size: 11px;
+}

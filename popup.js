@@ -18,7 +18,8 @@ const CATEGORIES = [
   { id: "scenes",  label: "Scenes",            key: "⌘7" },
   { id: "tree",    label: "Tree (by opener)",  key: "⌘8" },
   { id: "minimap", label: "Minimap",           key: "⌘9" },
-  { id: "history", label: "History",           key: "⌘0" }
+  { id: "history", label: "History",           key: "⌘0" },
+  { id: "pass",    label: "Pass",              key: "Tab" }
 ];
 
 // Browsing-history fetch ceiling. chrome.history.search() with text:""
@@ -44,7 +45,26 @@ const state = {
   collapsedTreeIds: new Set(),
   // Processes: lazily fetched when the user enters a category that uses
   // them. { available, perTab: { tabId: { cpu, memoryBytes } } }.
-  proc: { available: false, perTab: {} }
+  proc: { available: false, perTab: {} },
+  // PASS — lazily loaded on first entry into the category. matches is a
+  // list of entry paths (e.g. "amazon.com/wizard"); host is the active
+  // tab's hostname used for the match; loaded flips to true after the
+  // first NM call returns (success or empty); err holds the most recent
+  // native-host error so the row count can render an actionable banner.
+  // PASS — domain-scoped matches load into `matches`. Typing `/` followed
+  // by anything switches to whole-store search mode (browserpass-style):
+  // the host-side `pass.search` op streams subsequence-scored results into
+  // `searchResults`. `searchQuery` is the last query we asked the host for,
+  // used to dedupe redundant NM calls per keystroke.
+  pass: {
+    matches: [],
+    host: "",
+    loaded: false,
+    err: null,
+    searchResults: [],
+    searchQuery: null,
+    searching: false
+  }
 };
 
 function host(u) { try { return new URL(u).hostname; } catch { return ""; } }
@@ -124,6 +144,34 @@ function currentList() {
       visitCount: h.visitCount,
       frecency: h.frecency,
     }));
+  } else if (cat.id === "pass") {
+    if (!state.pass.loaded) {
+      loadPass();
+      return [];
+    }
+    // Slash-prefix → whole-store search mode (browserpass convention).
+    if (state.filter.startsWith("/")) {
+      const q = state.filter.slice(1);
+      if (q !== state.pass.searchQuery) loadPassSearch(q);
+      return state.pass.searchResults.map((m) => ({
+        kind: "pass",
+        path: m.path,
+        store: m.store,
+        title: m.path,
+        url: "search",
+        searchMode: true
+      }));
+    }
+    const f = state.filter.toLowerCase();
+    return state.pass.matches
+      .filter((m) => !f || m.path.toLowerCase().includes(f))
+      .map((m) => ({
+        kind: "pass",
+        path: m.path,
+        store: m.store,
+        title: m.path,
+        url: state.pass.host || ""
+      }));
   } else if (cat.id === "minimap") {
     // Minimap doesn't render titles; filter still helps when user types.
     const f = state.filter.toLowerCase();
@@ -186,6 +234,14 @@ function renderList() {
   ` : "";
 
   if (!items.length) {
+    if (cat.id === "pass") {
+      let passMsg;
+      if (!state.pass.loaded)  passMsg = `searching ${escapeHtml(state.pass.host || "…")}`;
+      else if (state.pass.err) passMsg = `native host: ${escapeHtml(state.pass.err)} — run host/install.sh &lt;ext-id&gt;`;
+      else                     passMsg = `no pass entries match ${escapeHtml(state.pass.host || "(no host)")}`;
+      $list.innerHTML = `<div class="empty">${passMsg}</div>`;
+      return;
+    }
     $list.innerHTML = saveForm + `<div class="empty">${isScenes ? "no scenes saved yet" : "no matches"}</div>`;
     if (isScenes) wireSceneForm();
     return;
@@ -194,6 +250,31 @@ function renderList() {
   if (state.rowIdx < 0) state.rowIdx = 0;
 
   $list.innerHTML = saveForm + items.map((t, i) => {
+    if (t.kind === "pass") {
+      const pth   = escapeHtml(t.path);
+      const store = escapeHtml(t.store || "");
+      const storeBadge = store
+        ? `<span class="pass-store-badge" title="store: ${store}">${store}</span>`
+        : "";
+      const dataset = `data-path="${pth}" data-store="${store}"`;
+      return `
+        <div class="row pass-row${i === state.rowIdx ? " sel" : ""}"
+             data-idx="${i}" data-kind="pass" ${dataset}>
+          <span class="favicon pass-glyph">⛀</span>
+          <div class="title-col">
+            <span class="name">${storeBadge}${pth}</span>
+            <span class="path">pass · ${escapeHtml(t.url)}</span>
+          </div>
+          <div class="badges pass-badges">
+            <button class="badge pass-fill-btn"  ${dataset} title="fill login form on active tab">fill</button>
+            <button class="badge pass-go-btn"    ${dataset} title="open url from entry (shift = new tab)">go</button>
+            <button class="badge pass-copy-user" ${dataset} title="copy username">user</button>
+            <button class="badge pass-copy-pw"   ${dataset} title="copy password">pw</button>
+            <button class="badge pass-copy-otp"  ${dataset} title="copy OTP">otp</button>
+          </div>
+        </div>
+      `;
+    }
     if (t.kind === "scene") {
       const when = t.updated_at ? new Date(t.updated_at).toLocaleString() : "";
       return `
@@ -273,6 +354,60 @@ function renderList() {
         r.classList.toggle("sel", Number(r.dataset.idx) === state.rowIdx));
     });
   });
+  $list.querySelectorAll(".pass-fill-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ kind: "pass.fill", path: btn.dataset.path, store: btn.dataset.store || undefined }, (r) => {
+        if (chrome.runtime.lastError || !r?.ok) {
+          flashButton(btn, false, "fill");
+          return;
+        }
+        flashButton(btn, true, "fill");
+        setTimeout(() => window.close(), 300);
+      });
+    });
+  });
+  $list.querySelectorAll(".pass-go-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const newTab = e.shiftKey || e.metaKey || e.ctrlKey;
+      chrome.runtime.sendMessage({ kind: "pass.openUrl", path: btn.dataset.path, store: btn.dataset.store || undefined, newTab }, (r) => {
+        if (chrome.runtime.lastError || !r?.ok) {
+          flashButton(btn, false, "go");
+          return;
+        }
+        flashButton(btn, true, "go");
+        setTimeout(() => window.close(), 200);
+      });
+    });
+  });
+  $list.querySelectorAll(".pass-copy-pw").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      passFetch(btn.dataset.path, btn.dataset.store, (err, data) => {
+        if (err) { console.warn("[zpwrchrome] pass.fetch:", err); flashButton(btn, false, "pw"); return; }
+        copyToClipboard(data?.password || "").then((ok) => flashButton(btn, ok, "pw"));
+      });
+    });
+  });
+  $list.querySelectorAll(".pass-copy-user").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      passFetch(btn.dataset.path, btn.dataset.store, (err, data) => {
+        if (err) { console.warn("[zpwrchrome] pass.fetch:", err); flashButton(btn, false, "user"); return; }
+        copyToClipboard(data?.username || "").then((ok) => flashButton(btn, ok, "user"));
+      });
+    });
+  });
+  $list.querySelectorAll(".pass-copy-otp").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      passOtpFetch(btn.dataset.path, btn.dataset.store, (err, code) => {
+        if (err) { console.warn("[zpwrchrome] pass.otp:", err); flashButton(btn, false, "otp"); return; }
+        copyToClipboard(code || "").then((ok) => flashButton(btn, ok, "otp"));
+      });
+    });
+  });
   $list.querySelectorAll(".scene-restore-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -300,6 +435,89 @@ function renderList() {
   if (isScenes) wireSceneForm();
   const sel = $list.querySelector(".row.sel");
   if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+
+function loadPass() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const h = host(tabs?.[0]?.url || "");
+    state.pass.host = h;
+    if (!h) {
+      state.pass.matches = [];
+      state.pass.loaded = true;
+      state.pass.err = "no host for active tab";
+      render();
+      return;
+    }
+    chrome.runtime.sendMessage({ kind: "pass.match", host: h }, (r) => {
+      if (chrome.runtime.lastError) {
+        state.pass.matches = [];
+        state.pass.err = chrome.runtime.lastError.message;
+      } else if (r?.ok) {
+        state.pass.matches = Array.isArray(r.matches) ? r.matches : [];
+        state.pass.err = null;
+      } else {
+        state.pass.matches = [];
+        state.pass.err = r?.err || "native host error";
+      }
+      state.pass.loaded = true;
+      render();
+    });
+  });
+}
+
+function loadPassSearch(query) {
+  state.pass.searchQuery = query;
+  state.pass.searching = true;
+  chrome.runtime.sendMessage({ kind: "pass.search", query }, (r) => {
+    state.pass.searching = false;
+    if (chrome.runtime.lastError) {
+      state.pass.searchResults = [];
+      state.pass.err = chrome.runtime.lastError.message;
+    } else if (r?.ok) {
+      state.pass.searchResults = Array.isArray(r.matches) ? r.matches : [];
+      state.pass.err = null;
+    } else {
+      state.pass.searchResults = [];
+      state.pass.err = r?.err || "search failed";
+    }
+    render();
+  });
+}
+
+function passFetch(path, store, cb) {
+  chrome.runtime.sendMessage({ kind: "pass.fetch", path, store: store || undefined }, (r) => {
+    if (chrome.runtime.lastError) { cb(new Error(chrome.runtime.lastError.message), null); return; }
+    if (!r?.ok) { cb(new Error(r?.err || "fetch failed"), null); return; }
+    cb(null, r.data || {});
+  });
+}
+
+function passOtpFetch(path, store, cb) {
+  chrome.runtime.sendMessage({ kind: "pass.otp", path, store: store || undefined }, (r) => {
+    if (chrome.runtime.lastError) { cb(new Error(chrome.runtime.lastError.message), null); return; }
+    if (!r?.ok) { cb(new Error(r?.err || "otp failed"), null); return; }
+    cb(null, r.otp || "");
+  });
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function flashButton(btn, ok, restore) {
+  const orig = btn.textContent;
+  btn.textContent = ok ? "✓" : "✗";
+  btn.classList.toggle("pass-ok",  ok);
+  btn.classList.toggle("pass-err", !ok);
+  setTimeout(() => {
+    btn.textContent = restore || orig;
+    btn.classList.remove("pass-ok", "pass-err");
+  }, 800);
 }
 
 function fmtMb(bytes) {

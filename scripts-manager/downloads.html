@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // downloads</title>
+  <link rel="stylesheet" href="manager.css">
+  <link rel="stylesheet" href="downloads.css">
+</head>
+<body>
+  <header class="banner">
+    <div class="banner-inner">
+      <div class="brand">
+        <div class="logo">⬇</div>
+        <div class="brand-text">
+          <h1>zpwrchrome<sup>®</sup></h1>
+          <p class="sub">download queue · segmented · by <a href="https://github.com/MenkeTechnologies" target="_blank">MenkeTechnologies</a></p>
+        </div>
+      </div>
+      <div class="banner-actions">
+        <button id="addUrl"     class="btn primary" title="Queue a new URL">+ add url</button>
+        <button id="pauseAll"   class="btn"         title="Pause every active download">pause all</button>
+        <button id="resumeAll"  class="btn"         title="Resume every paused download">resume all</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="card">
+      <div class="card-head">
+        <h2>QUEUE</h2>
+        <span class="muted" id="status">connecting to native host…</span>
+      </div>
+      <div id="queue" class="queue"></div>
+    </section>
+  </main>
+
+  <script src="downloads.js" type="module"></script>
+</body>
+</html>

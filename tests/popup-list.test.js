@@ -81,14 +81,15 @@ test("popup HISTORY_MAX_RESULTS is 5000", () => {
   assert.match(popup, /const HISTORY_MAX_RESULTS = 5000/);
 });
 
-test("popup CATEGORIES defines exactly 10 entries", () => {
+test("popup CATEGORIES defines exactly 11 entries", () => {
   const m = popup.match(/const CATEGORIES = \[([\s\S]*?)\];/);
   assert.ok(m);
   const ids = [...m[1].matchAll(/id: "([^"]+)"/g)].map((x) => x[1]);
-  assert.equal(ids.length, 10);
+  assert.equal(ids.length, 11);
   assert.deepEqual(ids, [
     "all", "current", "pinned", "audible", "muted",
-    "closed", "scenes", "tree", "minimap", "history"
+    "closed", "scenes", "tree", "minimap", "history",
+    "pass"
   ]);
 });
 

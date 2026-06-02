@@ -98,6 +98,384 @@ async function dispatch(command) {
   if (command.startsWith("restore-scene-")) return restoreSceneByOrdinal(command);
   if (command === "kill-heaviest")        return killHeaviestTab();
   if (command === "open-history")         return openHistoryInPopup();
+  if (command === "pass-open-popup")      return openPassInPopup();
+  if (command === "pass-fill")            return passFillActive();
+  if (command === "pass-copy-pw")         return passCopyForActive("pw");
+  if (command === "pass-copy-user")       return passCopyForActive("user");
+  if (command === "pass-copy-otp")        return passCopyForActive("otp");
+  if (command === "pass-open-url")        return passOpenUrlForActive();
+  if (command === "dl-paste-url")         return dlPasteUrl();
+  if (command === "dl-show-queue")        return dlShowQueue();
+  if (command === "dl-pause-all")         return dlPauseAll();
+  if (command === "dl-resume-all")        return dlResumeAll();
+}
+
+async function openPassInPopup() {
+  await chrome.storage.session.set({ pendingCategory: "pass" });
+  await chrome.action.openPopup().catch(() => {});
+}
+
+async function passMatchActive() {
+  const t = await getActive();
+  const h = hostnameOf(t?.url || "");
+  if (!h) return { matches: [] };
+  try {
+    const data = await nmCall("pass", "match", { host: h });
+    return { matches: Array.isArray(data?.matches) ? data.matches : [] };
+  } catch (e) {
+    console.warn("[zpwrchrome] pass.match:", e?.message || e);
+    return { matches: [] };
+  }
+}
+
+async function passCopyForActive(field) {
+  const { matches } = await passMatchActive();
+  if (!matches.length) return;
+  const m = matches[0];  // {store, path}
+  try {
+    if (field === "otp") {
+      const data = await nmCall("pass", "otp", { path: m.path, store: m.store });
+      if (data?.otp) await passClipboardCopy(data.otp);
+      return;
+    }
+    const data = await nmCall("pass", "fetch", { path: m.path, store: m.store });
+    const text = field === "user" ? data?.username : data?.password;
+    if (text) await passClipboardCopy(text);
+  } catch (e) {
+    console.warn("[zpwrchrome] pass copy", field, "failed:", e?.message || e);
+  }
+}
+
+// Best-effort clipboard auto-clear (browserpass / pass -c convention).
+// 45 s matches `pass -c`. The MV3 service worker can be torn down mid-wait,
+// in which case the clipboard stays — that's a "fail open" trade-off; the
+// alternative (chrome.alarms) costs another declared permission for the
+// same convention and won't help if the SW is asleep anyway.
+const PASS_CLIPBOARD_CLEAR_MS = 45_000;
+let passClipboardTimer = null;
+
+async function passClipboardCopy(text) {
+  if (!text) return;
+  await writeClipboard(text);
+  if (passClipboardTimer) clearTimeout(passClipboardTimer);
+  passClipboardTimer = setTimeout(() => {
+    passClipboardTimer = null;
+    writeClipboard("").catch(() => {});
+  }, PASS_CLIPBOARD_CLEAR_MS);
+}
+
+async function passOpenUrlForActive() {
+  const { matches } = await passMatchActive();
+  if (!matches.length) return;
+  const m = matches[0];
+  try {
+    const data = await nmCall("pass", "fetch", { path: m.path, store: m.store });
+    const url = String(data?.url || "").trim();
+    if (!url) return;
+    const t = await getActive();
+    if (t?.id) await chrome.tabs.update(t.id, { url });
+  } catch (e) {
+    console.warn("[zpwrchrome] pass-open-url:", e?.message || e);
+  }
+}
+
+async function passOpenUrlFromPath(path, newTab, store) {
+  try {
+    const data = await nmCall("pass", "fetch", { path, store });
+    const url = String(data?.url || "").trim();
+    if (!url) return false;
+    if (newTab) {
+      await chrome.tabs.create({ url });
+    } else {
+      const t = await getActive();
+      if (t?.id) await chrome.tabs.update(t.id, { url });
+    }
+    return true;
+  } catch (e) {
+    console.warn("[zpwrchrome] pass.openUrl:", e?.message || e);
+    return false;
+  }
+}
+
+const PASS_SETTINGS_KEY = "pass.settings";
+const PASS_SETTINGS_DEFAULTS = {
+  // browserpass `Automatically submit forms after filling` equivalent —
+  // off by default to match browserpass's default. When on, the injected
+  // fillLoginForm picks the nearest submit button and clicks it after
+  // values have been set + change events have fired.
+  autoSubmit: false,
+  // Auto-supply HTTP basic auth credentials from the matching `pass` entry
+  // when the browser shows the auth prompt for a URL whose host has a
+  // single matching entry. Off by default to avoid leaking credentials on
+  // unexpected auth-required redirects.
+  basicAuthEnabled: false,
+};
+
+async function getPassSettings() {
+  const bag = await chrome.storage.local.get(PASS_SETTINGS_KEY);
+  return { ...PASS_SETTINGS_DEFAULTS, ...(bag?.[PASS_SETTINGS_KEY] || {}) };
+}
+
+async function setPassSettings(patch) {
+  const next = { ...(await getPassSettings()), ...(patch || {}) };
+  await chrome.storage.local.set({ [PASS_SETTINGS_KEY]: next });
+  return next;
+}
+
+async function passFillFromPath(path, store) {
+  if (!path) return false;
+  const t = await getActive();
+  if (!t?.id) return false;
+  let creds;
+  try {
+    creds = await nmCall("pass", "fetch", { path, store });
+  } catch (e) {
+    console.warn("[zpwrchrome] pass.fill fetch:", e?.message || e);
+    return false;
+  }
+  const settings = await getPassSettings();
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: t.id, allFrames: true },
+      func: fillLoginForm,
+      args: [String(creds?.username || ""), String(creds?.password || ""), !!settings.autoSubmit],
+    });
+    return Array.isArray(results) && results.some((r) => r?.result === true);
+  } catch (e) {
+    console.warn("[zpwrchrome] pass.fill inject:", e?.message || e);
+    return false;
+  }
+}
+
+async function passFillActive() {
+  const t = await getActive();
+  if (!t?.id) return;
+  const h = hostnameOf(t.url || "");
+  if (!h) return;
+  let matches;
+  try {
+    const r = await nmCall("pass", "match", { host: h });
+    matches = Array.isArray(r?.matches) ? r.matches : [];
+  } catch (e) {
+    console.warn("[zpwrchrome] pass-fill match:", e?.message || e);
+    return;
+  }
+  if (!matches.length) return;
+  if (matches.length > 1) {
+    // Ambiguous — hand off to the popup so the user picks the entry.
+    return openPassInPopup();
+  }
+  let creds;
+  try {
+    creds = await nmCall("pass", "fetch", { path: matches[0].path, store: matches[0].store });
+  } catch (e) {
+    console.warn("[zpwrchrome] pass-fill fetch:", e?.message || e);
+    return;
+  }
+  const settings = await getPassSettings();
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: t.id, allFrames: true },
+      func: fillLoginForm,
+      args: [String(creds?.username || ""), String(creds?.password || ""), !!settings.autoSubmit],
+    });
+  } catch (e) {
+    console.warn("[zpwrchrome] pass-fill inject:", e?.message || e);
+  }
+}
+
+// Injected into the active tab (all frames) by pass-fill. Pure DOM logic —
+// kept self-contained so chrome.scripting.executeScript can serialize it.
+//
+// Strategy:
+//  1. Pick the first visible, enabled <input type="password">.
+//  2. For the username, prefer a visible non-password text-like input in
+//     the SAME form, preceding the password field in document order; fall
+//     back to the first visible text-like input anywhere.
+//  3. Set values via the native HTMLInputElement.value setter so React /
+//     Vue / Lit (which override the property) still see the change.
+//  4. Dispatch input + change so framework listeners react.
+function fillLoginForm(username, password, autoSubmit) {
+  function nativeSet(el, val) {
+    const proto = Object.getPrototypeOf(el);
+    const desc = Object.getOwnPropertyDescriptor(proto, "value");
+    if (desc && desc.set) desc.set.call(el, val);
+    else el.value = val;
+    el.dispatchEvent(new Event("input",  { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function visible(el) {
+    if (!el || el.disabled || el.readOnly) return false;
+    if (el.type === "hidden") return false;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const cs = el.ownerDocument.defaultView.getComputedStyle(el);
+    if (cs.visibility === "hidden" || cs.display === "none") return false;
+    return true;
+  }
+  const pw = [...document.querySelectorAll('input[type="password"]')].find(visible);
+  if (!pw) return false;
+  if (password) nativeSet(pw, password);
+  if (username) {
+    const sel = 'input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="reset"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="image"])';
+    const all = pw.form
+      ? [...pw.form.querySelectorAll(sel)]
+      : [...document.querySelectorAll(sel)];
+    const visibleAll = all.filter(visible);
+    const before = visibleAll.filter((c) => pw.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING);
+    const target = before.length ? before[before.length - 1] : visibleAll[0];
+    if (target) nativeSet(target, username);
+  }
+  pw.focus();
+  if (autoSubmit) {
+    // Walk up to the enclosing form, then prefer an explicit submit button
+    // (so onClick handlers run); fall back to form.submit() if no button is
+    // present.
+    const form = pw.form;
+    if (form) {
+      const submitBtn =
+        form.querySelector('button[type="submit"]') ||
+        form.querySelector('input[type="submit"]') ||
+        form.querySelector('button:not([type="button"]):not([type="reset"])');
+      if (submitBtn && !submitBtn.disabled) {
+        submitBtn.click();
+      } else {
+        try { form.submit(); } catch {}
+      }
+    }
+  }
+  return true;
+}
+
+async function dlPasteUrl() {
+  // Read clipboard via injection into the active tab — service workers have
+  // no DOM clipboard. The active tab inherits user-activation from the
+  // keyboard command so clipboard.readText() is permitted.
+  const t = await getActive();
+  if (!t?.id) return;
+  let url;
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: t.id },
+      func: () => navigator.clipboard.readText(),
+    });
+    url = String(result || "").trim();
+  } catch (e) {
+    console.warn("[zpwrchrome] dl-paste-url: clipboard read failed:", e?.message || e);
+    return;
+  }
+  if (!/^https?:\/\//i.test(url)) {
+    console.warn("[zpwrchrome] dl-paste-url: clipboard text is not an http(s) URL");
+    return;
+  }
+  try {
+    const args = await enrichDownloadArgs(url, {});
+    const data = await nmCall("dl", "add", args);
+    if (chrome.notifications) {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: "zpwrchrome download queued",
+        message: `gid ${data?.gid} → ${data?.dest || ""}`,
+      });
+    }
+  } catch (e) {
+    console.warn("[zpwrchrome] dl-paste-url: nmCall failed:", e?.message || e);
+  }
+}
+
+async function dlShowQueue() {
+  const url = chrome.runtime.getURL("scripts-manager/downloads.html");
+  await chrome.tabs.create({ url });
+}
+
+async function dlPauseAll() {
+  try {
+    const list = await nmCall("dl", "list", {});
+    const active = (list?.jobs || []).filter((j) => j.status === "active");
+    await Promise.all(active.map((j) => nmCall("dl", "pause", { gid: j.gid }).catch(() => null)));
+  } catch (e) {
+    console.warn("[zpwrchrome] dl-pause-all:", e?.message || e);
+  }
+}
+
+async function dlResumeAll() {
+  try {
+    const list = await nmCall("dl", "list", {});
+    const paused = (list?.jobs || []).filter((j) => j.status === "paused");
+    await Promise.all(paused.map((j) => nmCall("dl", "resume", { gid: j.gid }).catch(() => null)));
+  } catch (e) {
+    console.warn("[zpwrchrome] dl-resume-all:", e?.message || e);
+  }
+}
+
+// Build the args object for dl.add, attaching session cookies + user-agent
+// so downloads behind a login (paywalls, GitHub private releases, S3 signed
+// URLs that piggyback on session) work without the user re-logging in CLI.
+//
+// Cookie scope: chrome.cookies.getAll({url}) returns only cookies that the
+// browser would itself send for this exact URL — respects Secure, Path,
+// Domain, SameSite. We don't widen that.
+async function enrichDownloadArgs(url, msg) {
+  const args = {
+    url,
+    dir: msg.dir,
+    name: msg.name,
+    segments: msg.segments,
+  };
+  if (chrome.cookies && url) {
+    try {
+      const jar = await chrome.cookies.getAll({ url });
+      if (jar?.length) {
+        args.cookies = jar.map((c) => `${c.name}=${c.value}`).join("; ");
+      }
+    } catch (e) {
+      console.warn("[zpwrchrome] cookie fetch failed:", e?.message || e);
+    }
+  }
+  args.userAgent = navigator.userAgent;
+  return args;
+}
+
+// ---------------------------------------------------------------------------
+// Right-click "Download with zpwrchrome" on links + media (phase 7 opt-in).
+
+const CTX_DL_LINK  = "zpwrchrome-dl-link";
+const CTX_DL_MEDIA = "zpwrchrome-dl-media";
+
+chrome.runtime.onInstalled.addListener(() => {
+  if (!chrome.contextMenus) return;
+  chrome.contextMenus.create({
+    id: CTX_DL_LINK,
+    title: "Download with zpwrchrome",
+    contexts: ["link"],
+  }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.create({
+    id: CTX_DL_MEDIA,
+    title: "Download with zpwrchrome",
+    contexts: ["image", "video", "audio"],
+  }, () => void chrome.runtime.lastError);
+});
+
+if (chrome.contextMenus) {
+  chrome.contextMenus.onClicked.addListener(async (info) => {
+    const url = info.linkUrl || info.srcUrl;
+    if (!url) return;
+    try {
+      const args = await enrichDownloadArgs(url, {});
+      const data = await nmCall("dl", "add", args);
+      if (chrome.notifications) {
+        chrome.notifications.create({
+          type: "basic",
+          iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+          title: "zpwrchrome download queued",
+          message: `gid ${data?.gid} → ${data?.dest || ""}`,
+        });
+      }
+    } catch (e) {
+      console.warn("[zpwrchrome] right-click download:", e?.message || e);
+    }
+  });
 }
 
 async function openHistoryInPopup() {
@@ -827,6 +1205,105 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, error: String(e) }));
     return true;
   }
+
+  // --- Native messaging host: pass + downloads ---
+  if (msg?.kind === "pass.match") {
+    nmCall("pass", "match", { host: String(msg.host || "") })
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.list") {
+    nmCall("pass", "list", {})
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.search") {
+    nmCall("pass", "search", { query: String(msg.query || ""), limit: Number(msg.limit) || 200 })
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.fetch") {
+    nmCall("pass", "fetch", { path: String(msg.path || ""), store: msg.store || undefined })
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.otp") {
+    nmCall("pass", "otp", { path: String(msg.path || ""), store: msg.store || undefined })
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.fill") {
+    passFillFromPath(String(msg.path || ""), msg.store || undefined)
+      .then((ok) => sendResponse({ ok }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.openUrl") {
+    passOpenUrlFromPath(String(msg.path || ""), !!msg.newTab, msg.store || undefined)
+      .then((ok) => sendResponse({ ok }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.settings.get") {
+    getPassSettings().then((settings) => sendResponse({ ok: true, settings }));
+    return true;
+  }
+  if (msg?.kind === "pass.settings.set") {
+    setPassSettings(msg.settings || {})
+      .then((settings) => sendResponse({ ok: true, settings }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "dl.add") {
+    const url = String(msg.url || "");
+    enrichDownloadArgs(url, msg).then((args) =>
+      nmCall("dl", "add", args)
+        .then((data) => sendResponse({ ok: true, ...data }))
+        .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }))
+    );
+    return true;
+  }
+  if (msg?.kind === "dl.list") {
+    nmCall("dl", "list", {})
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "dl.snapshot.cached") {
+    chrome.storage.local.get(DL_SNAPSHOT_KEY).then((bag) => {
+      sendResponse({ ok: true, snapshot: bag?.[DL_SNAPSHOT_KEY] || null });
+    });
+    return true;
+  }
+  if (msg?.kind === "dl.pause") {
+    nmCall("dl", "pause", { gid: Number(msg.gid) })
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "dl.resume") {
+    nmCall("dl", "resume", { gid: Number(msg.gid) })
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "dl.cancel") {
+    nmCall("dl", "cancel", { gid: Number(msg.gid) })
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "host.meta") {
+    nmCall("meta", "", {})
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -948,4 +1425,141 @@ async function killHeaviestTab() {
   }
   try { await chrome.tabs.remove(worst.tabId); return worst.tabId; }
   catch { return undefined; }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP basic auth injection via chrome.webRequest.onAuthRequired (asyncBlocking
+// listener). Only fires when (a) the user opted in via pass.settings, (b) the
+// request is NOT a proxy auth challenge (different security model), and (c)
+// exactly one pass entry matches the request URL's host. Ambiguous matches
+// fall through to the native browser prompt so the user picks the account.
+if (chrome.webRequest && chrome.webRequest.onAuthRequired) {
+  chrome.webRequest.onAuthRequired.addListener(
+    async (details, callback) => {
+      if (details.isProxy) {
+        callback({});
+        return;
+      }
+      try {
+        const settings = await getPassSettings();
+        if (!settings.basicAuthEnabled) {
+          callback({});
+          return;
+        }
+        const host = hostnameOf(details.url || "");
+        if (!host) {
+          callback({});
+          return;
+        }
+        const r = await nmCall("pass", "match", { host });
+        const matches = Array.isArray(r?.matches) ? r.matches : [];
+        if (matches.length !== 1) {
+          callback({});
+          return;
+        }
+        const m = matches[0];
+        const creds = await nmCall("pass", "fetch", { path: m.path, store: m.store });
+        const username = String(creds?.username || "");
+        const password = String(creds?.password || "");
+        if (!username || !password) {
+          callback({});
+          return;
+        }
+        callback({ authCredentials: { username, password } });
+      } catch (e) {
+        console.warn("[zpwrchrome] basic auth lookup:", e?.message || e);
+        callback({});
+      }
+    },
+    { urls: ["<all_urls>"] },
+    ["asyncBlocking"]
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Native messaging host port (com.menketechnologies.zpwrchrome)
+//
+// Single long-lived port across all pass/dl calls. Lazily opened on first
+// call, reopened on disconnect. Each request gets a monotonic id; the
+// response with matching id resolves the pending promise.
+//
+// Push events (download progress, etc.) arrive with id=0 and are fanned
+// out to subscribers via nmEventListeners.
+
+const NATIVE_HOST = "com.menketechnologies.zpwrchrome";
+let nmPort = null;
+let nmNextId = 1;
+const nmPending = new Map();
+const nmEventListeners = new Set();
+
+function nmAddEventListener(fn) { nmEventListeners.add(fn); }
+function nmRemoveEventListener(fn) { nmEventListeners.delete(fn); }
+
+// Fan out host push events (id=0) to any open extension page (downloads.html,
+// popup, etc.). Pages listen with chrome.runtime.onMessage for kind:"dl.event"
+// and get live updates without polling.
+//
+// Also mirror dl.progress to chrome.storage.local so downloads.html can show
+// the queue immediately on open even if the service worker is currently
+// asleep — re-hydration happens before the NM port reconnects.
+const DL_SNAPSHOT_KEY = "dl.snapshot";
+nmAddEventListener((evt) => {
+  if (!evt) return;
+  try {
+    chrome.runtime.sendMessage({ kind: "dl.event", event: evt }).catch(() => {});
+  } catch { /* no listeners — fine */ }
+  if (evt.kind === "dl.progress" && Array.isArray(evt.jobs)) {
+    chrome.storage.local.set({ [DL_SNAPSHOT_KEY]: { jobs: evt.jobs, ts: Date.now() } })
+      .catch(() => {});
+  }
+});
+
+function nmEnsurePort() {
+  if (nmPort) return nmPort;
+  try {
+    nmPort = chrome.runtime.connectNative(NATIVE_HOST);
+  } catch (e) {
+    console.warn("[zpwrchrome] connectNative failed:", e?.message || e);
+    nmPort = null;
+    return null;
+  }
+  nmPort.onMessage.addListener((msg) => {
+    if (!msg || typeof msg !== "object") return;
+    if (msg.id === 0) {
+      for (const fn of nmEventListeners) {
+        try { fn(msg); } catch (e) { console.warn("[zpwrchrome] nm listener:", e); }
+      }
+      return;
+    }
+    const p = nmPending.get(msg.id);
+    if (!p) return;
+    nmPending.delete(msg.id);
+    if (msg.ok) p.resolve(msg.data ?? null);
+    else p.reject(new Error(msg.err || "native host error"));
+  });
+  nmPort.onDisconnect.addListener(() => {
+    const err = chrome.runtime.lastError?.message || "native host disconnected";
+    nmPort = null;
+    for (const [, p] of nmPending) p.reject(new Error(err));
+    nmPending.clear();
+  });
+  return nmPort;
+}
+
+function nmCall(kind, op, args) {
+  return new Promise((resolve, reject) => {
+    const port = nmEnsurePort();
+    if (!port) {
+      reject(new Error("native host unavailable — install via host/install.sh"));
+      return;
+    }
+    const id = nmNextId++;
+    nmPending.set(id, { resolve, reject });
+    try {
+      port.postMessage({ id, kind, op: op || "", args: args || {} });
+    } catch (e) {
+      nmPending.delete(id);
+      reject(e);
+    }
+  });
 }

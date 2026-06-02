@@ -68,12 +68,13 @@ test("popup activate open tree minimap kinds all route through activate message"
   assert.match(fn[0], /kind: "activate", tabId: t\.id/);
 });
 
-test("popup CATEGORIES array declares exactly 10 entries", () => {
+test("popup CATEGORIES array declares exactly 11 entries (10 tab views + pass)", () => {
   const matches = [...popup.matchAll(/\{\s*id:\s*"([a-z]+)"/g)];
   const catBlock = popup.match(/const CATEGORIES = \[([\s\S]*?)\];/);
   assert.ok(catBlock);
   const ids = [...catBlock[1].matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
-  assert.equal(ids.length, 10);
+  assert.equal(ids.length, 11);
+  assert.ok(ids.includes("pass"), "pass category must be in CATEGORIES");
 });
 
 test("popup open-scripts click prevents default navigation on hash href", () => {

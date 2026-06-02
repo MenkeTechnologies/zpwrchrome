@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 38 keyboard commands, 10 popup categories, 21 message kinds, 3,501 JS lines, 2,595 tests. Cyberpunk HUD by MenkeTechnologies.">
+  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 48 keyboard commands, 11 popup categories, 21 message kinds, 4,333 JS lines, 2,640 tests. Cyberpunk HUD by MenkeTechnologies.">
   <title>zpwrchrome &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -177,7 +177,7 @@
         <a href="https://github.com/MenkeTechnologies/zpwrchrome">GitHub</a>
       </nav>
       <p class="tagline">
-        Manifest V3 Chrome extension &middot; cross-window MRU &middot; 38 keyboard commands &middot; 10-category fzf-scored popup &middot; <code>chrome.userScripts</code> Tampermonkey-equivalent &middot; frecency-ranked history search
+        Manifest V3 Chrome extension &middot; cross-window MRU &middot; 48 keyboard commands &middot; 11-category fzf-scored popup &middot; <code>chrome.userScripts</code> Tampermonkey-equivalent &middot; frecency-ranked history search
       </p>
     </div>
   </header>
@@ -189,33 +189,33 @@
       zpwrchrome is a single-author Chrome MV3 extension built around the
       MRU (most-recently-used) tab primitive. The service worker tracks
       tab activation in <code>chrome.storage.session</code> across windows;
-      the toolbar popup renders 10 categories with
+      the toolbar popup renders 11 categories with
       fzf fuzzy filtering; a Tampermonkey-equivalent userscript engine
       runs in Chrome's native <code>USER_SCRIPT</code> world via
       <code>chrome.userScripts</code>; and a frecency-ranked
       <code>chrome.history</code> search replaces Chrome's built-in
       <code>chrome://history</code> page on <code>Cmd+Y</code>.
-      <strong>3,501 JS lines + 831 CSS lines + 18,921 test lines &middot; 38 commands &middot; 21 message handlers &middot; 2595 tests passing</strong>.
+      <strong>4,333 JS lines + 865 CSS lines + 19,329 test lines &middot; 48 commands &middot; 21 message handlers &middot; 2640 tests passing</strong>.
     </p>
 
     <div class="stat-grid">
-      <div class="stat-card"><div class="v">3,501</div><div class="l">JS Lines</div></div>
-      <div class="stat-card"><div class="v">831</div><div class="l">CSS Lines</div></div>
-      <div class="stat-card"><div class="v a">38</div><div class="l">Keyboard Commands</div></div>
-      <div class="stat-card"><div class="v g">2595</div><div class="l">Tests Passing</div></div>
-      <div class="stat-card"><div class="v">10</div><div class="l">Popup Categories</div></div>
+      <div class="stat-card"><div class="v">4,333</div><div class="l">JS Lines</div></div>
+      <div class="stat-card"><div class="v">865</div><div class="l">CSS Lines</div></div>
+      <div class="stat-card"><div class="v a">48</div><div class="l">Keyboard Commands</div></div>
+      <div class="stat-card"><div class="v g">2640</div><div class="l">Tests Passing</div></div>
+      <div class="stat-card"><div class="v">11</div><div class="l">Popup Categories</div></div>
       <div class="stat-card"><div class="v m">21</div><div class="l">Message Kinds</div></div>
-      <div class="stat-card"><div class="v">23</div><div class="l">Dispatch Handlers</div></div>
-      <div class="stat-card"><div class="v">10</div><div class="l">Permissions</div></div>
+      <div class="stat-card"><div class="v">33</div><div class="l">Dispatch Handlers</div></div>
+      <div class="stat-card"><div class="v">16</div><div class="l">Permissions</div></div>
       <div class="stat-card"><div class="v">15</div><div class="l">Pure Helpers</div></div>
-      <div class="stat-card"><div class="v">205</div><div class="l">Repo Files</div></div>
+      <div class="stat-card"><div class="v">6499</div><div class="l">Repo Files</div></div>
       <div class="stat-card"><div class="v y">3</div><div class="l">Default-Keyed</div></div>
-      <div class="stat-card"><div class="v">v0.4.19</div><div class="l">Version</div></div>
+      <div class="stat-card"><div class="v">v0.5.0</div><div class="l">Version</div></div>
     </div>
 
     <div>
-      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 23,532 total lines</p>
-      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:14.9%;"></div><span class="bar-label">JS &middot; 3,501 lines &middot; 14.9%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:80.4%;"></div><span class="bar-label">Tests &middot; 18,921 lines &middot; 80.4%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.5%;"></div><span class="bar-label">CSS &middot; 831 lines &middot; 3.5%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:1.2%;"></div><span class="bar-label">HTML &middot; 279 lines &middot; 1.2%</span></div>
+      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 24,806 total lines</p>
+      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:17.5%;"></div><span class="bar-label">JS &middot; 4,333 lines &middot; 17.5%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:77.9%;"></div><span class="bar-label">Tests &middot; 19,329 lines &middot; 77.9%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.5%;"></div><span class="bar-label">CSS &middot; 865 lines &middot; 3.5%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:1.1%;"></div><span class="bar-label">HTML &middot; 279 lines &middot; 1.1%</span></div>
     </div>
 
     <h2 class="section"><span class="hash">~</span>SUBSYSTEM BREAKDOWN</h2>
@@ -223,13 +223,13 @@
     <div class="subsystems">
         <div class="card">
           <h3>Service worker</h3>
-          <ul class="files"><li><code>background.js</code> &mdash; 952 lines</li></ul>
+          <ul class="files"><li><code>background.js</code> &mdash; 1,566 lines</li></ul>
           <p>MV3 SW. Cross-window MRU tracker, command dispatcher, popup/modal message API, userscript registration, scenes, history, chrome.processes snapshot.</p>
         </div>
         <div class="card">
           <h3>Popup</h3>
-          <ul class="files"><li><code>popup.html</code> &mdash; 35 lines</li><li><code>popup.css</code> &mdash; 328 lines</li><li><code>popup.js</code> &mdash; 539 lines</li></ul>
-          <p>Cyberpunk HUD toolbar action. 10 categories, fzf filter, keyboard nav, opens via Alt+T or Cmd+Y (focused on History).</p>
+          <ul class="files"><li><code>popup.html</code> &mdash; 35 lines</li><li><code>popup.css</code> &mdash; 362 lines</li><li><code>popup.js</code> &mdash; 757 lines</li></ul>
+          <p>Cyberpunk HUD toolbar action. 11 categories (incl. PASS), fzf filter, keyboard nav, opens via Alt+T / Cmd+Y (history) / Alt+P-bindable (pass).</p>
         </div>
         <div class="card">
           <h3>Modal (content script)</h3>
@@ -251,6 +251,11 @@
           <ul class="files"><li><code>scripts-manager/manager.html</code> &mdash; 244 lines</li><li><code>scripts-manager/manager.js</code> &mdash; 458 lines</li><li><code>scripts-manager/manager.css</code> &mdash; 503 lines</li></ul>
           <p>Options-page editor — installed/log/settings/utilities/help tabs, sortable table, monaco-free CodeMirror-free plain textarea editor, fire-log ring buffer reader.</p>
         </div>
+        <div class="card">
+          <h3>Download queue UI</h3>
+          <ul class="files"><li><code>scripts-manager/downloads.html</code> &mdash; 0 lines</li><li><code>scripts-manager/downloads.js</code> &mdash; 0 lines</li><li><code>scripts-manager/downloads.css</code> &mdash; 0 lines</li></ul>
+          <p>Live segmented-download queue. Subscribes to host push events (id=0 dl.progress) for ~5/s updates while active, falls back to polling. Re-hydrates from chrome.storage.local snapshot mirror so the queue paints instantly across SW restarts. Pause / resume / cancel per-row + bulk; speed + ETA + per-job segment count.</p>
+        </div>
     </div>
 
     <h2 class="section"><span class="hash">#</span>TOP FILES BY SIZE</h2>
@@ -258,21 +263,21 @@
     <table class="file-table">
       <thead><tr><th>Path</th><th class="num">Lines</th><th class="num">Bytes</th></tr></thead>
       <tbody>
-        <tr><td><code>background.js</code></td><td class="num">952</td><td class="num">35,082</td></tr>
+        <tr><td><code>background.js</code></td><td class="num">1,566</td><td class="num">57,648</td></tr>
         <tr><td><code>modal/content.template.js</code></td><td class="num">930</td><td class="num">37,419</td></tr>
+        <tr><td><code>popup.js</code></td><td class="num">757</td><td class="num">29,694</td></tr>
+        <tr><td><code>tests/static.test.js</code></td><td class="num">560</td><td class="num">26,150</td></tr>
         <tr><td><code>tests/logic.test.js</code></td><td class="num">555</td><td class="num">22,613</td></tr>
-        <tr><td><code>tests/static.test.js</code></td><td class="num">553</td><td class="num">25,809</td></tr>
-        <tr><td><code>popup.js</code></td><td class="num">539</td><td class="num">21,319</td></tr>
         <tr><td><code>scripts-manager/manager.css</code></td><td class="num">503</td><td class="num">16,708</td></tr>
         <tr><td><code>scripts-manager/manager.js</code></td><td class="num">458</td><td class="num">17,201</td></tr>
         <tr><td><code>tests/userscript.test.js</code></td><td class="num">369</td><td class="num">13,025</td></tr>
+        <tr><td><code>popup.css</code></td><td class="num">362</td><td class="num">11,169</td></tr>
         <tr><td><code>tests/quality.test.js</code></td><td class="num">352</td><td class="num">17,665</td></tr>
-        <tr><td><code>popup.css</code></td><td class="num">328</td><td class="num">10,134</td></tr>
         <tr><td><code>tests/modal.test.js</code></td><td class="num">299</td><td class="num">16,097</td></tr>
+        <tr><td><code>tests/pass-integration.test.js</code></td><td class="num">248</td><td class="num">11,748</td></tr>
         <tr><td><code>scripts-manager/manager.html</code></td><td class="num">244</td><td class="num">11,198</td></tr>
         <tr><td><code>tests/manager.test.js</code></td><td class="num">223</td><td class="num">8,612</td></tr>
         <tr><td><code>tests/fuzz-adversarial.test.js</code></td><td class="num">217</td><td class="num">8,757</td></tr>
-        <tr><td><code>tests/userscript-real-world.test.js</code></td><td class="num">215</td><td class="num">6,900</td></tr>
       </tbody>
     </table>
 
@@ -291,7 +296,7 @@
                                        ▼
               popup.html/.js                          modal/content.js (shadow DOM)
               ───────────────                         ─────────────────────────────
-              10 categories                            10 categories (dormant since v0.4.16)
+              11 categories                            10 categories (dormant since v0.4.16)
               fzf filter                              10 categories
               keyboard nav                            same protocol kinds
 
@@ -302,7 +307,7 @@
 </pre>
 
     <h2 class="section"><span class="hash">&amp;</span>MESSAGE PROTOCOL</h2>
-    <p class="subtitle"><strong>21</strong> message kinds handled by the service worker. Popup sends <strong>18</strong> kinds; modal sends <strong>19</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
+    <p class="subtitle"><strong>21</strong> message kinds handled by the service worker. Popup sends <strong>19</strong> kinds; modal sends <strong>19</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
     <ul class="kinds">
 
         <li><code>activate</code><span>popup/modal → SW. Switch to a tab by id + focus its window.</span></li>
@@ -329,7 +334,7 @@
     </ul>
 
     <h2 class="section"><span class="hash">$</span>KEYBOARD COMMANDS</h2>
-    <p class="subtitle">Chrome MV3 caps commands with default-suggested keys at <strong>4</strong>; everything else is user-bound at <code>chrome://extensions/shortcuts</code>. Currently <strong>3</strong> default-keyed (<code>_execute_action=Alt+T</code>, <code>switch-previous-tab=Command+E</code>, <code>open-history=Command+Y</code>), <strong>35</strong> user-bound, <strong>38</strong> total.</p>
+    <p class="subtitle">Chrome MV3 caps commands with default-suggested keys at <strong>4</strong>; everything else is user-bound at <code>chrome://extensions/shortcuts</code>. Currently <strong>3</strong> default-keyed (<code>_execute_action=Alt+T</code>, <code>switch-previous-tab=Command+E</code>, <code>open-history=Command+Y</code>), <strong>45</strong> user-bound, <strong>48</strong> total.</p>
     <div class="stat-grid">
       <div class="stat-card"><div class="v">7</div><div class="l">Switching / popup</div></div>
       <div class="stat-card"><div class="v">9</div><div class="l">Jump</div></div>
@@ -341,7 +346,7 @@
     </div>
 
     <h2 class="section"><span class="hash">%</span>POPUP CATEGORIES</h2>
-    <p class="subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders 10 categories with fzf scoring against title + host. Each category is jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot). The modal mirrors the same list since v0.4.15.</p>
+    <p class="subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders 11 categories with fzf scoring against title + host. Each category is jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot). The modal mirrors the same list since v0.4.15.</p>
     <ul class="cat-list">
       <li><span class="label">All Tabs</span><span class="key">⌘1</span></li>
       <li><span class="label">Current Window</span><span class="key">⌘2</span></li>
@@ -353,6 +358,7 @@
       <li><span class="label">Tree (by opener)</span><span class="key">⌘8</span></li>
       <li><span class="label">Minimap</span><span class="key">⌘9</span></li>
       <li><span class="label">History</span><span class="key">⌘0</span></li>
+      <li><span class="label">Pass</span><span class="key">Tab</span></li>
     </ul>
 
     <h2 class="section"><span class="hash">^</span>HISTORY &mdash; FRECENCY FORMULA</h2>
@@ -369,7 +375,7 @@
   }</pre>
 
     <h2 class="section"><span class="hash">!</span>PERMISSIONS</h2>
-    <p class="subtitle"><strong>10</strong> declared. <code>tests/static.test.js</code> enforces every declared permission is actually used in <code>background.js</code> or <code>popup.js</code> &mdash; no dead permissions.</p>
+    <p class="subtitle"><strong>16</strong> declared. <code>tests/static.test.js</code> enforces every declared permission is actually used in <code>background.js</code> or <code>popup.js</code> &mdash; no dead permissions.</p>
     <div>
       <span class="perm-pill">tabs</span>
       <span class="perm-pill">tabGroups</span>
@@ -381,11 +387,17 @@
       <span class="perm-pill">userScripts</span>
       <span class="perm-pill">webNavigation</span>
       <span class="perm-pill">clipboardWrite</span>
+      <span class="perm-pill">nativeMessaging</span>
+      <span class="perm-pill">contextMenus</span>
+      <span class="perm-pill">notifications</span>
+      <span class="perm-pill">cookies</span>
+      <span class="perm-pill">webRequest</span>
+      <span class="perm-pill">webRequestAuthProvider</span>
       <span class="perm-pill opt" title="optional_permissions — not requested at install">processes</span>
     </div>
 
     <h2 class="section"><span class="hash">*</span>TESTS</h2>
-    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>2595</strong> cases across <strong>166</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
+    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>2640</strong> cases across <strong>168</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
     <table class="file-table">
       <thead><tr><th>File</th><th class="num">Tests</th><th class="num">Lines</th></tr></thead>
       <tbody>
@@ -401,6 +413,7 @@
         <tr><td><code>tests/copy-helpers.test.js</code></td><td class="num">14</td><td class="num">87</td></tr>
         <tr><td><code>tests/dispatch-popup.test.js</code></td><td class="num">16</td><td class="num">97</td></tr>
         <tr><td><code>tests/dispatch-tab-ops.test.js</code></td><td class="num">12</td><td class="num">65</td></tr>
+        <tr><td><code>tests/dl-integration.test.js</code></td><td class="num">15</td><td class="num">148</td></tr>
         <tr><td><code>tests/docs-index.test.js</code></td><td class="num">16</td><td class="num">83</td></tr>
         <tr><td><code>tests/domain-hue-distribution.test.js</code></td><td class="num">11</td><td class="num">115</td></tr>
         <tr><td><code>tests/domain-hue-unit.test.js</code></td><td class="num">12</td><td class="num">86</td></tr>
@@ -488,6 +501,7 @@
         <tr><td><code>tests/parity.test.js</code></td><td class="num">17</td><td class="num">127</td></tr>
         <tr><td><code>tests/parse-metadata-more.test.js</code></td><td class="num">15</td><td class="num">114</td></tr>
         <tr><td><code>tests/parseMetadata-duplicate-keys.test.js</code></td><td class="num">13</td><td class="num">131</td></tr>
+        <tr><td><code>tests/pass-integration.test.js</code></td><td class="num">30</td><td class="num">248</td></tr>
         <tr><td><code>tests/popup-activate.test.js</code></td><td class="num">18</td><td class="num">103</td></tr>
         <tr><td><code>tests/popup-css.test.js</code></td><td class="num">19</td><td class="num">108</td></tr>
         <tr><td><code>tests/popup-escape-html.test.js</code></td><td class="num">6</td><td class="num">64</td></tr>
@@ -495,8 +509,8 @@
         <tr><td><code>tests/popup-html.test.js</code></td><td class="num">14</td><td class="num">80</td></tr>
         <tr><td><code>tests/popup-interaction.test.js</code></td><td class="num">18</td><td class="num">99</td></tr>
         <tr><td><code>tests/popup-keys.test.js</code></td><td class="num">21</td><td class="num">115</td></tr>
-        <tr><td><code>tests/popup-lifecycle.test.js</code></td><td class="num">15</td><td class="num">91</td></tr>
-        <tr><td><code>tests/popup-list.test.js</code></td><td class="num">18</td><td class="num">103</td></tr>
+        <tr><td><code>tests/popup-lifecycle.test.js</code></td><td class="num">15</td><td class="num">92</td></tr>
+        <tr><td><code>tests/popup-list.test.js</code></td><td class="num">18</td><td class="num">104</td></tr>
         <tr><td><code>tests/popup-minimap-render.test.js</code></td><td class="num">14</td><td class="num">77</td></tr>
         <tr><td><code>tests/popup-minimap.test.js</code></td><td class="num">18</td><td class="num">95</td></tr>
         <tr><td><code>tests/popup-refresh-first.test.js</code></td><td class="num">14</td><td class="num">82</td></tr>
@@ -516,7 +530,7 @@
         <tr><td><code>tests/protocol.test.js</code></td><td class="num">7</td><td class="num">89</td></tr>
         <tr><td><code>tests/quality.test.js</code></td><td class="num">17</td><td class="num">352</td></tr>
         <tr><td><code>tests/readme.test.js</code></td><td class="num">11</td><td class="num">91</td></tr>
-        <tr><td><code>tests/report-html.test.js</code></td><td class="num">26</td><td class="num">170</td></tr>
+        <tr><td><code>tests/report-html.test.js</code></td><td class="num">26</td><td class="num">173</td></tr>
         <tr><td><code>tests/resolve-boundary.test.js</code></td><td class="num">16</td><td class="num">85</td></tr>
         <tr><td><code>tests/scene-crud-composition.test.js</code></td><td class="num">11</td><td class="num">124</td></tr>
         <tr><td><code>tests/scene-restore-open.test.js</code></td><td class="num">12</td><td class="num">75</td></tr>
@@ -527,7 +541,7 @@
         <tr><td><code>tests/scripts-toggle-storage.test.js</code></td><td class="num">13</td><td class="num">83</td></tr>
         <tr><td><code>tests/sessions-restore.test.js</code></td><td class="num">14</td><td class="num">91</td></tr>
         <tr><td><code>tests/single-tab-ops.test.js</code></td><td class="num">19</td><td class="num">104</td></tr>
-        <tr><td><code>tests/static.test.js</code></td><td class="num">41</td><td class="num">553</td></tr>
+        <tr><td><code>tests/static.test.js</code></td><td class="num">41</td><td class="num">560</td></tr>
         <tr><td><code>tests/stress-memory-scale.test.js</code></td><td class="num">11</td><td class="num">170</td></tr>
         <tr><td><code>tests/stress-pathological-fzf.test.js</code></td><td class="num">15</td><td class="num">139</td></tr>
         <tr><td><code>tests/stress-timing-budgets.test.js</code></td><td class="num">11</td><td class="num">161</td></tr>
@@ -555,26 +569,32 @@
         <tr><td><code>tests/util-large-scale.test.js</code></td><td class="num">10</td><td class="num">128</td></tr>
         <tr><td><code>tests/util-mru-cap-edge.test.js</code></td><td class="num">10</td><td class="num">63</td></tr>
         <tr><td><code>tests/validate-userscript-unit.test.js</code></td><td class="num">13</td><td class="num">87</td></tr>
-        <tr><td><code>TOTAL</code></td><td class="num"><strong>2595</strong></td><td class="num"><strong>18,921</strong></td></tr>
+        <tr><td><code>TOTAL</code></td><td class="num"><strong>2640</strong></td><td class="num"><strong>19,329</strong></td></tr>
       </tbody>
     </table>
 
     <h2 class="section"><span class="hash">?</span>KEY DESIGN DECISIONS</h2>
     <div class="decisions">
-      <div class="card"><h3>Service worker, not background page</h3><p>MV3 requires an event-driven SW. State lives in chrome.storage.session (MRU) and chrome.storage.local (scenes, userscripts, GM bags) — never in module-level globals.</p></div>
+      <div class="card"><h3>Service worker, not background page</h3><p>MV3 requires an event-driven SW. State lives in chrome.storage.session (MRU) and chrome.storage.local (scenes, userscripts, GM bags, dl.snapshot mirror) — never in module-level globals.</p></div>
       <div class="card"><h3>No build step</h3><p>Zero npm dependencies at runtime. No bundler, no transpiler. Pure ES modules in the SW; popup ships as a regular extension page; modal pre-builds via scripts/build-modal.sh inlining fonts + lib/fzf.js + lib/util.js into a single content-script file.</p></div>
+      <div class="card"><h3>Native messaging host in Rust, not JS</h3><p><code>pass</code> + <code>gpg</code> can't run inside the SW (MV3 has no shell). One long-lived Rust process per Chrome session multiplexes pass + dl channels over the same length-prefixed JSON port (4-byte LE len, ≤1 MiB/msg per spec). Single install.sh writes the NM manifest for Chrome/Chromium/Brave/Edge on macOS+Linux.</p></div>
+      <div class="card"><h3>Vendored Rust HTTP client, not aria2</h3><p>ureq + rustls compiled into the host gives portable HTTP/HTTPS with Range support — no <code>aria2</code> or curl binary on PATH. Pure-Rust TLS works on macOS aarch64 + Linux x86_64/aarch64 with no system OpenSSL dependency. Future-proof against OS TLS API churn.</p></div>
+      <div class="card"><h3>Segmented download via Range, file pre-allocated</h3><p>HEAD probe + 4-way parallel <code>Range</code> GETs. Destination file pre-allocated to total size via <code>set_len</code> so segment threads never collide on disk writes. <code>downloaded_in_seg</code> counter tracks per-segment progress so a mid-stream connection drop resumes via Range from the correct offset rather than restarting the segment.</p></div>
+      <div class="card"><h3>Cookie + UA forwarded for logged-in URLs</h3><p>chrome.cookies.getAll(url) → Cookie header on every HEAD + GET. Without this, downloads behind a login (paywalls, GitHub private releases, session-piggybacked S3 URLs) silently 401 / 403. UA forwarded too so servers that key on UA (GitHub release filtering, browser-detection paywalls) behave identically to a regular browser download.</p></div>
+      <div class="card"><h3>Clipboard auto-clear matches &lt;code&gt;pass -c&lt;/code&gt;</h3><p>45 s setTimeout on copy. Fail-open: if the SW dies before the timer fires the clipboard stays, which is the conservative direction (worst case the user sees their password longer; never accidentally clobbers a later copy they made).</p></div>
       <div class="card"><h3>fzf scorer ported from audio-haxor</h3><p>Same constants — boundary=9, camel=7, gap-start=-3, match=16. Visual parity (<mark class="fzf-hl">) across MenkeTechnologies' tools.</p></div>
       <div class="card"><h3>Closed shadow DOM for the modal</h3><p>Host-page CSS can never leak in. Fonts inlined as base64 data: URIs so strict host-page font-src CSP can't block them.</p></div>
       <div class="card"><h3>Window-capture keydown for the modal</h3><p>window.addEventListener("keydown", h, true) + stopImmediatePropagation beats Vimium / cVim / any other extension that listens on document.</p></div>
       <div class="card"><h3>Frecency for History</h3><p>visitCount + 2*typedCount over hoursAgo+2. Typed visits weigh 2x (deliberate). Linear decay: ~57x weight to 1h-ago vs 1w-ago.</p></div>
       <div class="card"><h3>Default-key ceiling = 4</h3><p>Chrome MV3 hard cap. Currently 3 used (Alt+T popup, Cmd+E switch-previous-tab, Cmd+Y history). Everything else binds at chrome://extensions/shortcuts.</p></div>
       <div class="card"><h3>Pure helpers in lib/util.js</h3><p>Zero chrome.* refs so they unit-test in plain Node and so they can also be inlined into the content-script modal via UTIL_INLINE_START/END markers + scripts/build-modal.mjs.</p></div>
+      <div class="card"><h3>Pure helpers in host/src/{pass,dl}.rs</h3><p>PSL eTLD+1 match, entry parser, filename sanitization, unique_dest_path collision handling — all <code>fn</code>s with no I/O. cargo test exercises them directly. Integration tests stand up a std::net HTTP/1.1 fixture to drive the actual worker threads end-to-end, including cookie-gate + retry-recovery + cancel paths.</p></div>
     </div>
 
   </main>
 
   <footer>
-    zpwrchrome v0.4.19 &middot; MIT &middot; MenkeTechnologies &middot;
+    zpwrchrome v0.5.0 &middot; MIT &middot; MenkeTechnologies &middot;
     <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a> &middot;
     regenerate via <code>scripts/gen.sh</code>
   </footer>

@@ -174,16 +174,18 @@ The most keyboard-driven recent-tabs Chrome extension ever shipped. Cross-window
 \`zpwrchrome\` is a Chrome MV3 extension that replaces [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) with a keyboard-first switcher carrying ${total - 1}× more commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via \`chrome.storage.session\`, survives service-worker restarts
-- **Alt+T popup** — the cyberpunk HUD with 10 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History), Cmd+1–0 jumps, fzf scoring on every row
+- **Alt+T popup** — the cyberpunk HUD with 11 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History / **Pass**), Cmd+1–0 jumps, fzf scoring on every row
 - **Cmd+E / Ctrl+E modal** — JetBrains-style Recent Files overlay: 2-column shadow-DOM modal injected into the active page with categories (All / Current Window / Pinned / Audible / Muted / Recently Closed), Cmd+1–6 category jumps, live filter, hold-cycle on the trigger key
 - **Cmd+Y / Ctrl+Y history** — replaces Chrome’s built-in chrome://history page with an fzf-fuzzy search over up to ${5000} entries, Backspace deletes the highlighted URL from history
-- **${userBound} user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at \`chrome://extensions/shortcuts\` (single-tab ops, batch ops, numeric jumps, clipboard utilities)
+- **UNIX \`pass\` integration** — replaces browserpass via a vendored Rust native-messaging host that walks \`~/.password-store\` with eTLD+1 + multi-label PSL matching, shells to \`pass show\`/\`pass otp\`, returns credentials over a length-prefixed JSON port. PASS popup category with fill / user / pw / otp buttons. Hotkeys: \`pass-fill\` autofills the active tab via injected \`HTMLInputElement.value\` setter (React/Vue safe) + input/change dispatch; \`pass-copy-{pw,user,otp}\` write to clipboard with 45 s auto-clear matching \`pass -c\`
+- **Segmented download manager** — same Rust host vendors a multi-connection downloader (HEAD probe → N parallel \`Range\` segments, default 4, pre-allocated dest file). Cookie + User-Agent forwarded from \`chrome.cookies.getAll\` so logged-in downloads work; transient errors retry with 200 ms × 3ⁿ backoff and resume via \`Range\` from the segment-local offset; queue mirrored to \`chrome.storage.local\` so the UI paints instantly across service-worker restarts. Right-click \`Download with zpwrchrome\` on links / images / video / audio; \`dl-paste-url\` reads the clipboard via injected \`navigator.clipboard.readText\`. Live queue UI at \`scripts-manager/downloads.html\` subscribes to host push events. Filename collisions auto-rename \`foo.zip\` → \`foo (1).zip\`. Pure-Rust, vendorable TLS (\`ureq\`+rustls), no \`aria2\` or other runtime binary
+- **${userBound} user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at \`chrome://extensions/shortcuts\` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
 - **Sub-popup live filter** — type to filter open + closed tabs; \`↑\`/\`↓\`/\`Enter\`/\`Delete\`/\`Esc\` nav
 - **Companion Chrome theme** — \`theme/\` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from \`strykelang/docs/hud-static.css\` (\`--cyan #05d9e8\`, \`--accent #ff2a6d\`, \`--magenta #d300c5\`, CRT scanlines, neon-border-glow card frames)
-- **Pure-helper test surface** — MRU stack semantics, hostname parsing, and jump-index resolution live in \`lib/util.js\` and are unit-tested without a Chrome runtime
+- **Pure-helper test surface** — MRU stack semantics, hostname parsing, jump-index resolution in \`lib/util.js\` + pass match/parse + dl filename/collision helpers in \`host/src/{pass,dl}.rs\` all unit-tested without a Chrome runtime
 - **Single source of truth** — \`README.md\`, \`docs/index.html\`, and command counts are all generated from \`manifest.json\` by \`scripts/gen.sh\`; CI guards against drift
-- **Zero runtime dependencies** — no bundler, no transpiler, no npm modules at runtime; pure ES module service worker
+- **Zero JS runtime dependencies** — no bundler, no transpiler, no npm modules at runtime; pure ES module service worker. The native host adds \`serde\`/\`serde_json\`/\`ureq\` (foundational pure-Rust crates) and ships as a single static binary
 
 ---
 
@@ -199,6 +201,26 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 2. Enable **Developer mode** (top-right)
 3. Click **Load unpacked**, pick the cloned directory
 4. Open \`chrome://extensions/shortcuts\` to bind any of the ${userBound} user-configurable commands
+
+#### Native messaging host (required for \`pass\` and downloads)
+
+1. Install GPG + \`pass\` if not already (\`brew install pass\` on macOS, \`apt install pass\` on Debian/Ubuntu); make sure \`pass show\` decrypts an entry from your shell first
+2. Build + register the host (writes the NM manifest for Chrome / Chromium / Brave / Edge):
+
+\`\`\`sh
+cd host
+./install.sh <extension-id>     # find the ID at chrome://extensions
+\`\`\`
+
+The \`<extension-id>\` is the 32-character string shown under the extension after enabling Developer mode. The script lays down \`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.menketechnologies.zpwrchrome.json\` (macOS) or \`~/.config/google-chrome/NativeMessagingHosts/…\` (Linux), pointing at the freshly-built \`host/target/debug/zpwr-chrome-host\`. Reload the extension after running it.
+
+Alternatively, install via Homebrew tap:
+
+\`\`\`sh
+brew tap MenkeTechnologies/zpwrchrome
+brew install zpwr-chrome-host
+zpwr-chrome-host-register <extension-id>
+\`\`\`
 
 #### Theme
 
@@ -282,38 +304,53 @@ Color anchors (RGB triplets in \`theme/manifest.json\`):
 ## [0x06] ARCHITECTURE
 
 \`\`\`
-                  ┌──────────────────────────┐
-                  │  background.js (sw)      │
-   chrome.tabs    │  ──────────────────────  │   chrome.storage
-   onActivated ──▶│  pushMru / dropFromMru   │◀────  .session
-   onRemoved      │  command dispatcher      │       (MRU array)
-   onReplaced     │  message API for popup   │
-                  └──────────────────────────┘
-                              │
-                              │  runtime.sendMessage
-                              ▼
-                  ┌──────────────────────────┐
-                  │  popup.{html,css,js}     │
-                  │  ──────────────────────  │
-                  │  search input            │
-                  │  MRU list + closed list  │
-                  │  ↑↓/Enter/Del nav        │
-                  └──────────────────────────┘
-
-                  ┌──────────────────────────┐
-                  │  lib/util.js (pure)      │
-                  │  ──────────────────────  │
-                  │  mruPush / mruDrop       │
-                  │  mruStep / mruPrevious   │
-                  │  hostnameOf              │
-                  │  resolveJumpIndex        │
-                  └──────────────────────────┘
-                              ▲
-                              │ imported by
-                              │ background.js + tests
+   chrome.tabs        ┌──────────────────────────┐    chrome.storage
+   onActivated ──────▶│  background.js (sw)      │◀──── .session (MRU)
+   onRemoved          │  ──────────────────────  │      .local (scenes,
+   onReplaced         │  pushMru / dropFromMru   │             userscripts,
+                      │  command dispatcher      │             dl.snapshot)
+   chrome.commands ──▶│  message API             │
+                      │  nmCall / nmPort         │
+                      │  contextMenus / cookies  │
+                      └────────────┬─────────────┘
+                                   │
+                  ┌────────────────┼─────────────────┐
+                  │                │                 │
+                  │ runtime.       │ connectNative   │ scripting.
+                  │ sendMessage    │ (NM port)       │ executeScript
+                  ▼                ▼                 ▼
+        ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+        │ popup.{js,css,   │ │ zpwr-chrome-host │ │ active tab:      │
+        │ html}            │ │ (Rust binary)    │ │ • pass-fill      │
+        │ ──────────────── │ │ ──────────────── │ │   injector       │
+        │ MRU + 10 tab cat │ │ frame.rs (LE32+  │ │   (native value  │
+        │ + PASS category  │ │   JSON, ≤1 MiB)  │ │   setter, R/V/L  │
+        │ Cmd+1–0 jumps    │ │ proto.rs (id/    │ │   safe)          │
+        │ fzf scoring      │ │   kind/op/args)  │ │ • dl-paste-url:  │
+        └──────────────────┘ │ dispatch.rs      │ │   clipboard read │
+                             │   → pass: list/  │ │ • writeClipboard │
+        ┌──────────────────┐ │     match/fetch/ │ │   (copy hotkeys) │
+        │ scripts-manager/ │ │     otp          │ └──────────────────┘
+        │ downloads.{html, │ │   → dl:   add/   │
+        │ css,js}          │◀│     list/pause/  │      ┌────────────┐
+        │ ──────────────── │ │     resume/      │      │ ureq+rustls│
+        │ live queue UI    │ │     cancel       │─────▶│ HEAD + N×  │
+        │ subs to push     │ │ push events      │      │ Range GET  │
+        │   events (id=0)  │ │   id=0 / 200ms   │      │ +retry/200 │
+        │ rehydrates from  │ └──────────────────┘      │ ×3ⁿ backoff│
+        │   dl.snapshot    │          │                └────────────┘
+        └──────────────────┘          │                       │
+                                      │ shells to             │ writes
+                                      ▼                       ▼
+                          ┌─────────────────────┐    ┌──────────────────┐
+                          │ pass / gpg / pinentry│    │ ~/Downloads/     │
+                          │ ~/.password-store/   │    │   zpwrchrome/    │
+                          └─────────────────────┘    │ (pre-allocated   │
+                                                     │  N-segment file) │
+                                                     └──────────────────┘
 \`\`\`
 
-The service worker holds no globals — MRU lives in \`chrome.storage.session\`. Pure helpers in \`lib/util.js\` carry no \`chrome.*\` references and are unit-tested in plain Node.
+The service worker holds no globals — MRU lives in \`chrome.storage.session\`. Pure helpers in \`lib/util.js\` (JS) and \`host/src/{pass,dl}.rs\` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / \`cargo test\`. The native host is one long-lived Rust process per Chrome session, multiplexing \`pass\` and \`dl\` channels over the same length-prefixed stdio port.
 
 ---
 
@@ -335,6 +372,8 @@ The service worker holds no globals — MRU lives in \`chrome.storage.session\`.
 | Numeric jumps (1–9) | **yes** | no |
 | Copy URL / Markdown link | **yes** | no |
 | Bookmark active tab via shortcut | **yes** | no |
+| UNIX \`pass\` integration (autofill + OTP + clipboard) | **yes (replaces browserpass)** | no |
+| Segmented multi-connection downloader (Cookie/UA forwarded) | **yes (replaces browserpass-style DL extensions)** | no |
 | Companion browser theme | **yes** | no |
 | Manifest version | **MV3** | MV2/MV3 |
 | License | **MIT** | proprietary |
@@ -348,15 +387,22 @@ The service worker holds no globals — MRU lives in \`chrome.storage.session\`.
 | Path | Purpose |
 | --- | --- |
 | \`manifest.json\` | MV3 manifest, command registry (the only source of truth) |
-| \`background.js\` | Service worker — MRU tracker, command dispatcher, popup message API |
+| \`background.js\` | Service worker — MRU tracker, command dispatcher, popup message API, NM port (\`nmCall\`/\`nmAddEventListener\`), pass-fill injector, clipboard auto-clear, context-menu \`Download with zpwrchrome\`, \`enrichDownloadArgs\` (cookie + UA forwarding), \`dl.snapshot\` mirror |
 | \`lib/util.js\` | Pure helpers — \`mruPush\`/\`mruDrop\`/\`mruStep\`/\`mruPrevious\`/\`hostnameOf\`/\`resolveJumpIndex\` |
-| \`popup.html\` / \`popup.css\` / \`popup.js\` | Cyberpunk HUD popup |
+| \`popup.html\` / \`popup.css\` / \`popup.js\` | Cyberpunk HUD popup with 11 categories including PASS (fill/user/pw/otp buttons) |
 | \`modal/content.js\` | JetBrains-style Recent Tabs modal — content script, shadow DOM, 2-column layout |
+| \`scripts-manager/manager.{html,css,js}\` | Userscript engine dashboard (Tampermonkey-equivalent) |
+| \`scripts-manager/downloads.{html,css,js}\` | Live download queue UI — push-event subscription + cached snapshot rehydration |
+| \`host/Cargo.toml\` / \`host/src/{lib,main,frame,proto,dispatch,pass,dl}.rs\` | Rust native messaging host — pass channel (\`list\`/\`match\`/\`fetch\`/\`otp\`) + dl channel (\`add\`/\`list\`/\`pause\`/\`resume\`/\`cancel\`) over length-prefixed JSON on stdio |
+| \`host/install.sh\` | Writes \`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.menketechnologies.zpwrchrome.json\` (Chrome / Chromium / Brave / Edge on macOS + Linux) |
+| \`host/Formula/zpwr-chrome-host.rb\` | Homebrew formula for the \`MenkeTechnologies/zpwrchrome\` tap |
+| \`host/tests/{frame_roundtrip,echo_integration,pass_unit,dl_unit,dl_integration}.rs\` | \`cargo test\` suite — framing, dispatch, pass match + parse, dl filename helpers, end-to-end segmented download against a Rust HTTP fixture (cookie gate + retry recovery + cancel) |
 | \`docs/index.html\` | GitHub-Pages landing page (regenerated from manifest) |
+| \`docs/report.html\` | Strykelang-style engineering report (regenerated from repo stats) |
 | \`theme/\` | Companion Chrome theme — separate unpacked extension |
 | \`icons/icon.svg\` + \`icon{16,32,48,128}.png\` | Extension icons; PNGs rasterized via \`rsvg-convert\` |
 | \`scripts/gen.sh\` + \`scripts/gen.mjs\` | Regenerate \`README.md\` and \`docs/index.html\` from \`manifest.json\` |
-| \`tests/\` | \`node:test\` suite — pure logic + static invariants + theme + protocol |
+| \`tests/\` | \`node:test\` suite — pure logic + static invariants + theme + protocol + pass / dl integration |
 | \`.github/workflows/ci.yml\` | GitHub Actions — \`npm test\` on push/PR across Node 20 + 22 |
 | \`package.json\` | \`npm test\` script |
 
@@ -654,6 +700,8 @@ const html = `<!DOCTYPE html>
         <div class="feature"><strong>MRU tracking</strong>Cross-window most-recently-used stack. Survives service-worker restarts.</div>
         <div class="feature"><strong>Cmd+Y history</strong>Replaces Chrome's chrome://history with an fzf-fuzzy search over up to ${5000} URLs. Backspace deletes.</div>
         <div class="feature"><strong>Cmd+E modal</strong>JetBrains-style Recent Files overlay injected into the active page.</div>
+        <div class="feature"><strong>UNIX <code>pass</code> integration</strong>Replaces browserpass via a Rust native host. Walks <code>~/.password-store</code>, autofills active-tab login forms, copies user / pw / OTP with 45 s clipboard auto-clear (matches <code>pass -c</code>). React/Vue/Lit-safe autofill.</div>
+        <div class="feature"><strong>Segmented download manager</strong>Multi-connection HTTP/HTTPS downloader. N-segment <code>Range</code> GETs with retry / resume, Chrome cookies + User-Agent forwarded for logged-in URLs. Live queue UI, right-click <em>Download with zpwrchrome</em>. Pure-Rust, ureq + rustls, no <code>aria2</code>.</div>
         <div class="feature"><strong>Filtered popup</strong>Live filter over open + closed tabs, ↑↓/Enter/Del nav.</div>
         <div class="feature"><strong>Batch tab ops</strong>close-others, close-right, close-duplicates, reload-all, sort-by-URL, group-by-domain.</div>
         <div class="feature"><strong>Single-tab ops</strong>duplicate, pin, mute, detach, bookmark, copy URL, copy Markdown link.</div>
@@ -668,7 +716,8 @@ const html = `<!DOCTYPE html>
         <li><code>git clone https://github.com/MenkeTechnologies/zpwrchrome.git</code></li>
         <li>Open <code>chrome://extensions</code> and enable <strong>Developer mode</strong></li>
         <li>Click <strong>Load unpacked</strong>, pick the cloned directory</li>
-        <li>Open <code>chrome://extensions/shortcuts</code> to bind any of the ${userBound} user-configurable commands</li>
+        <li>For UNIX <code>pass</code> + downloads support, build and register the native host: <code>cd host &amp;&amp; ./install.sh &lt;extension-id&gt;</code> (or via Homebrew: <code>brew tap MenkeTechnologies/zpwrchrome &amp;&amp; brew install zpwr-chrome-host &amp;&amp; zpwr-chrome-host-register &lt;extension-id&gt;</code>). Requires <code>pass</code> + GPG already configured locally.</li>
+        <li>Open <code>chrome://extensions/shortcuts</code> to bind any of the ${userBound} user-configurable commands (incl. <code>pass-fill</code>, <code>pass-copy-pw</code>, <code>pass-copy-otp</code>, <code>dl-paste-url</code>, <code>dl-show-queue</code>)</li>
         <li>Optional: <strong>Load unpacked</strong> the <code>theme/</code> subdirectory for the matching browser theme</li>
       </ol>
     </section>
@@ -723,7 +772,7 @@ const subsystems = [
   {
     name: "Popup",
     files: ["popup.html", "popup.css", "popup.js"],
-    role: "Cyberpunk HUD toolbar action. 10 categories, fzf filter, keyboard nav, opens via Alt+T or Cmd+Y (focused on History).",
+    role: "Cyberpunk HUD toolbar action. 11 categories (incl. PASS), fzf filter, keyboard nav, opens via Alt+T / Cmd+Y (history) / Alt+P-bindable (pass).",
   },
   {
     name: "Modal (content script)",
@@ -744,6 +793,11 @@ const subsystems = [
     name: "Userscript dashboard",
     files: ["scripts-manager/manager.html", "scripts-manager/manager.js", "scripts-manager/manager.css"],
     role: "Options-page editor — installed/log/settings/utilities/help tabs, sortable table, monaco-free CodeMirror-free plain textarea editor, fire-log ring buffer reader.",
+  },
+  {
+    name: "Download queue UI",
+    files: ["scripts-manager/downloads.html", "scripts-manager/downloads.js", "scripts-manager/downloads.css"],
+    role: "Live segmented-download queue. Subscribes to host push events (id=0 dl.progress) for ~5/s updates while active, falls back to polling. Re-hydrates from chrome.storage.local snapshot mirror so the queue paints instantly across SW restarts. Pause / resume / cancel per-row + bulk; speed + ETA + per-job segment count.",
   },
 ];
 
@@ -812,14 +866,20 @@ const messageRoles = {
 };
 
 const designDecisions = [
-  ["Service worker, not background page", "MV3 requires an event-driven SW. State lives in chrome.storage.session (MRU) and chrome.storage.local (scenes, userscripts, GM bags) — never in module-level globals."],
+  ["Service worker, not background page", "MV3 requires an event-driven SW. State lives in chrome.storage.session (MRU) and chrome.storage.local (scenes, userscripts, GM bags, dl.snapshot mirror) — never in module-level globals."],
   ["No build step", "Zero npm dependencies at runtime. No bundler, no transpiler. Pure ES modules in the SW; popup ships as a regular extension page; modal pre-builds via scripts/build-modal.sh inlining fonts + lib/fzf.js + lib/util.js into a single content-script file."],
+  ["Native messaging host in Rust, not JS", "<code>pass</code> + <code>gpg</code> can't run inside the SW (MV3 has no shell). One long-lived Rust process per Chrome session multiplexes pass + dl channels over the same length-prefixed JSON port (4-byte LE len, ≤1 MiB/msg per spec). Single install.sh writes the NM manifest for Chrome/Chromium/Brave/Edge on macOS+Linux.",],
+  ["Vendored Rust HTTP client, not aria2", "ureq + rustls compiled into the host gives portable HTTP/HTTPS with Range support — no <code>aria2</code> or curl binary on PATH. Pure-Rust TLS works on macOS aarch64 + Linux x86_64/aarch64 with no system OpenSSL dependency. Future-proof against OS TLS API churn.",],
+  ["Segmented download via Range, file pre-allocated", "HEAD probe + 4-way parallel <code>Range</code> GETs. Destination file pre-allocated to total size via <code>set_len</code> so segment threads never collide on disk writes. <code>downloaded_in_seg</code> counter tracks per-segment progress so a mid-stream connection drop resumes via Range from the correct offset rather than restarting the segment.",],
+  ["Cookie + UA forwarded for logged-in URLs", "chrome.cookies.getAll(url) → Cookie header on every HEAD + GET. Without this, downloads behind a login (paywalls, GitHub private releases, session-piggybacked S3 URLs) silently 401 / 403. UA forwarded too so servers that key on UA (GitHub release filtering, browser-detection paywalls) behave identically to a regular browser download.",],
+  ["Clipboard auto-clear matches <code>pass -c</code>", "45 s setTimeout on copy. Fail-open: if the SW dies before the timer fires the clipboard stays, which is the conservative direction (worst case the user sees their password longer; never accidentally clobbers a later copy they made).",],
   ["fzf scorer ported from audio-haxor", "Same constants — boundary=9, camel=7, gap-start=-3, match=16. Visual parity (<mark class=\"fzf-hl\">) across MenkeTechnologies' tools."],
   ["Closed shadow DOM for the modal", "Host-page CSS can never leak in. Fonts inlined as base64 data: URIs so strict host-page font-src CSP can't block them."],
   ["Window-capture keydown for the modal", "window.addEventListener(\"keydown\", h, true) + stopImmediatePropagation beats Vimium / cVim / any other extension that listens on document."],
   ["Frecency for History", "visitCount + 2*typedCount over hoursAgo+2. Typed visits weigh 2x (deliberate). Linear decay: ~57x weight to 1h-ago vs 1w-ago."],
   ["Default-key ceiling = 4", "Chrome MV3 hard cap. Currently 3 used (Alt+T popup, Cmd+E switch-previous-tab, Cmd+Y history). Everything else binds at chrome://extensions/shortcuts."],
   ["Pure helpers in lib/util.js", "Zero chrome.* refs so they unit-test in plain Node and so they can also be inlined into the content-script modal via UTIL_INLINE_START/END markers + scripts/build-modal.mjs."],
+  ["Pure helpers in host/src/{pass,dl}.rs", "PSL eTLD+1 match, entry parser, filename sanitization, unique_dest_path collision handling — all <code>fn</code>s with no I/O. cargo test exercises them directly. Integration tests stand up a std::net HTTP/1.1 fixture to drive the actual worker threads end-to-end, including cookie-gate + retry-recovery + cancel paths.",],
 ];
 
 const report = `<!DOCTYPE html>

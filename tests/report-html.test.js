@@ -104,15 +104,18 @@ test("report.html source distribution bar includes test line count", () => {
 });
 
 test("report.html subsystem breakdown lists background.js line count", () => {
-  assert.match(report, new RegExp(`background\\.js</code> &mdash; ${sourceLines["background.js"]} lines`));
+  // gen.mjs renders counts via Number.toLocaleString("en-US") which inserts
+  // thousands separators (1,121); the raw assertion form silently worked
+  // only while every tracked file was under 1,000 lines.
+  assert.match(report, new RegExp(`background\\.js</code> &mdash; ${sourceLines["background.js"].toLocaleString("en-US")} lines`));
 });
 
 test("report.html subsystem breakdown lists popup.js line count", () => {
-  assert.match(report, new RegExp(`popup\\.js</code> &mdash; ${sourceLines["popup.js"]} lines`));
+  assert.match(report, new RegExp(`popup\\.js</code> &mdash; ${sourceLines["popup.js"].toLocaleString("en-US")} lines`));
 });
 
 test("report.html subsystem breakdown lists modal template line count", () => {
-  assert.match(report, new RegExp(`modal/content\\.template\\.js</code> &mdash; ${sourceLines["modal/content.template.js"]} lines`));
+  assert.match(report, new RegExp(`modal/content\\.template\\.js</code> &mdash; ${sourceLines["modal/content.template.js"].toLocaleString("en-US")} lines`));
 });
 
 test("report.html lists every popup category label from popup.js", () => {
