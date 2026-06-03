@@ -158,6 +158,25 @@ test("report.html HTML line stat matches popup.html + manager.html", () => {
   assert.match(report, new RegExp(`HTML &middot; ${totalHtmlLines.toLocaleString("en-US")} lines`));
 });
 
+test("report.html includes an SVG architecture diagram with the three process groups", () => {
+  // Pinned so a gen.mjs regression can't silently delete the section.
+  assert.match(report, /<h2 class="section">[\s\S]*?ARCHITECTURE<\/h2>/);
+  assert.match(report, /<svg class="arch"/);
+  // Three labeled groups: browser, native host, filesystem.
+  assert.match(report, />CHROME \(host browser\)</);
+  assert.match(report, />NATIVE HOST \(Rust\)</);
+  assert.match(report, />FILESYSTEM/);
+  // Key components must be labeled (catches accidental relabel drift).
+  for (const label of [
+    "Service Worker", "Popup", "Extension pages", "Content scripts",
+    "chrome.* APIs", "chrome.storage", "browserpass-host-rs",
+    "Extension actions", "Detached workers",
+    "~/.cache/zpwrchrome/dl/", "~/Downloads/", "~/.password-store/",
+  ]) {
+    assert.ok(report.includes(label), `architecture diagram missing label "${label}"`);
+  }
+});
+
 test("report.html repo file count is derived not hardcoded stale", () => {
   // Mirror scripts/gen.mjs — count git-tracked files so local dev trees
   // (with target/, lockfiles, etc.) and fresh CI checkouts agree.

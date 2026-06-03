@@ -1035,6 +1035,9 @@ const report = `<!DOCTYPE html>
     pre.code .k { color: var(--cyan); }
     pre.code .a { color: var(--accent-light); }
 
+    .arch-wrap { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--magenta); padding: 12px; border-radius: 2px; margin: 8px 0; overflow-x: auto; }
+    .arch-wrap svg.arch { display: block; max-width: 100%; height: auto; }
+
     .perm-pill { display: inline-block; margin: 2px 4px 2px 0; padding: 3px 8px; font-size: 11px; border: 1px solid var(--cyan); color: var(--cyan); border-radius: 2px; background: rgba(5,217,232,0.06); }
     .perm-pill.opt { border-color: var(--text-muted); color: var(--text-muted); background: transparent; }
 
@@ -1121,6 +1124,194 @@ const report = `<!DOCTYPE html>
 ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
       </tbody>
     </table>
+
+    <h2 class="section"><span class="hash">%</span>ARCHITECTURE</h2>
+    <p class="subtitle">Three processes, six storage planes. Chrome hosts the extension; the extension's SW (one process) talks to a Rust native messaging host (one process per request, plus detached download worker processes that outlive their parent). All persistent state lives in <code>chrome.storage</code> or on the filesystem under <code>~/.cache/zpwrchrome/</code> — nothing relies on the SW staying alive.</p>
+    <div class="arch-wrap">
+      <svg class="arch" viewBox="0 0 1080 660" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="zpwrchrome process and data flow architecture">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--cyan)" />
+          </marker>
+          <marker id="arrow-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--magenta)" />
+          </marker>
+          <marker id="arrow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+          </marker>
+        </defs>
+        <style>
+          .arch text { font-family: 'Share Tech Mono','SF Mono',monospace; fill: var(--text); font-size: 11px; }
+          .arch .title { font-family: 'Orbitron','Share Tech Mono',monospace; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+          .arch .group { fill: rgba(5,217,232,0.04); stroke: var(--border); stroke-width: 1; rx: 6; }
+          .arch .box   { fill: var(--bg-card); stroke: var(--cyan); stroke-width: 1.5; rx: 4; }
+          .arch .box.host    { stroke: var(--magenta); }
+          .arch .box.fs      { stroke: var(--accent); }
+          .arch .box.user    { stroke: var(--green); }
+          .arch .box.storage { stroke: var(--yellow); }
+          .arch .grpttl { fill: var(--cyan); font-size: 10px; letter-spacing: 2px; }
+          .arch .grpttl.host { fill: var(--magenta); }
+          .arch .grpttl.fs   { fill: var(--accent); }
+          .arch .grpttl.user { fill: var(--green); }
+          .arch .grpttl.storage { fill: var(--yellow); }
+          .arch .lbl  { fill: var(--text); font-weight: 700; font-size: 11px; }
+          .arch .sub  { fill: var(--text-dim); font-size: 9.5px; }
+          .arch .flow { stroke: var(--cyan); stroke-width: 1.5; fill: none; }
+          .arch .flow.m { stroke: var(--magenta); }
+          .arch .flow.a { stroke: var(--accent); }
+          .arch .flow.dashed { stroke-dasharray: 4 3; }
+          .arch .edge { fill: var(--text-dim); font-size: 9.5px; }
+        </style>
+
+        <!-- ─── Browser group ─────────────────────────────────── -->
+        <rect class="group" x="20" y="20" width="700" height="380" />
+        <text class="title grpttl" x="36" y="42">CHROME (host browser)</text>
+
+        <!-- Service worker -->
+        <rect class="box" x="56" y="64" width="220" height="64" />
+        <text class="lbl"  x="68" y="84">Service Worker (MV3)</text>
+        <text class="sub"  x="68" y="100">background.js · 1 process</text>
+        <text class="sub"  x="68" y="114">commands · NM bridge · context menus</text>
+
+        <!-- Popup -->
+        <rect class="box" x="56" y="148" width="220" height="56" />
+        <text class="lbl"  x="68" y="168">Popup (toolbar)</text>
+        <text class="sub"  x="68" y="184">popup.html · 11 categories</text>
+        <text class="sub"  x="68" y="198">downloads strip + clipboard banner</text>
+
+        <!-- Manager pages -->
+        <rect class="box" x="56" y="222" width="220" height="56" />
+        <text class="lbl"  x="68" y="242">Extension pages</text>
+        <text class="sub"  x="68" y="258">scripts-manager/* · settings × 5</text>
+        <text class="sub"  x="68" y="272">diagnostics · download manager UI</text>
+
+        <!-- Content scripts -->
+        <rect class="box" x="56" y="296" width="220" height="56" />
+        <text class="lbl"  x="68" y="316">Content scripts</text>
+        <text class="sub"  x="68" y="332">modal/content.js · userscripts</text>
+        <text class="sub"  x="68" y="346">pass-fill injector · screenshot probe</text>
+
+        <!-- chrome.* APIs -->
+        <rect class="box" x="320" y="64" width="200" height="288" />
+        <text class="lbl"  x="332" y="84">chrome.* APIs</text>
+        <text class="sub"  x="332" y="104">tabs / windows / scripting</text>
+        <text class="sub"  x="332" y="120">downloads / contextMenus</text>
+        <text class="sub"  x="332" y="136">notifications / sessions</text>
+        <text class="sub"  x="332" y="152">history / commands</text>
+        <text class="sub"  x="332" y="168">cookies / processes</text>
+        <text class="sub"  x="332" y="184">webRequest · userScripts</text>
+        <text class="sub"  x="332" y="200">action.setBadgeText</text>
+        <text class="sub"  x="332" y="216">runtime.sendNativeMessage</text>
+
+        <!-- chrome.storage box (inside browser group) -->
+        <rect class="box storage" x="320" y="244" width="200" height="108" />
+        <text class="lbl"  x="332" y="264">chrome.storage</text>
+        <text class="sub"  x="332" y="282">.session  → MRU stack</text>
+        <text class="sub"  x="332" y="298">.local    → dl.settings,</text>
+        <text class="sub"  x="332" y="312">             dl.rules, dl.snapshot,</text>
+        <text class="sub"  x="332" y="326">             scenes, scripts, zpc.diag</text>
+        <text class="sub"  x="332" y="342">.local    → pass.settings</text>
+
+        <!-- User tabs / pages -->
+        <rect class="box user" x="556" y="64" width="146" height="288" />
+        <text class="lbl"  x="568" y="84">Web pages</text>
+        <text class="sub"  x="568" y="104">N user tabs</text>
+        <text class="sub"  x="568" y="120">login forms (pass)</text>
+        <text class="sub"  x="568" y="136">link/media targets</text>
+        <text class="sub"  x="568" y="152">scrollable bodies</text>
+        <text class="sub"  x="568" y="168">(screenshot src)</text>
+
+        <!-- ─── NM host process ────────────────────────────── -->
+        <rect class="group" x="760" y="20" width="300" height="380" />
+        <text class="title grpttl host" x="776" y="42">NATIVE HOST (Rust)</text>
+
+        <rect class="box host" x="780" y="64" width="262" height="80" />
+        <text class="lbl"  x="792" y="84">browserpass-host-rs</text>
+        <text class="sub"  x="792" y="100">crates.io · v${process.env.npm_package_version || ""}</text>
+        <text class="sub"  x="792" y="114">one process per NM message</text>
+        <text class="sub"  x="792" y="128">stdio: length-prefixed JSON</text>
+
+        <rect class="box host" x="780" y="164" width="262" height="76" />
+        <text class="lbl"  x="792" y="184">Extension actions</text>
+        <text class="sub"  x="792" y="200">dl.{add,list,pause,resume,cancel}</text>
+        <text class="sub"  x="792" y="214">dl.{clear,openDir,openFile,writeFile}</text>
+        <text class="sub"  x="792" y="228">otp · search · echo</text>
+
+        <rect class="box host" x="780" y="260" width="262" height="76" />
+        <text class="lbl"  x="792" y="280">Detached workers</text>
+        <text class="sub"  x="792" y="296">--dl-worker  (one per gid)</text>
+        <text class="sub"  x="792" y="310">setsid + close FD ≥ 3</text>
+        <text class="sub"  x="792" y="324">ureq+rustls · Range requests</text>
+
+        <!-- ─── FS group (bottom) ─────────────────────────── -->
+        <rect class="group" x="20" y="430" width="1040" height="200" />
+        <text class="title grpttl fs" x="36" y="452">FILESYSTEM (~)</text>
+
+        <rect class="box fs" x="56" y="468" width="280" height="140" />
+        <text class="lbl"  x="68" y="488">~/.cache/zpwrchrome/dl/</text>
+        <text class="sub"  x="68" y="506">gid_NNNNNN.json   (one per download)</text>
+        <text class="sub"  x="68" y="522">next_gid          (monotonic counter)</text>
+        <text class="sub"  x="68" y="538">worker.log        (detached worker out)</text>
+        <text class="sub"  x="68" y="556">host.log          (every NM invocation)</text>
+        <text class="sub"  x="68" y="572">Authoritative download state</text>
+        <text class="sub"  x="68" y="588">— survives SW restart, browser restart</text>
+
+        <rect class="box fs" x="372" y="468" width="280" height="140" />
+        <text class="lbl"  x="384" y="488">~/Downloads/</text>
+        <text class="sub"  x="384" y="506">User-configured (settings.downloadDir)</text>
+        <text class="sub"  x="384" y="522">Falls through: downloadDir → lastDir</text>
+        <text class="sub"  x="384" y="538">→ default_download_dir()  (host)</text>
+        <text class="sub"  x="384" y="558">Per-download bytes (segmented HTTP)</text>
+        <text class="sub"  x="384" y="574">+ screenshots (dl.writeFile)</text>
+
+        <rect class="box fs" x="688" y="468" width="320" height="140" />
+        <text class="lbl"  x="700" y="488">~/.password-store/</text>
+        <text class="sub"  x="700" y="506">browserpass-compatible</text>
+        <text class="sub"  x="700" y="522">GPG-encrypted *.gpg entries</text>
+        <text class="sub"  x="700" y="542">Read by host actions:</text>
+        <text class="sub"  x="700" y="558">  list / fetch / tree / search / otp</text>
+        <text class="sub"  x="700" y="576">Powers pass-fill keystroke + autofill badge</text>
+
+        <!-- Edges (annotated) -->
+        <!-- SW ↔ chrome APIs -->
+        <line class="flow" x1="276" y1="96"  x2="320" y2="96"  marker-end="url(#arrow)" />
+        <line class="flow" x1="276" y1="180" x2="320" y2="180" marker-end="url(#arrow)" />
+        <line class="flow" x1="276" y1="250" x2="320" y2="250" marker-end="url(#arrow)" />
+        <line class="flow" x1="276" y1="324" x2="320" y2="324" marker-end="url(#arrow)" />
+
+        <!-- chrome APIs ↔ user tabs -->
+        <line class="flow" x1="520" y1="200" x2="556" y2="200" marker-end="url(#arrow)" />
+
+        <!-- SW → NM host -->
+        <path class="flow m" d="M 276 110 C 410 24 600 24 780 88" marker-end="url(#arrow-m)" />
+        <text class="edge" x="430" y="56">sendNativeMessage  (stdio framed JSON)</text>
+
+        <!-- NM host → workers -->
+        <line class="flow m dashed" x1="910" y1="240" x2="910" y2="260" marker-end="url(#arrow-m)" />
+
+        <!-- workers → ~/Downloads -->
+        <path class="flow a" d="M 780 320 C 660 380 530 420 512 466" marker-end="url(#arrow-a)" />
+        <text class="edge" x="540" y="416">HTTP segments → file</text>
+
+        <!-- workers ↔ state files -->
+        <path class="flow a dashed" d="M 780 296 C 500 400 340 420 196 466" marker-end="url(#arrow-a)" />
+        <text class="edge" x="380" y="438">state files (read/write/atomic rename)</text>
+
+        <!-- host → pass-store -->
+        <path class="flow m" d="M 910 240 C 940 360 920 420 848 466" marker-end="url(#arrow-m)" />
+        <text class="edge" x="930" y="420">gpg decrypt</text>
+
+        <!-- SW ↔ storage (bottom-left edge) -->
+        <line class="flow" x1="420" y1="352" x2="420" y2="430" marker-end="url(#arrow)" />
+
+      </svg>
+      <p class="subtitle" style="margin-top:6px;">
+        <strong>Cyan</strong> edges = in-process chrome.* calls.
+        <strong>Magenta</strong> edges = native messaging RPC (stdio, length-prefixed JSON, one round-trip per process).
+        <strong>Pink</strong> edges = filesystem I/O performed by the detached worker process.
+        Dashed = process-spawn or asynchronous (worker doesn't await parent; SW doesn't await worker).
+      </p>
+    </div>
 
     <h2 class="section"><span class="hash">@</span>EXECUTION PIPELINE</h2>
     <p class="subtitle">Three persistence stores: <code>chrome.storage.session</code> for MRU (survives SW restart, not browser restart), <code>chrome.storage.local</code> for scenes / userscripts / GM bags / fire log, and the Chrome-managed <code>chrome.history</code> + <code>chrome.sessions</code> APIs for browsing history and recently-closed tabs.</p>
