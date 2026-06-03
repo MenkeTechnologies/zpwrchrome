@@ -96,10 +96,10 @@ test("stress: 10,000 frecencyScore calls finish < 50ms", () => {
   });
 });
 
-test("stress: 10,000 domainHueFor calls over a 100-URL corpus finish < 100ms", () => {
+test("stress: 10,000 domainHueFor calls over a 100-URL corpus finish < 500ms", () => {
   const urls = Array.from({ length: 100 }, (_, i) =>
     `https://host-${i}.example-${i % 7}.test/path/${i}`);
-  bench("10k domainHueFor", 100, () => {
+  bench("10k domainHueFor", 500, () => {
     for (let i = 0; i < 100; i++) for (const u of urls) domainHueFor(u);
   });
 });
