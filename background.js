@@ -1857,19 +1857,79 @@ function cancelBgPoll() {
   if (_bgPollTimer) { clearTimeout(_bgPollTimer); _bgPollTimer = null; }
 }
 
-// Toolbar badge — "Show number of downloading tasks over toolbar icon"
-async function applyToolbarBadge(jobs) {
+// Toolbar badge. Two independent counters share the single Chrome badge:
+//   1. Active downloads (cyan #05d9e8) — wins when ≥ 1 in flight.
+//   2. Matching pass entries for the active tab (magenta #d300c5).
+// If neither has anything to show, the badge is cleared. Both can be
+// toggled independently via dl.interface.badgeShowCount and
+// dl.settings.passShowMatchBadge.
+let _dlActiveCount  = 0;
+let _passMatchCount = 0;
+async function applyMultiplexedBadge() {
   try {
     const ifc = await loadDlInterface();
-    if (!ifc.badgeShowCount) {
-      await chrome.action?.setBadgeText?.({ text: "" });
+    const dls = await loadDlSettings();
+    const showDl   = !!ifc.badgeShowCount;
+    const showPass = dls.passShowMatchBadge !== false;   // default ON
+    if (showDl && _dlActiveCount > 0) {
+      await chrome.action?.setBadgeBackgroundColor?.({ color: "#05d9e8" });
+      await chrome.action?.setBadgeText?.({ text: String(_dlActiveCount) });
       return;
     }
-    const active = jobs.filter((j) => j.status === "active" || j.status === "pending").length;
-    await chrome.action?.setBadgeBackgroundColor?.({ color: "#05d9e8" });
-    await chrome.action?.setBadgeText?.({ text: active > 0 ? String(active) : "" });
+    if (showPass && _passMatchCount > 0) {
+      await chrome.action?.setBadgeBackgroundColor?.({ color: "#d300c5" });
+      await chrome.action?.setBadgeText?.({ text: String(_passMatchCount) });
+      return;
+    }
+    await chrome.action?.setBadgeText?.({ text: "" });
   } catch {}
 }
+
+async function applyToolbarBadge(jobs) {
+  _dlActiveCount = (jobs || []).filter((j) => j.status === "active" || j.status === "pending").length;
+  await applyMultiplexedBadge();
+}
+
+// Recompute the pass-match count for whatever tab is currently active and
+// repaint the badge. Called on tab switch + URL change + once on startup.
+async function refreshPassMatchBadge() {
+  try {
+    const dls = await loadDlSettings();
+    if (dls.passShowMatchBadge === false) {
+      _passMatchCount = 0;
+      await applyMultiplexedBadge();
+      return;
+    }
+    const t = await getActive();
+    const h = hostnameOf(t?.url || "");
+    if (!h) { _passMatchCount = 0; await applyMultiplexedBadge(); return; }
+    try {
+      const matches = await bpMatchByHost(h);
+      _passMatchCount = Array.isArray(matches) ? matches.length : 0;
+      diagPush("pass.badge", { host: h, count: _passMatchCount });
+    } catch (e) {
+      _passMatchCount = 0;
+      diagPush("pass.badge.err", { host: h, err: String(e?.message || e), code: e?.code });
+    }
+    await applyMultiplexedBadge();
+  } catch {}
+}
+
+chrome.tabs?.onActivated?.addListener?.(() => { refreshPassMatchBadge(); });
+chrome.tabs?.onUpdated?.addListener?.((tabId, change) => {
+  if (change?.url || change?.status === "complete") refreshPassMatchBadge();
+});
+chrome.runtime.onInstalled.addListener(() => { refreshPassMatchBadge(); });
+chrome.runtime.onStartup.addListener(()   => { refreshPassMatchBadge(); });
+// Also recompute when settings change so flipping passShowMatchBadge
+// or hideBuiltInUI takes effect without a tab switch.
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.kind === "dl.settings.changed" || msg?.kind === "dl.interface.changed") {
+    refreshPassMatchBadge();
+    // Do NOT sendResponse here — the existing handlers below already do.
+  }
+  return false;
+});
 
 // Last-seen-status cache for completion / error notifications.
 let _dlLastStatus = new Map();

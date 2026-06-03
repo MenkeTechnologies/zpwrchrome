@@ -348,6 +348,30 @@ test("Interface page exposes every Chrono General/Interface section we adopted",
   }
 });
 
+test("toolbar badge multiplexes downloads (cyan) and pass match count (magenta) on a single counter", () => {
+  // Pin the two-channel design — downloads dominate, pass fills in when idle.
+  assert.match(bg, /async function applyMultiplexedBadge/);
+  assert.match(bg, /_dlActiveCount/);
+  assert.match(bg, /_passMatchCount/);
+  // Cyan = downloads, magenta = pass.
+  assert.match(bg, /color: "#05d9e8"/);
+  assert.match(bg, /color: "#d300c5"/);
+  // Pass channel respects dl.settings.passShowMatchBadge (default ON).
+  assert.match(bg, /passShowMatchBadge !== false/);
+  // Recomputed on tab switch + URL change so the badge tracks the user.
+  assert.match(bg, /chrome\.tabs\?\.onActivated/);
+  assert.match(bg, /chrome\.tabs\?\.onUpdated/);
+  assert.match(bg, /async function refreshPassMatchBadge/);
+  assert.match(bg, /diagPush\("pass\.badge"/);
+});
+
+test("DL_DEFAULTS exposes passShowMatchBadge:true and dl-settings.html surfaces the toggle", () => {
+  const setJs   = read("scripts-manager/dl-settings.js");
+  const setHtml = read("scripts-manager/dl-settings.html");
+  assert.match(setJs,   /passShowMatchBadge: true/);
+  assert.match(setHtml, /data-key="passShowMatchBadge"/);
+});
+
 test("background.js wires badge text + completion/error notifications off dl.interface flags", () => {
   assert.match(bg, /async function applyToolbarBadge/);
   assert.match(bg, /chrome\.action\?\.setBadgeText/);

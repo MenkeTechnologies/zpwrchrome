@@ -38,6 +38,11 @@ export const DL_DEFAULTS = Object.freeze({
 
   // Pass autofill
   passAutoSubmit: false,
+  // When ON, the toolbar badge shows the number of `pass` entries matching
+  // the active tab's host (in magenta) — gives a glance whether to even
+  // bother pressing the autofill shortcut. Downloads counter still wins
+  // when there are any in flight.
+  passShowMatchBadge: true,
 
   // Internal (not user-editable in UI): last directory used by dl.add.
   lastDir: "",
