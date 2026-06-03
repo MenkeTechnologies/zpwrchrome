@@ -470,6 +470,7 @@ fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {
 // replies). The child becomes a child of init when parent exits.
 fn spawn_worker(gid: u64) -> std::io::Result<()> {
     let exe = std::env::current_exe()?;
+    crate::diag::log(&format!("SPAWN_WORKER gid={gid} exe={}", exe.display()));
     let log_path = cache_dir()?.join("worker.log");
     let log = fs::OpenOptions::new()
         .append(true)
@@ -508,13 +509,15 @@ fn spawn_worker(gid: u64) -> std::io::Result<()> {
             Ok(())
         });
     }
-    cmd.spawn()?;
+    let child = cmd.spawn()?;
+    crate::diag::log(&format!("SPAWN_WORKER_OK gid={gid} child_pid={}", child.id()));
     Ok(())
 }
 
 // ─── Worker process ─────────────────────────────────────────────────────────
 
 pub fn run_worker(gid: u64) -> std::io::Result<()> {
+    crate::diag::log(&format!("WORKER_START gid={gid}"));
     let mut state = read_state(gid)?;
     state.status = "active".into();
     let start_instant = Instant::now();

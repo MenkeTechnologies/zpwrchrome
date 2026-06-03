@@ -13,3 +13,4 @@
 pub mod frame;
 pub mod ported;
 pub mod extensions;
+pub mod diag;

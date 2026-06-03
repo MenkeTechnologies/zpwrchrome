@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // diagnostics</title>
+  <link rel="stylesheet" href="dl-settings.css">
+  <style>
+    .diag-grid { display: grid; grid-template-rows: auto auto 1fr; gap: 12px; height: 100%; padding: 16px 20px; overflow: hidden; }
+    .diag-bar  { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .diag-bar input[type="search"] { flex: 1; min-width: 240px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; font-family: inherit; border-radius: 3px; }
+    .diag-bar .pill { font-size: 11px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px; color: var(--text-dim); }
+    .diag-bar .pill.ok   { color: var(--green);  border-color: var(--green); }
+    .diag-bar .pill.warn { color: var(--yellow); border-color: var(--yellow); }
+    .diag-bar .pill.bad  { color: var(--accent); border-color: var(--accent); }
+    .diag-bar select { background: var(--bg-primary); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; font-family: inherit; }
+    .diag-list { overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 3px; padding: 6px; font-size: 11px; }
+    .diag-row  { display: grid; grid-template-columns: 130px 200px 1fr; gap: 12px; padding: 4px 8px; border-bottom: 1px dashed var(--border); }
+    .diag-row:last-child { border-bottom: none; }
+    .diag-row.lvl-ok   { color: var(--text); }
+    .diag-row.lvl-warn { color: var(--yellow); }
+    .diag-row.lvl-bad  { color: var(--accent); }
+    .diag-row .ts    { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .diag-row .label { color: var(--cyan); }
+    .diag-row .body  { white-space: pre-wrap; word-break: break-all; color: var(--text-dim); }
+    .host-log { background: var(--bg-card); border: 1px solid var(--border); padding: 8px 10px; font-size: 11px; color: var(--text); white-space: pre-wrap; max-height: 200px; overflow-y: auto; font-family: inherit; }
+  </style>
+</head>
+<body style="display: grid; grid-template-rows: 56px 1fr;">
+
+<header class="topbar">
+  <a class="back" href="downloads.html">‹ Back</a>
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <h1>zpwrchrome <span class="dim">diagnostics</span></h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<section class="diag-grid">
+  <div class="diag-bar">
+    <input type="search" id="filter" placeholder="filter // label or any field…" autocomplete="off">
+    <button id="ping" class="btn-ghost">Ping host</button>
+    <button id="refresh" class="btn-ghost">Refresh</button>
+    <button id="clear" class="btn-ghost">Clear log</button>
+    <span id="alive" class="pill warn">probing…</span>
+    <span id="count" class="pill">0 lines</span>
+  </div>
+
+  <details>
+    <summary style="cursor: pointer; color: var(--cyan); font-size: 12px;">Host-side log (~/.cache/zpwrchrome/host.log) — copy/paste output from a terminal</summary>
+    <pre class="host-log">tail -100 ~/.cache/zpwrchrome/host.log</pre>
+  </details>
+
+  <div class="diag-list" id="list"></div>
+</section>
+
+<script src="dl-diag.js" type="module"></script>
+</body>
+</html>

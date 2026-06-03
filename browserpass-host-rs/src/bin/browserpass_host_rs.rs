@@ -12,6 +12,7 @@
 //! exit code = error code on failure, 0 on success.
 #![allow(non_snake_case)]
 
+use browserpass_host_rs::diag;
 use browserpass_host_rs::extensions::{dl, otp, search};
 use browserpass_host_rs::frame;
 use browserpass_host_rs::ported::errors::{self, field};
@@ -22,10 +23,13 @@ use serde_json::Value;
 use std::io;
 
 fn main() {
+    diag::install_panic_hook();
+
     let mut isVerbose: bool = false;
     let mut isVersion: bool = false;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
+    diag::log_start(&args);
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -98,6 +102,7 @@ fn main() {
     let raw = match frame::read_msg(&mut sin) {
         Ok(b) => b,
         Err(e) => {
+            diag::log(&format!("RECV_ERR kind=length error={e}"));
             response::SendErrorAndExit(
                 errors::Code::ParseRequestLength,
                 Some(response::params_of(&[
@@ -107,10 +112,12 @@ fn main() {
             );
         }
     };
+    diag::log(&format!("RECV bytes={}", raw.len()));
 
     let value: Value = match serde_json::from_slice(&raw) {
         Ok(v) => v,
         Err(e) => {
+            diag::log(&format!("RECV_ERR kind=json error={e}"));
             response::SendErrorAndExit(
                 errors::Code::ParseRequest,
                 Some(response::params_of(&[
@@ -122,15 +129,19 @@ fn main() {
     };
     let action_str: String = value.get("action")
         .and_then(|v| v.as_str()).unwrap_or("").to_string();
+    diag::log(&format!("ACTION action={action_str}"));
 
     // 1. Extension actions — zpwrchrome additions that browserpass-extension
     //    never sends. Each handler SendOk/SendErrorAndExits on its own.
     if let Some(stripped) = action_str.strip_prefix("dl.") {
         let _ = stripped;
+        diag::log(&format!("DISPATCH category=extension target=dl action={action_str}"));
         dl::dispatch_dl(&action_str, &value);
+        diag::log("EXIT code=0 reason=dl_returned");
         return;
     }
     if action_str == "otp" || action_str == "search" {
+        diag::log(&format!("DISPATCH category=extension target={action_str}"));
         // These reuse the BP request shape; safe to deserialize through it.
         let req: request = serde_json::from_value(value.clone()).unwrap_or_default();
         match action_str.as_str() {
@@ -138,6 +149,7 @@ fn main() {
             "search" => search::search(&req),
             _ => unreachable!(),
         }
+        diag::log("EXIT code=0 reason=ext_returned");
         return;
     }
 
@@ -145,6 +157,7 @@ fn main() {
     let req: request = match serde_json::from_value(value) {
         Ok(r) => r,
         Err(e) => {
+            diag::log(&format!("RECV_ERR kind=request_deserialize error={e}"));
             response::SendErrorAndExit(
                 errors::Code::ParseRequest,
                 Some(response::params_of(&[
@@ -154,7 +167,9 @@ fn main() {
             );
         }
     };
+    diag::log(&format!("DISPATCH category=ported action={}", req.Action));
     process_dispatch(&req);
+    diag::log("EXIT code=0 reason=ported_returned");
 }
 
 // Mirrors the switch block from request/process.go:65. Kept here in `bin/`

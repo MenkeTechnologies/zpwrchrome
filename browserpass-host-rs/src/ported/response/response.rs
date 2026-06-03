@@ -140,11 +140,14 @@ pub fn MakeDeleteResponse() -> DeleteResponse {
 // json format                                                                // (cont)
 pub fn SendOk<T: Serialize>(data: T) {
     let data_value = serde_json::to_value(&data).unwrap_or(Value::Null);
-    SendRaw_value(&serde_json::to_value(&okResponse {                         // go:102
+    let envelope = serde_json::to_value(&okResponse {                         // go:102
         Status:  "ok",                                                        // go:103
         Version: version::CODE,                                               // go:104
         Data:    data_value,                                                  // go:105
-    }).unwrap());
+    }).unwrap();
+    let est = serde_json::to_vec(&envelope).map(|v| v.len()).unwrap_or(0);
+    crate::diag::log(&format!("SEND status=ok bytes={est}"));
+    SendRaw_value(&envelope);
 }
 
 /// Port of `SendErrorAndExit()` from `response/response.go:110`.
@@ -152,13 +155,18 @@ pub fn SendOk<T: Serialize>(data: T) {
 // SendErrorAndExit sends an error response to the browser extension in the   // go:109
 // predefined json format and exits with the specified exit code              // (cont)
 pub fn SendErrorAndExit(error_code: errors::Code, params: Option<Params>) -> ! {
-    SendRaw_value(&serde_json::to_value(&errorResponse {                      // go:111
+    let envelope = serde_json::to_value(&errorResponse {                      // go:111
         Status:  "error",                                                     // go:112
         Code:    error_code.as_i32(),                                         // go:113
         Version: version::CODE,                                               // go:114
         Params:  params,                                                      // go:115
-    }).unwrap());
+    }).unwrap();
+    let summary = serde_json::to_string(&envelope).unwrap_or_default();
+    let summary = if summary.len() > 300 { format!("{}…", &summary[..300]) } else { summary };
+    crate::diag::log(&format!("SEND status=error code={} envelope={}", error_code.as_i32(), summary));
+    SendRaw_value(&envelope);
 
+    crate::diag::log(&format!("EXIT code={} reason=send_error", error_code.as_i32()));
     errors::exit_with_code(error_code);                                       // go:118
     unreachable!()
 }

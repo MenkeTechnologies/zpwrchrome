@@ -27,6 +27,7 @@ import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath } from "./lib/bp-pass.js";
 import { loadSettings as loadDlSettings, DL_DEFAULTS as DL_SETTINGS_DEFAULTS, saveSettings as saveDlSettings } from "./scripts-manager/dl-settings.js";
 import { loadInterface as loadDlInterface, DL_INTERFACE_DEFAULTS } from "./scripts-manager/dl-interface.js";
+import { diagPush, diagRead, diagClear } from "./lib/diag.js";
 
 const MRU_KEY = "mru";
 const DL_SETTINGS_KEY = "dl.settings";
@@ -489,8 +490,9 @@ function shouldInterceptDownload(item) {
 
 if (chrome.downloads && chrome.downloads.onCreated) {
   chrome.downloads.onCreated.addListener(async (item) => {
-    if (!shouldInterceptDownload(item))   return;
-    if (!(await isTakeOverEnabled()))     return;
+    diagPush("dl.takeover.onCreated", { id: item?.id, url: item?.url, filename: item?.filename });
+    if (!shouldInterceptDownload(item))   { diagPush("dl.takeover.skip", { reason: "not_intercepted", url: item?.url }); return; }
+    if (!(await isTakeOverEnabled()))     { diagPush("dl.takeover.skip", { reason: "disabled" }); return; }
 
     // Cancel Chrome's download immediately. Erase from history so the
     // download shelf clears (the shelf may still flash briefly — there's
@@ -538,6 +540,7 @@ if (chrome.downloads && chrome.downloads.onCreated) {
       }
       bpDlBroadcast();
     } catch (e) {
+      diagPush("dl.takeover.failed", { url: item?.url, err: String(e?.message || e), code: e?.code });
       console.warn("[zpwrchrome] download takeover failed:", e?.message || e);
     }
   });
@@ -1452,6 +1455,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ ok: true });
     return true;
   }
+  if (msg?.kind === "diag.read") {
+    diagRead().then((entries) => sendResponse({ ok: true, entries }));
+    return true;
+  }
+  if (msg?.kind === "diag.clear") {
+    diagClear().then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  if (msg?.kind === "diag.ping") {
+    // Liveness probe + round-trip diag pop. Useful from the diagnostics page.
+    diagPush("diag.ping", { from: msg.from || "(unknown)" });
+    bpSend({ action: "echo", echoResponse: { ping: "diag" } })
+      .then((resp) => sendResponse({ ok: true, alive: true, echo: resp }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e), code: e?.code }));
+    return true;
+  }
   if (msg?.kind === "host.meta") {
     // BP `echo` round-trip — confirms the host is reachable and returns the
     // sentinel verbatim. Used by the popup as a liveness probe.
@@ -1641,23 +1660,40 @@ function bpStores() { return { default: PASS_STORE }; }
 // object on `status:"ok"`, rejecting with an Error (carrying `code` +
 // `params` properties) on `status:"error"`. Transport failures throw.
 function bpSend(req) {
+  const t0 = performance.now();
+  const action = req?.action || "(no action)";
+  // Don't log password contents or huge payloads — just keys.
+  const reqSummary = { action, keys: Object.keys(req || {}) };
+  diagPush("bp.send", reqSummary);
   return new Promise((resolve, reject) => {
     try {
       chrome.runtime.sendNativeMessage(NATIVE_HOST, req, (resp) => {
+        const dt = Math.round(performance.now() - t0);
         const last = chrome.runtime.lastError;
-        if (last) { reject(new Error(last.message)); return; }
-        if (!resp || typeof resp !== "object") { reject(new Error("native host: empty response")); return; }
+        if (last) {
+          diagPush("bp.send.transport_err", { action, ms: dt, err: String(last.message || last) });
+          reject(new Error(last.message));
+          return;
+        }
+        if (!resp || typeof resp !== "object") {
+          diagPush("bp.send.empty", { action, ms: dt });
+          reject(new Error("native host: empty response"));
+          return;
+        }
         if (resp.status === "error") {
           const msg = resp.params?.message || `error code ${resp.code}`;
+          diagPush("bp.send.host_err", { action, ms: dt, code: resp.code, msg, params: resp.params });
           const e = new Error(msg);
           e.code = resp.code;
           e.params = resp.params;
           reject(e);
           return;
         }
+        diagPush("bp.send.ok", { action, ms: dt, dataKeys: resp.data ? Object.keys(resp.data) : [] });
         resolve(resp);
       });
     } catch (e) {
+      diagPush("bp.send.throw", { action, err: String(e?.message || e) });
       reject(e);
     }
   });
