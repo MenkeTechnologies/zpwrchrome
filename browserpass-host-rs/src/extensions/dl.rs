@@ -1271,8 +1271,8 @@ struct ProbeResult {
 /// objects.githubusercontent.com S3 URLs whose signature is bound to
 /// the GET method, so HEAD comes back 401), falls back to a
 /// `Range: bytes=0-0` GET. A 206 response gives us:
-///   - Content-Range: bytes 0-0/<total>   → real total via the suffix
-///   - Content-Length: 1                  → the one byte requested
+///   - `Content-Range: bytes 0-0/{total}` — real total via the suffix
+///   - `Content-Length: 1` — the one byte requested
 ///   - And confirms the server supports byte-Range, even if it omits
 ///     Accept-Ranges (some servers do).
 /// A 200 response from the Range GET means the server ignored the Range

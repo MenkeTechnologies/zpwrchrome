@@ -5,10 +5,12 @@
 //! path on each keystroke.
 //!
 //! Wire shape:
+//! ```text
 //!   request:  {"action":"search", "settings":{...}, "echoResponse":"<query>"}
 //!             (We piggyback on `echoResponse` to carry the query string so
 //!             the ported request struct stays unmodified.)
 //!   response: ok { "matches": [ {"store":"<id>","path":"<rel>"}, ... ] }
+//! ```
 //!
 //! Scoring: substring matches outrank subsequence matches. Pure function so
 //! tests can exercise it without spawning the binary.

@@ -3,10 +3,12 @@
 //! OTP); we add it because zpwrchrome's PASS popup needs it.
 //!
 //! Wire shape:
+//! ```text
 //!   request:  {"action":"otp", "storeId":"<id>", "file":"path/in/store"}
 //!   response: ok { "code": "123456" }    on success
 //!             error code 24 (UnableToDecryptPasswordFile) when `pass otp`
 //!             fails — matches the semantic of decryption failure.
+//! ```
 #![allow(non_snake_case)]
 
 use crate::ported::errors::{self, field};
