@@ -1871,17 +1871,32 @@ async function applyMultiplexedBadge() {
     const dls = await loadDlSettings();
     const showDl   = !!ifc.badgeShowCount;
     const showPass = dls.passShowMatchBadge !== false;   // default ON
-    if (showDl && _dlActiveCount > 0) {
-      await chrome.action?.setBadgeBackgroundColor?.({ color: "#05d9e8" });
-      await chrome.action?.setBadgeText?.({ text: String(_dlActiveCount) });
-      return;
+    const dl   = showDl   ? _dlActiveCount  : 0;
+    const pass = showPass ? _passMatchCount : 0;
+
+    let text  = "";
+    let color = "#05d9e8";   // cyan default
+    let title = "zpwrchrome";
+
+    if (dl > 0 && pass > 0) {
+      // Composite — downloads dominate visually, asterisk hints pass also
+      // has matches. Tooltip carries the actual breakdown so a hover
+      // reveals it.
+      text  = `${dl}*`;
+      color = "#05d9e8";
+      title = `zpwrchrome — ${dl} active download${dl === 1 ? "" : "s"} · ${pass} pass match${pass === 1 ? "" : "es"} (hit your fill shortcut)`;
+    } else if (dl > 0) {
+      text  = String(dl);
+      color = "#05d9e8";
+      title = `zpwrchrome — ${dl} active download${dl === 1 ? "" : "s"}`;
+    } else if (pass > 0) {
+      text  = String(pass);
+      color = "#d300c5";
+      title = `zpwrchrome — ${pass} pass match${pass === 1 ? "" : "es"} for this tab (hit your fill shortcut)`;
     }
-    if (showPass && _passMatchCount > 0) {
-      await chrome.action?.setBadgeBackgroundColor?.({ color: "#d300c5" });
-      await chrome.action?.setBadgeText?.({ text: String(_passMatchCount) });
-      return;
-    }
-    await chrome.action?.setBadgeText?.({ text: "" });
+    await chrome.action?.setBadgeBackgroundColor?.({ color });
+    await chrome.action?.setBadgeText?.({ text });
+    await chrome.action?.setTitle?.({ title });
   } catch {}
 }
 

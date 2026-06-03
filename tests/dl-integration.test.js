@@ -354,8 +354,8 @@ test("toolbar badge multiplexes downloads (cyan) and pass match count (magenta) 
   assert.match(bg, /_dlActiveCount/);
   assert.match(bg, /_passMatchCount/);
   // Cyan = downloads, magenta = pass.
-  assert.match(bg, /color: "#05d9e8"/);
-  assert.match(bg, /color: "#d300c5"/);
+  assert.match(bg, /color = "#05d9e8"/);
+  assert.match(bg, /color = "#d300c5"/);
   // Pass channel respects dl.settings.passShowMatchBadge (default ON).
   assert.match(bg, /passShowMatchBadge !== false/);
   // Recomputed on tab switch + URL change so the badge tracks the user.
@@ -363,6 +363,19 @@ test("toolbar badge multiplexes downloads (cyan) and pass match count (magenta) 
   assert.match(bg, /chrome\.tabs\?\.onUpdated/);
   assert.match(bg, /async function refreshPassMatchBadge/);
   assert.match(bg, /diagPush\("pass\.badge"/);
+});
+
+test("badge composite mode — when downloads AND pass match, text is `${dl}*` + tooltip carries the breakdown", () => {
+  const fn = bg.match(/async function applyMultiplexedBadge[\s\S]*?\n\}/);
+  assert.ok(fn, "applyMultiplexedBadge not found");
+  // Both > 0 branch is the composite — asterisk hint + structured tooltip.
+  assert.match(fn[0], /dl > 0 && pass > 0/);
+  assert.match(fn[0], /text\s*=\s*`\$\{dl\}\*`/);
+  // Tooltip is updated via chrome.action.setTitle on every paint so a hover
+  // surfaces what the badge text alone can't.
+  assert.match(fn[0], /chrome\.action\?\.setTitle/);
+  // The tooltip mentions both counts plus a hint to use the fill shortcut.
+  assert.match(fn[0], /pass match.+fill shortcut/);
 });
 
 test("DL_DEFAULTS exposes passShowMatchBadge:true and dl-settings.html surfaces the toggle", () => {
