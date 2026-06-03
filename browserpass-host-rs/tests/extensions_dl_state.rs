@@ -82,6 +82,7 @@ fn write_then_read_state_round_trips_all_fields() {
         cancelled:  false,
         cookies:    "session=abc".into(),
         user_agent: "test/0.1".into(),
+        worker_pid: 0,
     };
     write_state_atomic(&state).unwrap();
     let got = read_state(7).unwrap();
@@ -123,6 +124,7 @@ fn list_all_jobs_returns_every_state_file_sorted_by_gid() {
         total: 0, done: 0, status: status.into(), err: None,
         segments: 1, started_at: 0, elapsed_ms: 0, paused: false,
         cancelled: false, cookies: String::new(), user_agent: String::new(),
+        worker_pid: 0,
     };
     write_state_atomic(&make(3, "active")).unwrap();
     write_state_atomic(&make(1, "done")).unwrap();

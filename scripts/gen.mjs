@@ -217,25 +217,20 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 3. Click **Load unpacked**, pick the cloned directory
 4. Open \`chrome://extensions/shortcuts\` to bind any of the ${userBound} user-configurable commands
 
-#### Native messaging host (required for \`pass\` and downloads)
+#### Native messaging host (required for \`pass\`, downloads, screenshots)
 
-1. Install GPG + \`pass\` if not already (\`brew install pass\` on macOS, \`apt install pass\` on Debian/Ubuntu); make sure \`pass show\` decrypts an entry from your shell first
-2. Build + register the host (writes the NM manifest for Chrome / Chromium / Brave / Edge):
-
-\`\`\`sh
-cd browserpass-host-rs
-./install-browserpass.sh        # writes the NM manifest for every browser
-\`\`\`
-
-The installer writes \`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.github.browserpass.native.json\` (macOS) or \`~/.config/google-chrome/NativeMessagingHosts/…\` (Linux), pointing at the freshly-built \`browserpass-host-rs/target/debug/browserpass-host-rs\`. Reload the extension after running it.
-
-Alternatively, install via crates.io:
+1. Install GPG + \`pass\` if you want the password-store integration (\`brew install pass\` on macOS, \`apt install pass\` on Debian/Ubuntu); make sure \`pass show\` decrypts an entry from your shell first. (Skip if you only want downloads + screenshots.)
+2. Install the host binary from crates.io and register it for this extension's ID:
 
 \`\`\`sh
 cargo install browserpass-host-rs
-# then register the NM manifest from the repo:
-./browserpass-host-rs/install-browserpass.sh --binary $(which browserpass-host-rs)
+# find your extension ID at chrome://extensions (Developer mode), then:
+browserpass-host-rs --install <ext-id>
 \`\`\`
+
+The installer writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir (Chrome / Chromium / Brave / Edge / Arc / Vivaldi on macOS + Linux). \`allowed_origins\` is populated with \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension. Reload the extension at \`chrome://extensions\` after running it.
+
+To upgrade later: \`cargo install browserpass-host-rs --force\` — the NM manifest already points at \`$CARGO_HOME/bin/browserpass-host-rs\` so no re-install is needed.
 
 #### Theme
 
@@ -406,7 +401,7 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 | \`scripts-manager/manager.{html,css,js}\` | Userscript engine dashboard (Tampermonkey-equivalent) |
 | \`scripts-manager/downloads.{html,css,js}\` | Live download queue UI — push-event subscription + cached snapshot rehydration |
 | \`browserpass-host-rs/Cargo.toml\` / \`browserpass-host-rs/src/{lib,frame}.rs\` + \`src/ported/**\` + \`src/extensions/**\` + \`src/bin/browserpass_host_rs.rs\` | Rust port of \`browserpass-native\` v3.1.2 + extension actions (\`otp\`, \`search\`, \`dl.*\`) over length-prefixed JSON on stdio. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see \`browserpass-host-rs/docs/port_report.html\` |
-| \`browserpass-host-rs/install-browserpass.sh\` | Writes \`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.github.browserpass.native.json\` (Chrome / Chromium / Brave / Edge / Firefox on macOS + Linux) so a browser will spawn the binary |
+| \`browserpass-host-rs --install <ext-id>\` (CLI flag on the binary, not a separate script) | Writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir on macOS / Linux. \`allowed_origins\` is set to \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension |
 | \`browserpass-host-rs/tests/ported_*.rs\` + \`extensions_*.rs\` | \`cargo test\` suite — per-fn pins for the port + extensions, end-to-end binary spawn tests, segmented download against a local HTTP fixture |
 | \`docs/index.html\` | GitHub-Pages landing page (regenerated from manifest) |
 | \`docs/report.html\` | Strykelang-style engineering report (regenerated from repo stats) |
@@ -727,7 +722,7 @@ const html = `<!DOCTYPE html>
         <li><code>git clone https://github.com/MenkeTechnologies/zpwrchrome.git</code></li>
         <li>Open <code>chrome://extensions</code> and enable <strong>Developer mode</strong></li>
         <li>Click <strong>Load unpacked</strong>, pick the cloned directory</li>
-        <li>For UNIX <code>pass</code> + downloads support, build and register the native host: <code>cd browserpass-host-rs &amp;&amp; ./install-browserpass.sh</code> (or via crates.io: <code>cargo install browserpass-host-rs &amp;&amp; ./browserpass-host-rs/install-browserpass.sh --binary $(which browserpass-host-rs)</code>). Requires <code>pass</code> + GPG already configured locally.</li>
+        <li>For <code>pass</code>, downloads, and screenshots, install the native host from crates.io and register it for this extension: <code>cargo install browserpass-host-rs &amp;&amp; browserpass-host-rs --install &lt;ext-id&gt;</code>. Get the ext-id at <code>chrome://extensions</code> (Developer mode). <code>pass</code> support also requires GPG configured locally.</li>
         <li>Open <code>chrome://extensions/shortcuts</code> to bind any of the ${userBound} user-configurable commands (incl. <code>pass-fill</code>, <code>pass-copy-pw</code>, <code>pass-copy-otp</code>, <code>dl-paste-url</code>, <code>dl-show-queue</code>)</li>
         <li>Optional: <strong>Load unpacked</strong> the <code>theme/</code> subdirectory for the matching browser theme</li>
       </ol>

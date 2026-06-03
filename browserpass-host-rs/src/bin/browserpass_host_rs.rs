@@ -228,7 +228,10 @@ fn print_help() {
          browserpass-host-rs -version              print version and exit\n  \
          browserpass-host-rs -v                    verbose log to stderr\n\n\
          Upstream BP actions:   configure, list, tree, fetch, save, delete, echo\n\
-         Extension actions:     otp, search, dl.add/list/pause/resume/cancel\n",
+         Extension actions:     otp, search\n\
+         Download manager:      dl.add/list/pause/resume/cancel/remove/clear,\n\
+                                dl.openDir, dl.openFile,\n\
+                                dl.writeFile, dl.writeFileChunk\n",
         version::string()
     );
 }
