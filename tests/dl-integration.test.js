@@ -428,6 +428,28 @@ test("popup.html exposes a quick 'downloads ▸' link in the header next to scri
   assert.match(popupJs, /scripts-manager\/downloads\.html/);
 });
 
+test("popup ships a persistent bottom downloads strip that auto-refreshes every 1s", () => {
+  const popupHtml = read("popup.html");
+  const popupCss  = read("popup.css");
+  const popupJs   = read("popup.js");
+  // HTML: extra grid row reserved for the strip
+  assert.match(popupHtml, /id="dl-strip"/);
+  assert.match(popupHtml, /id="dl-strip-list"/);
+  assert.match(popupHtml, /id="dl-strip-count"/);
+  assert.match(popupHtml, /id="dl-strip-open"/);
+  // CSS: modal grid grew to 4 rows so the strip sits above the keybinding footer.
+  assert.match(popupCss, /grid-template-rows:\s*auto 1fr auto auto/);
+  assert.match(popupCss, /\.dl-strip\s*\{/);
+  // JS: cached-snapshot first paint, then dl.list poll on 1s interval.
+  assert.match(popupJs, /function renderStrip/);
+  assert.match(popupJs, /kind: "dl\.snapshot\.cached"/);
+  assert.match(popupJs, /function pollStrip/);
+  assert.match(popupJs, /setInterval\(pollStrip,\s*1000\)/);
+  // Click handling: done rows open the file, otherwise jump to manager.
+  assert.match(popupJs, /status === "done" && dest/);
+  assert.match(popupJs, /kind: "dl\.openFile"/);
+});
+
 test("badge filter only counts active+pending jobs (never done/failed/cancelled/paused)", () => {
   // Pins the badge regression where the toolbar count stayed visible after
   // a job transitioned to failed/done — the snapshot itself was correct,

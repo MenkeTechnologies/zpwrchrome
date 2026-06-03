@@ -759,4 +759,113 @@ document.getElementById("open-downloads").addEventListener("click", (e) => {
   window.close();
 });
 
+// ── bottom downloads strip (always-visible glance) ────────────────────
+//
+// Reuses the SW's cached dl.snapshot for an instant first paint, then
+// asks for a fresh dl.list. Repolls every 1 s while the popup is open
+// so active progress / completion / fail status updates without the user
+// having to leave the popup. Strip auto-hides when there's nothing to show.
+
+const STRIP_MAX_ROWS = 6;
+const $strip       = document.getElementById("dl-strip");
+const $stripList   = document.getElementById("dl-strip-list");
+const $stripCount  = document.getElementById("dl-strip-count");
+const $stripOpen   = document.getElementById("dl-strip-open");
+const STRIP_ICONS  = { image:"🖼", video:"🎬", audio:"🎵", document:"📄", archive:"🗂", other:"📦" };
+const STRIP_EXT = {
+  image:    new Set(["jpg","jpeg","png","gif","webp","svg","bmp","ico","tiff","heic","avif"]),
+  video:    new Set(["mp4","mkv","avi","mov","webm","flv","m4v","wmv","ts","vob"]),
+  audio:    new Set(["mp3","wav","flac","aac","ogg","m4a","opus","wma","alac"]),
+  document: new Set(["pdf","doc","docx","xls","xlsx","ppt","pptx","odt","ods","odp","txt","md","rtf","csv","epub","mobi"]),
+  archive:  new Set(["zip","tar","gz","bz2","xz","7z","rar","tgz","tbz","tbz2","z","lz","lzma","cab","iso","dmg"]),
+};
+function stripKind(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  for (const [k, set] of Object.entries(STRIP_EXT)) if (set.has(ext)) return k;
+  return "other";
+}
+function stripBasename(p) { return (p || "").split("/").pop() || p || ""; }
+function stripBytes(n) {
+  if (!n || n <= 0) return "0 B";
+  const u = ["B","KB","MB","GB","TB"]; let i = 0, v = Number(n);
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
+}
+function stripEsc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+function renderStrip(jobs) {
+  if (!Array.isArray(jobs) || jobs.length === 0) {
+    $strip.hidden = true;
+    return;
+  }
+  // Sort active/pending/paused first, then by recency.
+  const ord = { pending: 0, active: 1, paused: 2, failed: 3, cancelled: 4, done: 5 };
+  const sorted = jobs.slice().sort((a, b) => (ord[a.status] ?? 9) - (ord[b.status] ?? 9) || b.gid - a.gid);
+  const shown = sorted.slice(0, STRIP_MAX_ROWS);
+  const active = jobs.filter((j) => j.status === "active" || j.status === "pending").length;
+  $stripCount.textContent = active > 0
+    ? `${active} active · ${jobs.length} total`
+    : `${jobs.length} total`;
+  $stripList.innerHTML = shown.map((j) => {
+    const name = stripBasename(j.dest);
+    const kind = stripKind(name);
+    const ico  = STRIP_ICONS[kind] || "📄";
+    const pct  = j.total > 0 ? Math.min(100, Math.round((j.done / j.total) * 100)) : 0;
+    const destOnDisk = j.dest_exists !== false;
+    const isMissing  = j.status === "done" && !destOnDisk;
+    const cls = `dl-strip-row k-${kind}${isMissing ? " missing" : ""}`;
+    const tag = isMissing
+      ? `<span class="tag missing">missing</span>`
+      : `<span class="tag ${stripEsc(j.status)}">${stripEsc(j.status)}</span>`;
+    const sizeStr = j.total > 0
+      ? `${stripBytes(j.done)} / ${stripBytes(j.total)} (${pct}%)`
+      : (j.status === "done" ? stripBytes(j.done) : `${stripBytes(j.done)}`);
+    const showBar = j.status === "active" || j.status === "paused";
+    return `
+      <div class="${cls}" data-gid="${j.gid}" data-dest="${stripEsc(j.dest || "")}" data-status="${stripEsc(j.status)}">
+        <span class="ic">${ico}</span>
+        <span class="nm" title="${stripEsc(j.dest || "")}">${stripEsc(name || "(unnamed)")}</span>
+        <span class="right">${stripBytes(j.total || j.done)}</span>
+        <span class="meta">${tag}<span>${stripEsc(sizeStr)}</span></span>
+        ${showBar ? `<div class="bar"><div class="fill" style="width:${pct}%;"></div></div>` : ""}
+      </div>
+    `;
+  }).join("");
+  $strip.hidden = false;
+}
+$stripList.addEventListener("click", (e) => {
+  const row = e.target.closest(".dl-strip-row");
+  if (!row) return;
+  const status = row.dataset.status || "";
+  const dest   = row.dataset.dest   || "";
+  // Done + present → open the file; otherwise jump to the manager.
+  if (status === "done" && dest) {
+    chrome.runtime.sendMessage({ kind: "dl.openFile", path: dest }, () => {
+      window.close();
+    });
+    return;
+  }
+  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/downloads.html") });
+  window.close();
+});
+$stripOpen?.addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/downloads.html") });
+  window.close();
+});
+
+function pollStrip() {
+  chrome.runtime.sendMessage({ kind: "dl.list" }, (r) => {
+    if (chrome.runtime.lastError || !r?.ok) return;       // silent — popup keeps working
+    renderStrip(r.jobs || []);
+  });
+}
+// Instant paint from cached snapshot, then refresh + repeat.
+chrome.runtime.sendMessage({ kind: "dl.snapshot.cached" }, (r) => {
+  if (r?.snapshot?.jobs) renderStrip(r.snapshot.jobs);
+  pollStrip();
+});
+setInterval(pollStrip, 1000);
+
 refresh();
