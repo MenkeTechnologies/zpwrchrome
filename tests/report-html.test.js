@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 
@@ -158,18 +159,9 @@ test("report.html HTML line stat matches popup.html + manager.html", () => {
 });
 
 test("report.html repo file count is derived not hardcoded stale", () => {
-  const walk = (dir, acc = 0) => {
-    for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
-      const rel = dir === "." ? e.name : `${dir}/${e.name}`;
-      // Must match the skip list in scripts/gen.mjs so the derived value
-      // doesn't drift between local (with build caches) and CI (clean).
-      if (e.name.startsWith(".") || e.name === "node_modules") continue;
-      if (e.name === "target" || e.name === "dist" || e.name === "build") continue;
-      if (e.isDirectory()) acc = walk(rel, acc);
-      else acc += 1;
-    }
-    return acc;
-  };
-  const fileCount = walk(".");
-  assert.match(report, new RegExp(`<div class="v">${fileCount}</div><div class="l">Repo Files</div>`));
+  // Mirror scripts/gen.mjs — count git-tracked files so local dev trees
+  // (with target/, lockfiles, etc.) and fresh CI checkouts agree.
+  const tracked = execSync("git ls-files", { cwd: ROOT, encoding: "utf8" })
+    .split("\n").filter(Boolean).length;
+  assert.match(report, new RegExp(`<div class="v">${tracked}</div><div class="l">Repo Files</div>`));
 });

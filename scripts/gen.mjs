@@ -3,6 +3,7 @@
 // exercised in tests.
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join } from "node:path";
 
 const ROOT = process.env.ZPWR_ROOT;
@@ -87,21 +88,18 @@ const permissions = manifest.permissions || [];
 
 const utilExports = [...utilJs.matchAll(/^export (?:const|function)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
 
-const totalFiles = (function walk(dir, acc = 0) {
+// Count files that are tracked in git — the canonical "Repo Files" stat
+// that matches a fresh CI checkout. Walking the filesystem instead would
+// drift the moment the dev ran `cargo build` (target/, ~2k files) or had
+// an uncommitted .gitignored lockfile sitting around.
+const totalFiles = (function countTracked() {
   try {
-    for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
-      const rel = dir === "." ? e.name : `${dir}/${e.name}`;
-      // Skip dot-dirs, node_modules, and Rust/Cargo build caches so the
-      // count matches a fresh CI checkout regardless of whether the dev
-      // has run `cargo build` locally (target/ is huge).
-      if (e.name.startsWith(".") || e.name === "node_modules") continue;
-      if (e.name === "target" || e.name === "dist" || e.name === "build") continue;
-      if (e.isDirectory()) acc = walk(rel, acc);
-      else acc += 1;
-    }
-  } catch {}
-  return acc;
-})(".");
+    const out = execSync("git ls-files", { cwd: ROOT, encoding: "utf8" });
+    return out.split("\n").filter(Boolean).length;
+  } catch {
+    return 0;
+  }
+})();
 
 // Top N source files by line count, biggest first.
 const topFiles = [...SOURCES, ...testFiles.map((f) => "tests/" + f)]
