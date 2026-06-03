@@ -19,7 +19,7 @@ const CATEGORIES = [
   { id: "tree",    label: "Tree (by opener)",  key: "⌘8" },
   { id: "minimap", label: "Minimap",           key: "⌘9" },
   { id: "history", label: "History",           key: "⌘0" },
-  { id: "pass",    label: "Pass",              key: "Tab" }
+  { id: "pass",    label: "Pass",              key: "⌘P" }
 ];
 
 // Browsing-history fetch ceiling. chrome.history.search() with text:""
@@ -697,6 +697,19 @@ document.addEventListener("keydown", (e) => {
     if (idx < CATEGORIES.length) {
       e.preventDefault();
       state.catIdx = idx;
+      state.rowIdx = 0;
+      render();
+      return;
+    }
+  }
+  // Cmd/Ctrl+P → Pass category. Mnemonic, and the popup has no use for
+  // the browser's Print binding. Tab is left alone for normal focus
+  // traversal between the search box and other focusable elements.
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === "p" || e.key === "P")) {
+    const passIdx = CATEGORIES.findIndex((c) => c.id === "pass");
+    if (passIdx >= 0) {
+      e.preventDefault();
+      state.catIdx = passIdx;
       state.rowIdx = 0;
       render();
       return;

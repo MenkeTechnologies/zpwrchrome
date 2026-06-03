@@ -112,3 +112,13 @@ test("popup category shortcut resets rowIdx to top of list", () => {
 test("popup keydown handler guards category index against CATEGORIES.length", () => {
   assert.match(keydown[0], /if \(idx < CATEGORIES\.length\)/);
 });
+
+test("Cmd/Ctrl+P jumps to the Pass category (not Tab — Tab is reserved for focus traversal)", () => {
+  // No bare-Tab branch should exist.
+  assert.doesNotMatch(keydown[0], /e\.key === "Tab"/);
+  // Cmd/Ctrl+P (no Shift, no Alt) → Pass index.
+  assert.match(keydown[0], /\(e\.metaKey \|\| e\.ctrlKey\) && !e\.shiftKey && !e\.altKey && \(e\.key === "p" \|\| e\.key === "P"\)/);
+  assert.match(keydown[0], /CATEGORIES\.findIndex\(\(c\) => c\.id === "pass"\)/);
+  // Sidebar label updated to reflect the new chord.
+  assert.match(popup, /id: "pass",\s+label: "Pass",\s+key: "⌘P"/);
+});

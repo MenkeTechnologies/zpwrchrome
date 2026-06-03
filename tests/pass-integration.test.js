@@ -128,8 +128,8 @@ test("pass copy paths use passClipboardCopy (not the raw writeClipboard)", () =>
   assert.doesNotMatch(fn[0], /[^_]writeClipboard\(/);  // bare writeClipboard would skip the clear
 });
 
-test("popup CATEGORIES declares the PASS entry with Tab key indicator", () => {
-  assert.match(popup, /id: "pass",\s+label: "Pass",\s+key: "Tab"/);
+test("popup CATEGORIES declares the PASS entry with the Cmd+P key indicator", () => {
+  assert.match(popup, /id: "pass",\s+label: "Pass",\s+key: "⌘P"/);
 });
 
 test("popup loadPass reads active tab host before NM call", () => {
