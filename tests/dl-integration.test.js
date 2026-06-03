@@ -107,25 +107,46 @@ test("toolbar-icon right-click menu (contexts: action) ships Chrono-equivalent i
   // browser action / toolbar icon right-click menu.
   assert.match(bg, /const act = \["action"\]/);
   for (const [id, expectedTitle] of [
-    ["CTX_ACT_MGR",   /Open download manager/],
-    ["CTX_ACT_SET",   /title:\s*"Settings"/],
-    ["CTX_ACT_FOLD",  /Change downloads folder…/],
-    ["CTX_ACT_DIAG",  /title:\s*"Diagnostics"/],
-    ["CTX_ACT_HELP",  /title:\s*"Help"/],
-    ["CTX_ACT_ABOUT", /About zpwrchrome/],
-    ["CTX_ACT_ISSUE", /Report an issue/],
-    ["CTX_ACT_REPO",  /View source on GitHub/],
+    ["CTX_ACT_MGR",    /Open download manager/],
+    ["CTX_ACT_SCR",    /Open userscript manager/],
+    ["CTX_ACT_DIAG",   /Open diagnostics/],
+    ["CTX_ACT_SET",    /Settings — General/],
+    ["CTX_ACT_IFACE",  /Settings — Interface/],
+    ["CTX_ACT_EXTFLT", /Settings — Extension Filter/],
+    ["CTX_ACT_RULES",  /Settings — Rule System/],
+    ["CTX_ACT_FOLD",   /Change downloads folder…/],
+    ["CTX_ACT_HELP",   /title:\s*"Help"/],
+    ["CTX_ACT_ABOUT",  /About zpwrchrome/],
+    ["CTX_ACT_EXTPG",  /Manage this extension/],
+    ["CTX_ACT_ISSUE",  /Report an issue/],
+    ["CTX_ACT_REPO",   /View source on GitHub/],
   ]) {
     assert.match(bg, new RegExp(`const ${id}`),  `${id} const missing`);
     assert.match(bg, expectedTitle,              `${id} title not matching ${expectedTitle}`);
   }
+  // Every nav-strip destination has a context-menu pages-table entry.
+  for (const path of [
+    "/scripts-manager/downloads.html",
+    "/scripts-manager/manager.html",
+    "/scripts-manager/dl-diag.html",
+    "/scripts-manager/dl-settings.html",
+    "/scripts-manager/dl-interface.html",
+    "/scripts-manager/dl-extfilter.html",
+    "/scripts-manager/dl-rules.html",
+    "/scripts-manager/dl-help.html",
+    "/scripts-manager/dl-about.html",
+  ]) {
+    assert.match(bg, new RegExp(path.replace(/\//g, "\\/")), `pages table missing ${path}`);
+  }
   // Folder shortcut deep-links into the settings page anchor.
   assert.match(bg, /\/scripts-manager\/dl-settings\.html#downloadDir/);
-  // Two separator items between the three groups.
-  assert.match(bg, /CTX_ACT_SEP1[\s\S]*?type: "separator"/);
-  assert.match(bg, /CTX_ACT_SEP2[\s\S]*?type: "separator"/);
-  // Click dispatcher uses chrome.tabs.create — single source of truth for
-  // both extension pages and external github links.
+  // chrome:// link must use chrome.tabs.create (anchor href is blocked).
+  assert.match(bg, /chrome:\/\/extensions\/\?id=\$\{chrome\.runtime\.id\}/);
+  // Three separator items between the four groups.
+  for (const sep of ["CTX_ACT_SEP1", "CTX_ACT_SEP2", "CTX_ACT_SEP3"]) {
+    assert.match(bg, new RegExp(`${sep}[\\s\\S]*?type: "separator"`), `${sep} separator missing`);
+  }
+  // External github links.
   assert.match(bg, /chrome\.tabs\.create\(\{ url: ISSUE_URL \}\)/);
   assert.match(bg, /chrome\.tabs\.create\(\{ url: REPO_URL \}\)/);
 });
