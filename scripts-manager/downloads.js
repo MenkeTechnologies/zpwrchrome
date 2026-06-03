@@ -415,12 +415,14 @@ document.getElementById("t-resume-all").addEventListener("click", async () => {
 });
 document.getElementById("t-refresh").addEventListener("click", () => poll());
 document.getElementById("t-open-dir").addEventListener("click", () => {
-  // Prefer the user's last-used directory (set by saveToLastUsedLocation +
-  // populated by the takeover handler). Falls back to empty so the host
-  // opens its default — which is now Chrome's standard ~/Downloads.
-  const path = state.settings.saveToLastUsedLocation && state.settings.lastDir
-    ? state.settings.lastDir
-    : "";
+  // Same priority as the takeover handler:
+  //   explicit downloadDir > tracked lastDir > host default (~/Downloads).
+  const s = state.settings;
+  const path = (s.downloadDir && s.downloadDir.trim())
+    ? s.downloadDir.trim()
+    : (s.saveToLastUsedLocation && s.lastDir)
+      ? s.lastDir
+      : "";
   chrome.runtime.sendMessage({ kind: "dl.openDir", path }, (r) => {
     if (!r?.ok) $status.textContent = `open dir failed: ${r?.err || "unknown"}`;
     else        $status.textContent = `opened ${r.opened || "downloads folder"}`;

@@ -505,9 +505,13 @@ if (chrome.downloads && chrome.downloads.onCreated) {
     // when present so the user-visible name matches what they expected.
     const suggested = (item.filename || "").split(/[\\/]/).pop();
     const settings  = await loadDlSettings();
-    const dir       = settings.saveToLastUsedLocation && settings.lastDir
-      ? settings.lastDir
-      : "~/Downloads";
+    // Priority: explicit user-set downloadDir > tracked lastDir (only when
+    // saveToLastUsedLocation is on) > ~/Downloads (matches the host default).
+    const dir       = (settings.downloadDir && settings.downloadDir.trim())
+      ? settings.downloadDir.trim()
+      : (settings.saveToLastUsedLocation && settings.lastDir)
+        ? settings.lastDir
+        : "~/Downloads";
     const args = await enrichDownloadArgs(item.url, {
       dir,
       name: suggested || undefined,

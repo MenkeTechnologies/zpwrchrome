@@ -12,6 +12,10 @@ export const DL_DEFAULTS = Object.freeze({
   hideBuiltInUI: true,
 
   // New Task Defaults
+  // Default folder for new downloads. Empty = use host default (~/Downloads
+  // on macOS/Linux). User-set explicit value wins over saveToLastUsedLocation.
+  // Tildes are expanded host-side.
+  downloadDir: "",
   saveToLastUsedLocation: true,
   addToFrontOfQueue: false,
   addPaused: false,
@@ -114,6 +118,21 @@ function bootSettingsPage() {
     await hydrate();
     flash("reset");
     try { await chrome.runtime.sendMessage({ kind: "dl.settings.changed" }); } catch {}
+  });
+
+  // "Open this folder" reveals the currently-typed downloadDir in Finder.
+  document.getElementById("dd-open")?.addEventListener("click", () => {
+    const path = document.querySelector('[data-key="downloadDir"]').value.trim();
+    chrome.runtime.sendMessage({ kind: "dl.openDir", path }, (r) => {
+      if (!r?.ok) flash(`open dir failed: ${r?.err || "unknown"}`, false);
+      else        flash(`opened ${r.opened || "folder"}`);
+    });
+  });
+  // "Reset to host default" clears the field so the host falls back to ~/Downloads.
+  document.getElementById("dd-reset")?.addEventListener("click", async () => {
+    const el = document.querySelector('[data-key="downloadDir"]');
+    el.value = "";
+    await persist();
   });
 
   hydrate();

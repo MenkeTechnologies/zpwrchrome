@@ -47,9 +47,21 @@
 
     <fieldset>
       <legend>New Task Defaults <span class="help" title="Applied to every new download (browser-initiated takeovers + extension-added URLs)">?</span></legend>
+      <label class="opt inline">
+        <span class="lbl">Default download folder</span>
+        <input type="text" data-key="downloadDir"
+               style="flex:1; min-width:260px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: 13px; padding: 4px 8px; border-radius: 2px;"
+               placeholder="~/Downloads (leave blank for host default)">
+        <button id="dd-open"  class="btn-ghost" type="button" title="Open this folder">📁</button>
+        <button id="dd-reset" class="btn-ghost" type="button" title="Reset to host default">⟲</button>
+      </label>
+      <p class="dt-hint" style="margin-top:-6px;">
+        Tildes (<code>~/foo</code>) are expanded against <code>$HOME</code> on the host.
+        Empty = use the host's default (<code>~/Downloads</code> on macOS/Linux).
+      </p>
       <label class="opt">
         <input type="checkbox" data-key="saveToLastUsedLocation">
-        <span>Save file to last used location</span>
+        <span>Save file to last used location <span class="dt-hint" style="display:inline; color: var(--text-muted);">(remember the folder of the most recent download)</span></span>
       </label>
       <label class="opt">
         <input type="checkbox" data-key="addToFrontOfQueue">

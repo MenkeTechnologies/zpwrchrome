@@ -459,12 +459,33 @@ test("downloads.html toolbar exposes a 📁 button bound to t-open-dir", () => {
   assert.match(dlHtml, /id="t-open-dir"/);
 });
 
-test("downloads.js t-open-dir prefers settings.lastDir, falls back to default", () => {
+test("downloads.js t-open-dir picks downloadDir > lastDir > host-default in that order", () => {
   const dljs = read("scripts-manager/downloads.js");
   const block = dljs.match(/t-open-dir[\s\S]*?\}\);\n\}\);/);
   assert.ok(block, "t-open-dir handler not wired");
-  assert.match(block[0], /state\.settings\.saveToLastUsedLocation && state\.settings\.lastDir/);
+  assert.match(block[0], /s\.downloadDir && s\.downloadDir\.trim/);
+  assert.match(block[0], /s\.saveToLastUsedLocation && s\.lastDir/);
   assert.match(block[0], /kind: "dl\.openDir"/);
+});
+
+test("settings page exposes a 'Default download folder' text input + open/reset buttons", () => {
+  const setHtml = read("scripts-manager/dl-settings.html");
+  assert.match(setHtml, /data-key="downloadDir"/);
+  assert.match(setHtml, /id="dd-open"/);
+  assert.match(setHtml, /id="dd-reset"/);
+});
+
+test("DL_DEFAULTS.downloadDir is empty by default (= host fallback)", () => {
+  const setJs = read("scripts-manager/dl-settings.js");
+  assert.match(setJs, /downloadDir: ""/);
+});
+
+test("takeover handler honors downloadDir > lastDir > ~/Downloads", () => {
+  const block = bg.match(/chrome\.downloads\.onCreated\.addListener[\s\S]+?bpDlAdd/);
+  assert.ok(block, "takeover block missing");
+  assert.match(block[0], /settings\.downloadDir && settings\.downloadDir\.trim/);
+  assert.match(block[0], /settings\.saveToLastUsedLocation && settings\.lastDir/);
+  assert.match(block[0], /"~\/Downloads"/);
 });
 
 test("downloads.js renders rows incrementally via _rowCache (no innerHTML thrash, no hover flicker)", () => {
