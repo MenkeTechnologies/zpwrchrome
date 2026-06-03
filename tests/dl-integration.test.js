@@ -469,10 +469,26 @@ test("downloads.js t-open-dir click sends dl.openDir with empty path (default di
 
 test("downloads.js renders a 'reveal' action on done rows that opens the parent dir via dl.openDir", () => {
   const dljs = read("scripts-manager/downloads.js");
-  // Render-side: only `done` jobs get the reveal button, and it carries dest.
-  assert.match(dljs, /job\.status === "done"\s*\?\s*`<button data-act="reveal" data-dest="\$\{escDest\}">reveal<\/button>`/);
+  // Render-side: only `done` jobs WITH dest_exists get the reveal button.
+  assert.match(dljs, /\(job\.status === "done" && destOnDisk\)\s*\?\s*`<button data-act="reveal" data-dest="\$\{escDest\}">reveal<\/button>`/);
   // Handler-side: reveal click sends dl.openDir with the dest as path.
   assert.match(dljs, /act === "reveal"[\s\S]*?kind: "dl\.openDir"[\s\S]*?path: dest/);
+});
+
+test("downloads.js marks done rows whose dest is missing and hides reveal/open actions for them", () => {
+  const dljs = read("scripts-manager/downloads.js");
+  // The host emits dest_exists per job; the UI must read it and:
+  //   1. tag the row .missing
+  //   2. swap the stat tag for "missing"
+  //   3. strike the name
+  //   4. NEVER render reveal for a missing file (covered by the test above)
+  assert.match(dljs, /job\.dest_exists !== false/);
+  assert.match(dljs, /const isMissing\s*=\s*job\.status === "done" && !destOnDisk/);
+  assert.match(dljs, /stat-tag missing/);
+  const css = read("scripts-manager/downloads.css");
+  assert.match(css, /\.dl-row\.missing/);
+  assert.match(css, /\.dl-row\.missing \.name \{[^}]*line-through/);
+  assert.match(css, /\.stat-tag\.missing/);
 });
 
 test("background.js dl.openDir handler forwards the path arg to the host as `dir`", () => {

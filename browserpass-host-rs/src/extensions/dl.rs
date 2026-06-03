@@ -252,7 +252,17 @@ pub struct DlRequest {
 pub struct DlAddResponse    { pub gid: u64, pub dest: String }
 
 #[derive(Serialize, Debug)]
-pub struct DlListResponse   { pub jobs: Vec<JobState> }
+pub struct DlListResponse   { pub jobs: Vec<JobView> }
+
+/// Per-job view sent to the extension. Wraps JobState with computed
+/// presence info (whether `dest` is still on disk) so the UI can hide
+/// reveal/open actions for files the user deleted out of band.
+#[derive(Serialize, Debug, Clone)]
+pub struct JobView {
+    #[serde(flatten)]
+    pub state:       JobState,
+    pub dest_exists: bool,
+}
 
 #[derive(Serialize, Debug)]
 pub struct DlActionResponse { pub gid: u64, pub status: String }
@@ -377,7 +387,10 @@ pub fn dl_add(req: &DlRequest) {
 }
 
 pub fn dl_list() {
-    let jobs = list_all_jobs().unwrap_or_default();
+    let jobs: Vec<JobView> = list_all_jobs().unwrap_or_default().into_iter().map(|s| {
+        let dest_exists = !s.dest.is_empty() && std::path::Path::new(&s.dest).exists();
+        JobView { state: s, dest_exists }
+    }).collect();
     response::SendOk(DlListResponse { jobs });
 }
 
@@ -429,25 +442,61 @@ pub fn dl_cancel(req: &DlRequest) {
 // Path comes from the extension; expand `~` here so the user never sees a
 // literal `~` rendered in the response.
 pub fn dl_open_dir(req: &DlRequest) {
-    let raw = if req.dir.is_empty() {
-        // No path given → open the default-download directory.
-        default_download_dir().to_string_lossy().into_owned()
-    } else {
-        expand_home(&req.dir).to_string_lossy().into_owned()
-    };
-    let path = std::path::Path::new(&raw);
-    // If it's a file path, open its containing dir; if it's a dir, open it.
-    let target = if path.is_file() {
-        path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| path.to_path_buf())
-    } else {
-        path.to_path_buf()
-    };
-    // Ensure the dir exists so the open call doesn't fail on a fresh user.
-    let _ = fs::create_dir_all(&target);
-
+    // Two modes:
+    //   * empty req.dir          → open the default-download directory
+    //                              (auto-create OK; it's the host's own dir).
+    //   * non-empty req.dir      → "reveal" a specific file or folder. NEVER
+    //                              auto-create — that would expose a "fake"
+    //                              folder the user never had. Verify the
+    //                              path actually exists and refuse otherwise.
     let opener = if cfg!(target_os = "macos") { "open" }
                  else if cfg!(target_os = "windows") { "explorer" }
                  else { "xdg-open" };
+
+    if req.dir.is_empty() {
+        let target = default_download_dir();
+        let _ = fs::create_dir_all(&target);
+        match Command::new(opener).arg(&target).spawn() {
+            Ok(_) => response::SendOk(serde_json::json!({ "opened": target.to_string_lossy() })),
+            Err(e) => response::SendErrorAndExit(
+                errors::Code::InaccessiblePasswordStore,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "dl.openDir: failed to spawn opener"),
+                    (field::ACTION,  "dl.openDir"),
+                    (field::ERROR,   &e.to_string()),
+                ])),
+            ),
+        }
+    }
+
+    let raw = expand_home(&req.dir);
+    let raw_path = std::path::Path::new(&raw);
+    if !raw_path.exists() {
+        response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.openDir: path does not exist (file deleted or moved)"),
+                (field::ACTION,  "dl.openDir"),
+                (field::ERROR,   &raw.to_string_lossy()),
+            ])),
+        );
+    }
+    // Reveal mode: open the containing folder of a file, or the folder itself.
+    let target = if raw_path.is_file() {
+        raw_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| raw_path.to_path_buf())
+    } else {
+        raw_path.to_path_buf()
+    };
+    if !target.exists() {
+        response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.openDir: parent folder no longer exists"),
+                (field::ACTION,  "dl.openDir"),
+                (field::ERROR,   &target.to_string_lossy()),
+            ])),
+        );
+    }
     match Command::new(opener).arg(&target).spawn() {
         Ok(_) => response::SendOk(serde_json::json!({ "opened": target.to_string_lossy() })),
         Err(e) => response::SendErrorAndExit(

@@ -494,3 +494,49 @@ fn dl_add_with_tilde_dir_expands_to_home_in_state() {
     let _ = fs::remove_dir_all(&cache);
     let _ = fs::remove_dir_all(&home);
 }
+
+#[test]
+fn dl_list_emits_dest_exists_true_for_existing_files_false_for_missing() {
+    let cache = tempdir("dl-presence");
+    fs::create_dir_all(&cache).unwrap();
+    let touch = cache.join("real.bin");
+    fs::write(&touch, b"x").unwrap();
+    let dead = cache.join("ghost.bin");
+    // Two state files: one points at a real file, one at a path we never create.
+    for (gid, dest) in [(101u64, &touch), (102u64, &dead)] {
+        let st = json!({
+            "gid": gid, "url": format!("https://x/{gid}"),
+            "dest": dest.to_string_lossy(),
+            "total": 1, "done": 1, "status": "done", "err": null,
+            "segments": 1, "started_at": 1, "elapsed_ms": 0,
+            "paused": false, "cancelled": false, "cookies": "", "userAgent": ""
+        });
+        fs::write(cache.join(format!("gid_{gid:06}.json")),
+                  serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+    }
+    let resp = run_with_env(
+        &json!({ "action": "dl.list" }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    let jobs = resp["data"]["jobs"].as_array().unwrap();
+    let real = jobs.iter().find(|j| j["gid"] == 101).unwrap();
+    let ghost = jobs.iter().find(|j| j["gid"] == 102).unwrap();
+    assert_eq!(real["dest_exists"],  true,  "existing file must report dest_exists=true");
+    assert_eq!(ghost["dest_exists"], false, "missing file must report dest_exists=false");
+    let _ = fs::remove_dir_all(&cache);
+}
+
+#[test]
+fn dl_open_dir_refuses_to_reveal_a_path_that_does_not_exist() {
+    let cache = tempdir("dl-open-ghost");
+    fs::create_dir_all(&cache).unwrap();
+    let ghost = cache.join("not-real.bin");
+    let resp = run_with_env(
+        &json!({ "action": "dl.openDir", "dir": ghost.to_string_lossy() }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "error", "dl.openDir on missing path must error, not silently create");
+    let msg = resp["params"]["message"].as_str().unwrap_or("");
+    assert!(msg.contains("does not exist"), "expected does-not-exist error, got: {msg}");
+    let _ = fs::remove_dir_all(&cache);
+}

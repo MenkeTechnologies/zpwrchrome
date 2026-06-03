@@ -224,6 +224,10 @@ a.tbtn { display: inline-flex; align-items: center; justify-content: center; tex
 .dl-row .meta .stat-tag.done      { color: var(--green); }
 .dl-row .meta .stat-tag.failed,
 .dl-row .meta .stat-tag.cancelled { color: var(--accent); }
+.dl-row .meta .stat-tag.missing   { color: var(--text-muted); border-style: dashed; }
+.dl-row.missing { opacity: 0.55; }
+.dl-row.missing .name { text-decoration: line-through; color: var(--text-muted); }
+.dl-row.missing .ico  { color: var(--text-muted); }
 .dl-row .date {
   text-align: right;
   font-size: 11px;

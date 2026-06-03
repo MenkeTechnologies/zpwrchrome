@@ -185,15 +185,25 @@ function rowHtml(job) {
   const escUrl     = escapeHtml(job.url || "");
   const escDest    = escapeHtml(job.dest || "");
   const dateStr    = fmtDate(job.started_at);
+  // Host-computed presence flag (dl.list returns dest_exists per row). For
+  // done jobs whose dest has been deleted out of band, fall back to the
+  // status tag MISSING and hide reveal/open actions — never reveal a
+  // path that isn't actually there.
+  const destOnDisk = job.dest_exists !== false;            // undefined = legacy host = treat as present
+  const isMissing  = job.status === "done" && !destOnDisk;
+  const rowCls     = `dl-row k-${kind}${isSel ? " sel" : ""}${isMissing ? " missing" : ""}`;
+  const statTag    = isMissing
+      ? `<span class="stat-tag missing" title="file no longer on disk">missing</span>`
+      : `<span class="stat-tag ${escapeHtml(job.status)}">${escapeHtml(job.status)}</span>`;
 
   return `
-    <div class="dl-row k-${kind}${isSel ? " sel" : ""}" data-gid="${job.gid}" tabindex="0">
+    <div class="${rowCls}" data-gid="${job.gid}" tabindex="0">
       <span class="ico">${ICONS[kind] || "📄"}</span>
       <div class="body">
-        <span class="name" title="${escDest}">${escName}</span>
+        <span class="name" title="${escDest}${isMissing ? ' (deleted)' : ''}">${escName}</span>
         <span class="url"  title="${escUrl}">${escUrl}</span>
         <span class="meta">
-          <span class="stat-tag ${escapeHtml(job.status)}">${escapeHtml(job.status)}</span>
+          ${statTag}
           <span>${sizeStr}</span>
           ${showSpeed ? `<span>${fmtSpeed(job.done, job.elapsed_ms)}</span>` : ""}
           ${showEta   ? `<span>ETA ${fmtEta(job.done, job.total, bps)}</span>` : ""}
@@ -207,7 +217,7 @@ function rowHtml(job) {
         ${job.status === "active"  ? `<button data-act="pause"  data-gid="${job.gid}">pause</button>`  : ""}
         ${job.status === "paused"  ? `<button data-act="resume" data-gid="${job.gid}">resume</button>` : ""}
         ${(job.status === "failed" || job.status === "cancelled") ? `<button data-act="resume" data-gid="${job.gid}">retry</button>` : ""}
-        ${job.status === "done"
+        ${(job.status === "done" && destOnDisk)
             ? `<button data-act="reveal" data-dest="${escDest}">reveal</button>` : ""}
         ${(job.status === "active" || job.status === "paused" || job.status === "pending")
             ? `<button class="danger" data-act="cancel" data-gid="${job.gid}">cancel</button>` : ""}
