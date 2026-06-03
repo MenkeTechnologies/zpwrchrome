@@ -391,3 +391,19 @@ fn dl_add_with_missing_url_returns_code_12() {
     assert_eq!(resp["code"], 12);
     let _ = fs::remove_dir_all(&cache);
 }
+
+// Regression: spawn_worker MUST detach worker from Chrome's inherited
+// stdio FDs (setsid + close fds >= 3) — otherwise the worker keeps
+// Chrome's stdout pipe open and the SW sees "Native host has exited"
+// even though the host responded successfully.
+#[test]
+fn spawn_worker_detaches_worker_from_inherited_fds() {
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/extensions/dl.rs")
+    ).unwrap();
+    let block = src.split("fn spawn_worker").nth(1).expect("spawn_worker missing");
+    let head = &block[..block.find("\nfn ").unwrap_or(block.len())];
+    assert!(head.contains("setsid"),       "spawn_worker must call libc::setsid()");
+    assert!(head.contains("libc::close"),  "spawn_worker must close inherited FDs");
+    assert!(head.contains("pre_exec"),     "spawn_worker must use pre_exec hook");
+}

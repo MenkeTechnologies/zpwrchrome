@@ -476,12 +476,39 @@ fn spawn_worker(gid: u64) -> std::io::Result<()> {
         .create(true)
         .open(&log_path)?;
     let null = fs::OpenOptions::new().read(true).open("/dev/null")?;
-    Command::new(exe)
-        .args(["--dl-worker", &gid.to_string()])
+    let mut cmd = Command::new(exe);
+    cmd.args(["--dl-worker", &gid.to_string()])
         .stdin(Stdio::from(null))
         .stdout(Stdio::from(log.try_clone()?))
-        .stderr(Stdio::from(log))
-        .spawn()?;
+        .stderr(Stdio::from(log));
+    // Detach the worker from the parent host process group + close every
+    // inherited file descriptor above the std fds. Chrome's native-messaging
+    // stdio pipe is given to the host as FD 1; without this, the worker
+    // inherits a dup of that pipe, Chrome never sees EOF on its read end,
+    // and reports "Native host has exited" even on a successful response.
+    #[cfg(unix)]
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        cmd.pre_exec(|| {
+            // New session — survive the parent host exit.
+            if libc::setsid() == -1 {
+                // Already a session leader → not fatal.
+            }
+            // Close every FD >= 3 in the worker child. Std uses CLOEXEC on
+            // most opens since Rust 1.7, but Chrome's pipe-to-stdout dup is
+            // a kernel-level inheritance we can't tag — only the brute close
+            // sweep guarantees the worker holds none of Chrome's FDs.
+            let max_fd = match libc::sysconf(libc::_SC_OPEN_MAX) {
+                n if n > 0 => n as i32,
+                _          => 1024,
+            };
+            for fd in 3..max_fd {
+                libc::close(fd);
+            }
+            Ok(())
+        });
+    }
+    cmd.spawn()?;
     Ok(())
 }
 

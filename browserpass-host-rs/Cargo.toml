@@ -1,6 +1,6 @@
 [package]
 name = "browserpass-host-rs"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 authors = ["MenkeTechnologies <linux.dev25@gmail.com>"]
 description = "Rust port of browserpass-native (PROTOCOL.md v3.1.2) + extension actions for OTP, whole-store search, and a file-state segmented download manager."
@@ -37,6 +37,13 @@ serde_json = "1"
 # smallest foundational pure-Rust HTTP/1.1 client; rustls feature avoids OS
 # TLS (works on macOS, Linux, future archs without recompile). Vendorable.
 ureq = { version = "2.10", default-features = false, features = ["tls", "native-certs"] }
+
+# Used in spawn_worker to detach the worker from Chrome's inherited stdio
+# FDs — without setsid + close(>=3), the worker keeps Chrome's stdout pipe
+# open and Chrome reports "Native host has exited" even on a successful
+# response.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [profile.release]
 lto = true
