@@ -95,6 +95,79 @@ test("dl-pause-all and dl-resume-all enumerate via bpDlList then bulk-call", () 
   assert.match(resume[0], /bpDlGid\("dl\.resume"/);
 });
 
+test("page-level sniffer context menus appear on the page background", () => {
+  for (const id of ["CTX_PG_LINKS", "CTX_PG_IMAGES", "CTX_PG_MEDIA"]) {
+    assert.match(bg, new RegExp(`const ${id}`), `${id} const missing`);
+  }
+  // Each one is registered with contexts: ["page"].
+  const pageSniff = bg.match(/CTX_PG_LINKS[\s\S]*?CTX_PG_MEDIA[\s\S]*?contexts: \["page"\]/);
+  assert.ok(pageSniff, "page sniffer menus not wired");
+  // Dispatcher calls runPageSniffer for any of them.
+  assert.match(bg, /CTX_PG_LINKS\s*\|\|[\s\S]*?CTX_PG_IMAGES\s*\|\|[\s\S]*?CTX_PG_MEDIA/);
+  assert.match(bg, /runPageSniffer\(info\.menuItemId\)/);
+});
+
+test("collectPageUrls enumerates <a href> / <img src+srcset> / <video|audio src+source>", () => {
+  // Function is injected via chrome.scripting.executeScript, so it has to
+  // be a self-contained closure. Pin the selectors it walks.
+  const fn = bg.match(/function collectPageUrls\([\s\S]*?\n\}/);
+  assert.ok(fn, "collectPageUrls not found");
+  assert.match(fn[0], /a\[href\]/);
+  assert.match(fn[0], /img\[src\]/);
+  assert.match(fn[0], /img\[srcset\]/);
+  assert.match(fn[0], /picture source\[srcset\]/);
+  assert.match(fn[0], /video\[src\]/);
+  assert.match(fn[0], /audio\[src\]/);
+  assert.match(fn[0], /video source\[src\], audio source\[src\]/);
+});
+
+test("bpDlAdd fans out batch-pattern URLs through expandBatchSafe", () => {
+  // Import exists + the wrapper calls expandBatchSafe + has multi-result
+  // aggregation branch.
+  assert.match(bg, /import \{ expandBatchSafe \}\s+from "\.\/lib\/dl-batch\.js"/);
+  const fn = bg.match(/async function bpDlAdd\(args\)[\s\S]*?\n\}/);
+  assert.ok(fn, "bpDlAdd wrapper missing");
+  assert.match(fn[0], /expandBatchSafe\(args\.url\)/);
+  assert.match(fn[0], /urls\.length <= 1/);
+  assert.match(fn[0], /batch: true/);
+  assert.match(fn[0], /requested: urls\.length/);
+});
+
+test("background takeover passes settings.namingMask (rule system defaultMask) to host via `mask`", () => {
+  // Wire from dl-rules.js → enrichDownloadArgs(`mask`) → host dl.add.
+  assert.match(bg, /import \{ loadRules as loadDlRules \}/);
+  const block = bg.match(/chrome\.downloads\.onCreated\.addListener[\s\S]+?bpDlAdd/);
+  assert.ok(block, "takeover block missing");
+  assert.match(block[0], /loadDlRules\(\)/);
+  assert.match(block[0], /rules\?\.defaultMask/);
+  assert.match(block[0], /mask,/);
+});
+
+test("dl-settings.get message handler returns the persisted settings to the popup", () => {
+  const block = bg.match(/msg\?\.kind === "dl\.settings\.get"[\s\S]*?return true;/);
+  assert.ok(block, "dl.settings.get handler missing");
+  assert.match(block[0], /loadDlSettings\(\)\.then\(\(settings\) => sendResponse\(\{ ok: true, settings \}\)\)/);
+});
+
+test("popup ships a clipboard URL banner that gates on dl.settings.urlFromClipboard", () => {
+  const popupJs = read("popup.js");
+  const popupCss = read("popup.css");
+  assert.match(popupJs, /maybeOfferClipboardUrl/);
+  assert.match(popupJs, /kind: "dl\.settings\.get"/);
+  assert.match(popupJs, /urlFromClipboard === false/);
+  assert.match(popupJs, /navigator\.clipboard\.readText\(\)/);
+  assert.match(popupJs, /function showClipboardBanner/);
+  assert.match(popupCss, /\.dl-clip-banner/);
+});
+
+test("About page brand stack links zshrs and stryke (in addition to zpwr + zsh-more-completions)", () => {
+  const about = read("scripts-manager/dl-about.html");
+  assert.match(about, /href="https:\/\/github\.com\/MenkeTechnologies\/zpwr"[^>]*>zpwr</);
+  assert.match(about, /href="https:\/\/github\.com\/MenkeTechnologies\/zsh-more-completions"[^>]*>zsh-more-completions</);
+  assert.match(about, /href="https:\/\/github\.com\/MenkeTechnologies\/zshrs"[^>]*>zshrs</);
+  assert.match(about, /href="https:\/\/github\.com\/MenkeTechnologies\/stryke"[^>]*>stryke</);
+});
+
 test("context menu registers for link + image/video/audio (not just link)", () => {
   // Phase 7 design: right-click on a link OR direct media downloads via host.
   const installer = bg.match(/chrome\.contextMenus\.create\(\{[\s\S]*?contexts: \["link"\][\s\S]*?\}/);

@@ -686,3 +686,72 @@ fn percent_decode_handles_utf8_and_invalid_escapes() {
     // Multi-byte UTF-8 (caf%C3%A9 = "café").
     assert_eq!(percent_decode("caf%C3%A9"),        "café");
 }
+
+#[test]
+fn apply_naming_mask_substitutes_all_tokens() {
+    use browserpass_host_rs::extensions::dl::apply_naming_mask;
+    // *name* + *ext* are the workhorse pair.
+    assert_eq!(
+        apply_naming_mask("*name*.*ext*", "report.pdf", "https://x/r"),
+        "report.pdf",
+    );
+    // *host* + *date* come from URL + clock.
+    let r = apply_naming_mask("*host*-*name*.*ext*", "song.mp3", "https://music.example/album/song.mp3");
+    assert!(r.starts_with("music.example-song.mp3"), "got {r}");
+    // *subdirs* preserves the in-URL directory components.
+    assert_eq!(
+        apply_naming_mask("*subdirs*/*name*.*ext*", "a.jpg", "https://x.com/photos/2024/a.jpg"),
+        "photos/2024/a.jpg",
+    );
+    // *flat* replaces slashes with underscores.
+    assert_eq!(
+        apply_naming_mask("*flat*", "a.jpg", "https://x.com/photos/2024/a.jpg"),
+        "photos_2024_a.jpg",
+    );
+    // No extension on basename → *ext* empty.
+    assert_eq!(
+        apply_naming_mask("[*ext*]*name*", "README", "https://x/y"),
+        "[]README",
+    );
+    // Empty mask passes the original filename through verbatim.
+    assert_eq!(apply_naming_mask("", "thing.zip", "https://x"), "thing.zip");
+    // Unknown tokens stay literal so users can detect typos.
+    assert_eq!(apply_naming_mask("*nope*-*name*.*ext*", "a.b", "https://x"),
+               "*nope*-a.b");
+}
+
+#[test]
+fn apply_naming_mask_date_format_is_yyyy_mm_dd() {
+    use browserpass_host_rs::extensions::dl::apply_naming_mask;
+    let r = apply_naming_mask("*date*", "a.b", "https://x");
+    assert!(r.len() == 10 && &r[4..5] == "-" && &r[7..8] == "-", "got {r}");
+    // YYYY = 4 digits.
+    for (i, c) in r.chars().enumerate() {
+        if i == 4 || i == 7 { continue; }
+        assert!(c.is_ascii_digit(), "non-digit at {i} in {r}");
+    }
+}
+
+#[test]
+fn dl_add_with_mask_writes_state_using_masked_filename() {
+    let cache = tempdir("dl-mask");
+    fs::create_dir_all(&cache).unwrap();
+    let dir = tempdir("dl-mask-out");
+    fs::create_dir_all(&dir).unwrap();
+    let resp = run_with_env(
+        &json!({
+            "action":  "dl.add",
+            "url":     "https://example.invalid/photos/2024/sunset.jpg",
+            "dir":     dir.to_string_lossy(),
+            "name":    "sunset.jpg",
+            "mask":    "*host*-*name*.*ext*",
+            "cookies": "",
+            "userAgent": "test"
+        }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    let dest = resp["data"]["dest"].as_str().unwrap_or("");
+    assert!(dest.ends_with("example.invalid-sunset.jpg"), "got {dest}");
+    let _ = fs::remove_dir_all(&cache);
+    let _ = fs::remove_dir_all(&dir);
+}

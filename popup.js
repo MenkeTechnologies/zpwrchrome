@@ -920,4 +920,49 @@ chrome.runtime.sendMessage({ kind: "dl.snapshot.cached" }, (r) => {
 });
 setInterval(pollStrip, 1000);
 
+// ── clipboard URL monitor — checks once on popup open ─────────────────
+// Opening the popup IS a user gesture, so navigator.clipboard.readText()
+// resolves without prompting. Surface an inline banner when the clipboard
+// holds an http(s) URL that isn't already queued. Tied to
+// dl.settings.urlFromClipboard (default ON).
+function maybeOfferClipboardUrl() {
+  chrome.runtime.sendMessage({ kind: "dl.settings.get" }, (r) => {
+    if (chrome.runtime.lastError) return;
+    if (r?.settings && r.settings.urlFromClipboard === false) return;
+    navigator.clipboard.readText().then((raw) => {
+      const text = (raw || "").trim();
+      if (!/^https?:\/\//i.test(text)) return;
+      const known = new Set((state?.jobs || []).map((j) => j.url));
+      if (known.has(text)) return;
+      showClipboardBanner(text);
+    }).catch(() => {});
+  });
+}
+maybeOfferClipboardUrl();
+
+function showClipboardBanner(url) {
+  // Inject above the strip — once. If a banner already exists, replace
+  // its URL so we don't stack multiple.
+  let banner = document.getElementById("dl-clip-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "dl-clip-banner";
+    banner.className = "dl-clip-banner";
+    $strip.parentNode.insertBefore(banner, $strip);
+  }
+  banner.innerHTML = `
+    <span class="lbl">clipboard:</span>
+    <span class="url" title="${url.replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}">${url.length > 60 ? url.slice(0, 60) + "…" : url}</span>
+    <button class="add">add</button>
+    <button class="dismiss">×</button>
+  `;
+  banner.querySelector(".add").addEventListener("click", () => {
+    chrome.runtime.sendMessage({ kind: "dl.add", url }, () => {
+      banner.remove();
+      pollStrip();
+    });
+  });
+  banner.querySelector(".dismiss").addEventListener("click", () => banner.remove());
+}
+
 refresh();

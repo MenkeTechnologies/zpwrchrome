@@ -27,7 +27,9 @@ import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath } from "./lib/bp-pass.js";
 import { loadSettings as loadDlSettings, DL_DEFAULTS as DL_SETTINGS_DEFAULTS, saveSettings as saveDlSettings } from "./scripts-manager/dl-settings.js";
 import { loadInterface as loadDlInterface, DL_INTERFACE_DEFAULTS } from "./scripts-manager/dl-interface.js";
+import { loadRules as loadDlRules } from "./scripts-manager/dl-rules.js";
 import { diagPush, diagRead, diagClear } from "./lib/diag.js";
+import { expandBatchSafe }                from "./lib/dl-batch.js";
 
 const MRU_KEY = "mru";
 const DL_SETTINGS_KEY = "dl.settings";
@@ -402,6 +404,98 @@ function fillLoginForm(username, password, autoSubmit) {
   return { filled: !!password, userFilled, submitted, origin: location?.origin || "" };
 }
 
+// Inject a content script into the active tab that enumerates URLs by
+// kind, return the deduped list, then batch-enqueue. Empty selection
+// surfaces a notification instead of silently no-op'ing.
+async function runPageSniffer(menuId) {
+  const t = await getActive();
+  if (!t?.id) return;
+  const kind = menuId === CTX_PG_IMAGES ? "images"
+             : menuId === CTX_PG_MEDIA  ? "media"
+             : "links";
+  let urls = [];
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: t.id, allFrames: true },
+      func: collectPageUrls,
+      args: [kind],
+    });
+    urls = Array.isArray(result) ? result : [];
+  } catch (e) {
+    diagPush("dl.page-sniff.inject_err", { kind, err: String(e?.message || e) });
+    return;
+  }
+  // Dedup + filter to http(s) only.
+  const seen = new Set();
+  urls = urls.filter((u) => {
+    if (!/^https?:\/\//i.test(u)) return false;
+    if (seen.has(u)) return false;
+    seen.add(u);
+    return true;
+  });
+  diagPush("dl.page-sniff", { kind, host: hostnameOf(t.url || ""), count: urls.length });
+  if (!urls.length) {
+    chrome.notifications?.create({
+      type: "basic",
+      iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+      title: "zpwrchrome — page sniffer",
+      message: `No ${kind} found on this page.`,
+    });
+    return;
+  }
+  // Use the existing enrich + bpDlAdd path. Sequential to avoid hammering
+  // the host with N concurrent dl.add calls — each spawns its own worker.
+  let ok = 0;
+  for (const u of urls) {
+    try {
+      const args = await enrichDownloadArgs(u, {});
+      await bpDlAdd(args);
+      ok++;
+    } catch (e) {
+      diagPush("dl.page-sniff.fail", { url: u, err: String(e?.message || e) });
+    }
+  }
+  bpDlBroadcast();
+  chrome.notifications?.create({
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+    title: "zpwrchrome — page sniffer",
+    message: `Enqueued ${ok} / ${urls.length} ${kind} from this page.`,
+  });
+}
+
+// Injected into the active tab by runPageSniffer — serialized via
+// chrome.scripting.executeScript so it must be a pure function with no
+// outer closures.
+function collectPageUrls(kind) {
+  const out = [];
+  function push(u) { if (u && typeof u === "string") out.push(new URL(u, location.href).href); }
+  if (kind === "links") {
+    for (const a of document.querySelectorAll('a[href]')) push(a.getAttribute("href"));
+  } else if (kind === "images") {
+    for (const img of document.querySelectorAll('img[src]')) push(img.getAttribute("src"));
+    // Parse srcset to extract the highest-resolution candidate per image.
+    for (const img of document.querySelectorAll('img[srcset]')) {
+      const set = img.getAttribute("srcset") || "";
+      const candidates = set.split(",").map((p) => p.trim().split(/\s+/)[0]).filter(Boolean);
+      for (const c of candidates) push(c);
+    }
+    // <picture><source srcset="..."></picture>.
+    for (const s of document.querySelectorAll('picture source[srcset]')) {
+      const set = s.getAttribute("srcset") || "";
+      const candidates = set.split(",").map((p) => p.trim().split(/\s+/)[0]).filter(Boolean);
+      for (const c of candidates) push(c);
+    }
+  } else if (kind === "media") {
+    for (const v of document.querySelectorAll('video[src]'))  push(v.getAttribute("src"));
+    for (const a of document.querySelectorAll('audio[src]'))  push(a.getAttribute("src"));
+    for (const s of document.querySelectorAll('video source[src], audio source[src]')) {
+      push(s.getAttribute("src"));
+    }
+  }
+  return out;
+}
+
 async function dlPasteUrl() {
   // Read clipboard via injection into the active tab — service workers have
   // no DOM clipboard. The active tab inherits user-activation from the
@@ -563,9 +657,17 @@ if (chrome.downloads && chrome.downloads.onCreated) {
       : (settings.saveToLastUsedLocation && settings.lastDir)
         ? settings.lastDir
         : "~/Downloads";
+    // Pull the rule-system default naming mask too. dl-rules.js exposes it
+    // as `defaultMask`. Empty mask = host passes filename through verbatim.
+    let mask = "";
+    try {
+      const rules = await loadDlRules();
+      mask = String(rules?.defaultMask || "");
+    } catch {}
     const args = await enrichDownloadArgs(item.url, {
       dir,
       name: suggested || undefined,
+      mask,
       priority:        settings.addToFrontOfQueue ? "front" : "back",
       conflictAction:  settings.conflictAction,
       onDirUnsavable:  settings.onDirUnsavable,
@@ -642,8 +744,11 @@ chrome.runtime.onStartup.addListener(()   => { bpDlBroadcast(); });
 //     mirroring Chrono's right-click: manager, settings, change folder,
 //     diagnostics, help, report-issue, repo.
 
-const CTX_DL_LINK   = "zpwrchrome-dl-link";
-const CTX_DL_MEDIA  = "zpwrchrome-dl-media";
+const CTX_DL_LINK    = "zpwrchrome-dl-link";
+const CTX_DL_MEDIA   = "zpwrchrome-dl-media";
+const CTX_PG_LINKS   = "zpwrchrome-pg-links";
+const CTX_PG_IMAGES  = "zpwrchrome-pg-images";
+const CTX_PG_MEDIA   = "zpwrchrome-pg-media";
 const CTX_ACT_MGR    = "zpc-act-manager";
 const CTX_ACT_SCR    = "zpc-act-scripts";
 const CTX_ACT_DIAG   = "zpc-act-diag";
@@ -676,6 +781,20 @@ chrome.runtime.onInstalled.addListener(() => {
     id: CTX_DL_MEDIA,
     title: "Download with zpwrchrome",
     contexts: ["image", "video", "audio"],
+  }, () => void chrome.runtime.lastError);
+
+  // Page-level sniffers — right-click on page background offers bulk grabs.
+  chrome.contextMenus.create({
+    id: CTX_PG_LINKS,  title: "zpwrchrome: download all links on page",
+    contexts: ["page"],
+  }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.create({
+    id: CTX_PG_IMAGES, title: "zpwrchrome: download all images on page",
+    contexts: ["page"],
+  }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.create({
+    id: CTX_PG_MEDIA,  title: "zpwrchrome: download all media on page",
+    contexts: ["page"],
   }, () => void chrome.runtime.lastError);
 
   // Toolbar-icon menu (right-click on the extension's action icon).
@@ -728,6 +847,14 @@ if (chrome.contextMenus) {
     }
     if (info.menuItemId === CTX_ACT_ISSUE) { chrome.tabs.create({ url: ISSUE_URL }); return; }
     if (info.menuItemId === CTX_ACT_REPO)  { chrome.tabs.create({ url: REPO_URL });  return; }
+
+    // Page-level sniffer: enumerate URLs in the current tab, then batch-add.
+    if (info.menuItemId === CTX_PG_LINKS  ||
+        info.menuItemId === CTX_PG_IMAGES ||
+        info.menuItemId === CTX_PG_MEDIA) {
+      await runPageSniffer(info.menuItemId);
+      return;
+    }
 
     // Link/media → kick off a segmented download via the host.
     const url = info.linkUrl || info.srcUrl;
@@ -1598,6 +1725,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
+  if (msg?.kind === "dl.settings.get") {
+    loadDlSettings().then((settings) => sendResponse({ ok: true, settings }));
+    return true;
+  }
   if (msg?.kind === "dl.settings.changed") {
     applyDownloadsUiVisibility();
     sendResponse({ ok: true });
@@ -1891,7 +2022,35 @@ async function bpOtpCode(path) {
 }
 
 // dl.* extension actions — one round-trip each.
-async function bpDlAdd(args)       { return bpSend({ action: "dl.add",    ...args }); }
+async function bpDlAdd(args) {
+  // Batch pattern fan-out: if args.url contains bracket ranges
+  // ([01:99], [a:f], [0:20:5]), expand into individual dl.add calls and
+  // return a summary aligned with what the caller expects from a single add.
+  const urls = expandBatchSafe(args.url);
+  if (urls.length <= 1) return bpSend({ action: "dl.add", ...args });
+
+  diagPush("dl.add.batch.start", { url: args.url, count: urls.length });
+  const results = await Promise.allSettled(urls.map((u) => bpSend({ action: "dl.add", ...args, url: u })));
+  const ok    = results.filter((r) => r.status === "fulfilled");
+  const fail  = results.filter((r) => r.status === "rejected");
+  diagPush("dl.add.batch.done", { url: args.url, ok: ok.length, fail: fail.length });
+  if (ok.length === 0) {
+    const first = fail[0]?.reason;
+    throw new Error(`batch add: all ${urls.length} URLs failed (${first?.message || "unknown"})`);
+  }
+  return {
+    status: "ok",
+    version: 3001002,
+    data: {
+      batch: true,
+      requested: urls.length,
+      enqueued: ok.length,
+      failed: fail.length,
+      gids: ok.map((r) => r.value?.data?.gid).filter(Boolean),
+      firstDest: ok[0].value?.data?.dest,
+    },
+  };
+}
 async function bpDlList()          { return bpSend({ action: "dl.list" }); }
 async function bpDlGid(action, gid){ return bpSend({ action, gid }); }
 

@@ -508,3 +508,37 @@ mark.fzf-hl {
   box-shadow: 0 0 6px var(--cyan-glow);
   transition: width 200ms linear;
 }
+
+/* ── clipboard URL banner (above the downloads strip) ─────────────── */
+.dl-clip-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--magenta);
+  border-bottom: 1px solid var(--magenta);
+  padding: 6px 12px;
+  font-size: 11px;
+}
+.dl-clip-banner .lbl {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--magenta);
+  font-weight: 700;
+}
+.dl-clip-banner .url {
+  flex: 1;
+  color: var(--text);
+  font-family: inherit;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dl-clip-banner button {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.dl-clip-banner button.add:hover     { color: var(--cyan);   border-color: var(--cyan); }
+.dl-clip-banner button.dismiss:hover { color: var(--accent); border-color: var(--accent); }

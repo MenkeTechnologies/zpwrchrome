@@ -284,6 +284,75 @@ pub fn parse_content_disposition_filename(header: &str) -> Option<String> {
     Some(sanitize_filename(&name))
 }
 
+/// Render a Chrono-style naming mask into a final filename.
+///
+/// Tokens (case-sensitive, asterisks literal):
+///   `*name*`     — basename without extension
+///   `*ext*`      — extension without dot (empty if none)
+///   `*host*`     — URL hostname (no port)
+///   `*url*`      — full URL path (slashes kept)
+///   `*flat*`     — full URL path with slashes → underscores
+///   `*subdirs*`  — URL path directories (no trailing slash)
+///   `*date*`     — YYYY-MM-DD (UTC)
+///   `*time*`     — HHMMSS (UTC)
+///   `*size*`     — placeholder "?" (host doesn't know size at name time)
+///
+/// Unknown tokens are left literal. Returns the input verbatim if `mask`
+/// is empty — callers can safely pass `&settings.namingMask` regardless
+/// of whether it was set.
+pub fn apply_naming_mask(mask: &str, basename: &str, url: &str) -> String {
+    if mask.is_empty() { return basename.to_string(); }
+    // Split basename into stem + extension.
+    let (stem, ext) = match basename.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s.to_string(), e.to_string()),
+        _ => (basename.to_string(), String::new()),
+    };
+    // Parse URL — best effort. Host = part between :// and next /:?#.
+    let host = {
+        let after = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+        let h = after.split(|c: char| matches!(c, '/' | '?' | '#' | ':')).next().unwrap_or("");
+        h.to_string()
+    };
+    let path = {
+        let after = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+        let p = after.splitn(2, '/').nth(1).unwrap_or("");
+        p.split(|c: char| matches!(c, '?' | '#')).next().unwrap_or("").to_string()
+    };
+    let subdirs = match path.rsplit_once('/') {
+        Some((d, _)) => d.to_string(),
+        None         => String::new(),
+    };
+    let flat = path.replace('/', "_");
+
+    // Current UTC time via libc::gmtime_r to avoid pulling chrono.
+    let (date, time) = {
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as libc::time_t).unwrap_or(0);
+        #[cfg(unix)]
+        unsafe {
+            let mut tm: libc::tm = std::mem::zeroed();
+            libc::gmtime_r(&t, &mut tm);
+            (
+                format!("{:04}-{:02}-{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday),
+                format!("{:02}{:02}{:02}", tm.tm_hour, tm.tm_min, tm.tm_sec),
+            )
+        }
+        #[cfg(not(unix))]
+        { (String::from("0000-00-00"), String::from("000000")) }
+    };
+
+    mask
+        .replace("*name*",    &stem)
+        .replace("*ext*",     &ext)
+        .replace("*host*",    &host)
+        .replace("*url*",     &path)
+        .replace("*flat*",    &flat)
+        .replace("*subdirs*", &subdirs)
+        .replace("*date*",    &date)
+        .replace("*time*",    &time)
+        .replace("*size*",    "?")
+}
+
 pub fn sanitize_filename(s: &str) -> String {
     s.chars()
         .map(|c| match c {
@@ -330,6 +399,11 @@ pub struct DlRequest {
     pub scope: String,
     #[serde(rename = "deleteFromDisk")]
     pub deleteFromDisk: bool,
+    /// Naming-mask template applied to the resolved filename before write.
+    /// Supports tokens *name*, *ext*, *host*, *date*, *time*, *subdirs*,
+    /// *flat*. Empty = use the filename verbatim.
+    #[serde(default)]
+    pub mask: String,
 }
 
 #[derive(Serialize, Debug)]
@@ -413,7 +487,11 @@ pub fn dl_add(req: &DlRequest) {
     } else {
         req.name.clone()
     };
-    let dest = unique_dest_path(&dir, &sanitize_filename(&name));
+    // Apply naming-mask template if the request carries one. Tokens
+    // (*name*, *ext*, *host*, *date*, *time*, *subdirs*, *flat*, …) are
+    // substituted using the URL + the resolved filename basename.
+    let masked = apply_naming_mask(&req.mask, &name, &req.url);
+    let dest = unique_dest_path(&dir, &sanitize_filename(&masked));
 
     let gid = match next_gid() {
         Ok(g) => g,
