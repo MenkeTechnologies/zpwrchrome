@@ -825,6 +825,23 @@ function renderStrip(jobs) {
     const subStr = j.total > 0
       ? `${stripBytes(j.done)} / ${stripBytes(j.total)}`
       : (j.status === "done" ? stripBytes(j.done) : "—");
+    // Per-row action buttons. Status drives which appear:
+    //   pending|active → pause + cancel
+    //   paused         → resume + cancel
+    //   failed|cancelled → retry (resume)
+    //   done           → no buttons (row click opens the file)
+    const acts = [];
+    if (j.status === "active" || j.status === "pending") {
+      acts.push(`<button class="act" data-act="pause"  data-gid="${j.gid}" title="Pause">⏸</button>`);
+      acts.push(`<button class="act danger" data-act="cancel" data-gid="${j.gid}" title="Cancel">✕</button>`);
+    } else if (j.status === "paused") {
+      acts.push(`<button class="act" data-act="resume" data-gid="${j.gid}" title="Resume">▶</button>`);
+      acts.push(`<button class="act danger" data-act="cancel" data-gid="${j.gid}" title="Cancel">✕</button>`);
+    } else if (j.status === "failed" || j.status === "cancelled") {
+      acts.push(`<button class="act" data-act="resume" data-gid="${j.gid}" title="Retry">↻</button>`);
+    }
+    const actHtml = acts.length ? `<div class="acts">${acts.join("")}</div>` : "";
+
     return `
       <div class="${cls}" data-gid="${j.gid}" data-dest="${stripEsc(j.dest || "")}" data-status="${stripEsc(j.status)}">
         <span class="ic">${ico}</span>
@@ -833,6 +850,7 @@ function renderStrip(jobs) {
           <div class="meta">${tag}<span class="sz">${stripEsc(subStr)}</span></div>
           ${showBar ? `<div class="bar"><div class="fill" style="width:${pct}%;"></div></div>` : ""}
         </div>
+        ${actHtml}
         <span class="right">${stripEsc(rightStr)}</span>
       </div>
     `;
@@ -840,6 +858,22 @@ function renderStrip(jobs) {
   $strip.hidden = false;
 }
 $stripList.addEventListener("click", (e) => {
+  // Per-row action button — pause/resume/cancel via existing SW handlers.
+  const btn = e.target.closest("button.act");
+  if (btn) {
+    e.stopPropagation();
+    const act = btn.dataset.act;
+    const gid = Number(btn.dataset.gid);
+    if (!act || !Number.isFinite(gid)) return;
+    btn.disabled = true;
+    chrome.runtime.sendMessage({ kind: `dl.${act}`, gid }, () => {
+      btn.disabled = false;
+      // Refresh immediately so the strip reflects the new state without
+      // waiting for the 1 s poll tick.
+      pollStrip();
+    });
+    return;
+  }
   const row = e.target.closest(".dl-strip-row");
   if (!row) return;
   const status = row.dataset.status || "";

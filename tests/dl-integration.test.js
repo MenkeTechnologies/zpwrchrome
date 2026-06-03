@@ -428,6 +428,28 @@ test("popup.html exposes a quick 'downloads ▸' link in the header next to scri
   assert.match(popupJs, /scripts-manager\/downloads\.html/);
 });
 
+test("popup strip rows expose pause/resume/cancel/retry buttons per status", () => {
+  const popupJs  = read("popup.js");
+  const popupCss = read("popup.css");
+  // Render-side: each status emits the right button set.
+  assert.match(popupJs, /j\.status === "active" \|\| j\.status === "pending"/);
+  assert.match(popupJs, /data-act="pause"/);
+  assert.match(popupJs, /data-act="cancel"/);
+  assert.match(popupJs, /j\.status === "paused"/);
+  assert.match(popupJs, /data-act="resume"/);
+  assert.match(popupJs, /j\.status === "failed" \|\| j\.status === "cancelled"/);
+  // Click handler routes button clicks through dl.pause / dl.resume / dl.cancel.
+  const handler = popupJs.match(/\$stripList\.addEventListener\("click",[\s\S]*?\}\);/);
+  assert.ok(handler, "strip click handler missing");
+  assert.match(handler[0], /button\.act/);
+  assert.match(handler[0], /kind: `dl\.\$\{act\}`/);
+  // CSS: dedicated grid column for the actions, plus button styling that
+  // doesn't depend on hover (otherwise the previous flicker bug regresses).
+  assert.match(popupCss, /grid-template-columns:\s*22px 1fr auto 60px/);
+  assert.match(popupCss, /\.dl-strip-row \.act\s*\{/);
+  assert.match(popupCss, /\.dl-strip-row \.act\.danger:hover/);
+});
+
 test("popup ships a persistent bottom downloads strip that auto-refreshes every 1s", () => {
   const popupHtml = read("popup.html");
   const popupCss  = read("popup.css");
