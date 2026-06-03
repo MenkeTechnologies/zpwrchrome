@@ -175,5 +175,17 @@ function bootSettingsPage() {
     chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
   });
 
-  hydrate();
+  hydrate().then(() => {
+    // Deep-link via URL hash — e.g., the toolbar context menu's
+    // "Change downloads folder…" opens this page with #downloadDir
+    // so we scroll to and focus the right field.
+    const hash = (location.hash || "").replace(/^#/, "").toLowerCase();
+    if (hash) {
+      const el = document.querySelector(`[data-key="${CSS.escape(hash)}"]`);
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "instant" });
+        if (typeof el.focus === "function") el.focus({ preventScroll: true });
+      }
+    }
+  });
 }

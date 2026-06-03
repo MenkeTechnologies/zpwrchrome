@@ -636,13 +636,31 @@ chrome.runtime.onInstalled.addListener(() => { bpDlBroadcast(); });
 chrome.runtime.onStartup.addListener(()   => { bpDlBroadcast(); });
 
 // ---------------------------------------------------------------------------
-// Right-click "Download with zpwrchrome" on links + media (phase 7 opt-in).
+// Right-click context menus.
+//   * On links + media → "Download with zpwrchrome".
+//   * On the toolbar icon (contexts: ["action"]) → quick-access menu
+//     mirroring Chrono's right-click: manager, settings, change folder,
+//     diagnostics, help, report-issue, repo.
 
-const CTX_DL_LINK  = "zpwrchrome-dl-link";
-const CTX_DL_MEDIA = "zpwrchrome-dl-media";
+const CTX_DL_LINK   = "zpwrchrome-dl-link";
+const CTX_DL_MEDIA  = "zpwrchrome-dl-media";
+const CTX_ACT_MGR   = "zpc-act-manager";
+const CTX_ACT_SET   = "zpc-act-settings";
+const CTX_ACT_FOLD  = "zpc-act-folder";
+const CTX_ACT_DIAG  = "zpc-act-diag";
+const CTX_ACT_HELP  = "zpc-act-help";
+const CTX_ACT_ABOUT = "zpc-act-about";
+const CTX_ACT_ISSUE = "zpc-act-issue";
+const CTX_ACT_REPO  = "zpc-act-repo";
+const CTX_ACT_SEP1  = "zpc-act-sep1";
+const CTX_ACT_SEP2  = "zpc-act-sep2";
+
+const REPO_URL  = "https://github.com/MenkeTechnologies/zpwrchrome";
+const ISSUE_URL = "https://github.com/MenkeTechnologies/zpwrchrome/issues/new";
 
 chrome.runtime.onInstalled.addListener(() => {
   if (!chrome.contextMenus) return;
+  // Link/media menus.
   chrome.contextMenus.create({
     id: CTX_DL_LINK,
     title: "Download with zpwrchrome",
@@ -653,10 +671,43 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Download with zpwrchrome",
     contexts: ["image", "video", "audio"],
   }, () => void chrome.runtime.lastError);
+
+  // Toolbar-icon menu (right-click on the extension's action icon).
+  const act = ["action"];
+  const create = (props) => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
+  create({ id: CTX_ACT_MGR,   title: "Open download manager",        contexts: act });
+  create({ id: CTX_ACT_SET,   title: "Settings",                     contexts: act });
+  create({ id: CTX_ACT_FOLD,  title: "Change downloads folder…",     contexts: act });
+  create({ id: CTX_ACT_DIAG,  title: "Diagnostics",                  contexts: act });
+  create({ id: CTX_ACT_SEP1,  type: "separator",                     contexts: act });
+  create({ id: CTX_ACT_HELP,  title: "Help",                         contexts: act });
+  create({ id: CTX_ACT_ABOUT, title: "About zpwrchrome",             contexts: act });
+  create({ id: CTX_ACT_SEP2,  type: "separator",                     contexts: act });
+  create({ id: CTX_ACT_ISSUE, title: "Report an issue",              contexts: act });
+  create({ id: CTX_ACT_REPO,  title: "View source on GitHub",        contexts: act });
 });
 
 if (chrome.contextMenus) {
   chrome.contextMenus.onClicked.addListener(async (info) => {
+    // Toolbar-icon menu — open the matching extension page in a new tab.
+    // Append #downloadDir for the change-folder item so the General settings
+    // page can scroll to the field and focus its input.
+    const pages = {
+      [CTX_ACT_MGR]:   "/scripts-manager/downloads.html",
+      [CTX_ACT_SET]:   "/scripts-manager/dl-settings.html",
+      [CTX_ACT_FOLD]:  "/scripts-manager/dl-settings.html#downloadDir",
+      [CTX_ACT_DIAG]:  "/scripts-manager/dl-diag.html",
+      [CTX_ACT_HELP]:  "/scripts-manager/dl-help.html",
+      [CTX_ACT_ABOUT]: "/scripts-manager/dl-about.html",
+    };
+    if (pages[info.menuItemId]) {
+      chrome.tabs.create({ url: chrome.runtime.getURL(pages[info.menuItemId]) });
+      return;
+    }
+    if (info.menuItemId === CTX_ACT_ISSUE) { chrome.tabs.create({ url: ISSUE_URL }); return; }
+    if (info.menuItemId === CTX_ACT_REPO)  { chrome.tabs.create({ url: REPO_URL });  return; }
+
+    // Link/media → kick off a segmented download via the host.
     const url = info.linkUrl || info.srcUrl;
     if (!url) return;
     try {

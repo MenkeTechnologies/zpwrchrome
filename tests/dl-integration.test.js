@@ -102,6 +102,42 @@ test("context menu registers for link + image/video/audio (not just link)", () =
   assert.match(bg, /contexts: \["image", "video", "audio"\]/);
 });
 
+test("toolbar-icon right-click menu (contexts: action) ships Chrono-equivalent items + handlers", () => {
+  // All items hang off contexts: ["action"] — Chrome's name for the
+  // browser action / toolbar icon right-click menu.
+  assert.match(bg, /const act = \["action"\]/);
+  for (const [id, expectedTitle] of [
+    ["CTX_ACT_MGR",   /Open download manager/],
+    ["CTX_ACT_SET",   /title:\s*"Settings"/],
+    ["CTX_ACT_FOLD",  /Change downloads folder…/],
+    ["CTX_ACT_DIAG",  /title:\s*"Diagnostics"/],
+    ["CTX_ACT_HELP",  /title:\s*"Help"/],
+    ["CTX_ACT_ABOUT", /About zpwrchrome/],
+    ["CTX_ACT_ISSUE", /Report an issue/],
+    ["CTX_ACT_REPO",  /View source on GitHub/],
+  ]) {
+    assert.match(bg, new RegExp(`const ${id}`),  `${id} const missing`);
+    assert.match(bg, expectedTitle,              `${id} title not matching ${expectedTitle}`);
+  }
+  // Folder shortcut deep-links into the settings page anchor.
+  assert.match(bg, /\/scripts-manager\/dl-settings\.html#downloadDir/);
+  // Two separator items between the three groups.
+  assert.match(bg, /CTX_ACT_SEP1[\s\S]*?type: "separator"/);
+  assert.match(bg, /CTX_ACT_SEP2[\s\S]*?type: "separator"/);
+  // Click dispatcher uses chrome.tabs.create — single source of truth for
+  // both extension pages and external github links.
+  assert.match(bg, /chrome\.tabs\.create\(\{ url: ISSUE_URL \}\)/);
+  assert.match(bg, /chrome\.tabs\.create\(\{ url: REPO_URL \}\)/);
+});
+
+test("dl-settings.js honors URL hash to deep-link to a specific field (e.g. #downloadDir)", () => {
+  const setJs = read("scripts-manager/dl-settings.js");
+  assert.match(setJs, /location\.hash/);
+  assert.match(setJs, /\[data-key="\$\{CSS\.escape\(hash\)\}"\]/);
+  assert.match(setJs, /el\.scrollIntoView/);
+  assert.match(setJs, /el\.focus\(/);
+});
+
 test("SW mirrors dl.list snapshots to chrome.storage.local via bpDlBroadcast", () => {
   // BP one-shot: there are no host push events. After every dl.{add,pause,
   // resume,cancel} round-trip the SW polls dl.list and broadcasts the result
