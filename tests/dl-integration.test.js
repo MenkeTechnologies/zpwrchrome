@@ -455,6 +455,33 @@ test("bpDlBroadcast re-polls every 1.5s while any active/pending job exists, the
   assert.match(bg, /function cancelBgPoll\(\)/);
 });
 
+test("downloads.html toolbar exposes a 📁 button bound to t-open-dir", () => {
+  assert.match(dlHtml, /id="t-open-dir"/);
+});
+
+test("downloads.js t-open-dir click sends dl.openDir with empty path (default dir)", () => {
+  const dljs = read("scripts-manager/downloads.js");
+  const block = dljs.match(/t-open-dir[\s\S]*?\}\);\n\}\);/);
+  assert.ok(block, "t-open-dir handler not wired");
+  assert.match(block[0], /kind: "dl\.openDir"/);
+  assert.match(block[0], /path: ""/);
+});
+
+test("downloads.js renders a 'reveal' action on done rows that opens the parent dir via dl.openDir", () => {
+  const dljs = read("scripts-manager/downloads.js");
+  // Render-side: only `done` jobs get the reveal button, and it carries dest.
+  assert.match(dljs, /job\.status === "done"\s*\?\s*`<button data-act="reveal" data-dest="\$\{escDest\}">reveal<\/button>`/);
+  // Handler-side: reveal click sends dl.openDir with the dest as path.
+  assert.match(dljs, /act === "reveal"[\s\S]*?kind: "dl\.openDir"[\s\S]*?path: dest/);
+});
+
+test("background.js dl.openDir handler forwards the path arg to the host as `dir`", () => {
+  const block = bg.match(/msg\?\.kind === "dl\.openDir"[\s\S]*?return true;/);
+  assert.ok(block, "dl.openDir handler not registered");
+  assert.match(block[0], /action: "dl\.openDir"/);
+  assert.match(block[0], /dir: String\(msg\.path/);
+});
+
 test("SW fires one bpDlBroadcast on install + startup to clear any stale badge", () => {
   // Pattern: both runtime.onInstalled and runtime.onStartup get a listener
   // that calls bpDlBroadcast() unconditionally so a SW resume after Chrome

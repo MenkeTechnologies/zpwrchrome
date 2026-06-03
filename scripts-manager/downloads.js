@@ -207,6 +207,8 @@ function rowHtml(job) {
         ${job.status === "active"  ? `<button data-act="pause"  data-gid="${job.gid}">pause</button>`  : ""}
         ${job.status === "paused"  ? `<button data-act="resume" data-gid="${job.gid}">resume</button>` : ""}
         ${(job.status === "failed" || job.status === "cancelled") ? `<button data-act="resume" data-gid="${job.gid}">retry</button>` : ""}
+        ${job.status === "done"
+            ? `<button data-act="reveal" data-dest="${escDest}">reveal</button>` : ""}
         ${(job.status === "active" || job.status === "paused" || job.status === "pending")
             ? `<button class="danger" data-act="cancel" data-gid="${job.gid}">cancel</button>` : ""}
       </div>
@@ -266,8 +268,18 @@ $list.addEventListener("click", async (e) => {
   const actBtn = e.target.closest("button[data-act]");
   if (actBtn) {
     e.stopPropagation();
-    const gid = Number(actBtn.dataset.gid);
     const act = actBtn.dataset.act;
+    if (act === "reveal") {
+      // Open the file's parent directory in the platform file manager.
+      const dest = actBtn.dataset.dest || "";
+      actBtn.disabled = true;
+      chrome.runtime.sendMessage({ kind: "dl.openDir", path: dest }, (r) => {
+        actBtn.disabled = false;
+        if (!r?.ok) $status.textContent = `reveal failed: ${r?.err || "unknown"}`;
+      });
+      return;
+    }
+    const gid = Number(actBtn.dataset.gid);
     actBtn.disabled = true;
     const r = await sendAct(act, gid);
     actBtn.disabled = false;
@@ -321,6 +333,13 @@ document.getElementById("t-resume-all").addEventListener("click", async () => {
   poll();
 });
 document.getElementById("t-refresh").addEventListener("click", () => poll());
+document.getElementById("t-open-dir").addEventListener("click", () => {
+  // Open the host's default download directory in Finder/Explorer/Nautilus.
+  chrome.runtime.sendMessage({ kind: "dl.openDir", path: "" }, (r) => {
+    if (!r?.ok) $status.textContent = `open dir failed: ${r?.err || "unknown"}`;
+    else        $status.textContent = `opened ${r.opened || "downloads folder"}`;
+  });
+});
 
 // Clear menu — overlay panel toggled from the toolbar Clear button.
 const $clearBtn  = document.getElementById("t-clear");

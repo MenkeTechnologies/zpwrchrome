@@ -165,12 +165,28 @@ pub fn list_all_jobs() -> std::io::Result<Vec<JobState>> {
 
 pub fn default_download_dir() -> PathBuf {
     if let Ok(p) = std::env::var("ZPWRCHROME_DL_DIR") {
-        return PathBuf::from(p);
+        return expand_home(&p);
     }
     if let Ok(home) = std::env::var("HOME") {
         return PathBuf::from(home).join("Downloads").join("zpwrchrome");
     }
     PathBuf::from("./downloads")
+}
+
+/// Expand a leading `~` (or `~/`) to `$HOME`. Bare `~user` is not supported
+/// (the host runs as the calling user only). Returns the input unchanged
+/// when HOME is unset or the path doesn't start with `~`.
+pub fn expand_home(p: &str) -> PathBuf {
+    if let Some(rest) = p.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(rest);
+        }
+    } else if p == "~" {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home);
+        }
+    }
+    PathBuf::from(p)
 }
 
 pub fn guess_filename(url: &str) -> Option<String> {
@@ -250,12 +266,13 @@ pub struct DlClearResponse {
 pub fn dispatch_dl(action: &str, value: &Value) {
     let req: DlRequest = serde_json::from_value(value.clone()).unwrap_or_default();
     match action {
-        "dl.add"    => dl_add(&req),
-        "dl.list"   => dl_list(),
-        "dl.pause"  => dl_pause(&req),
-        "dl.resume" => dl_resume(&req),
-        "dl.cancel" => dl_cancel(&req),
-        "dl.clear"  => dl_clear(&req),
+        "dl.add"     => dl_add(&req),
+        "dl.list"    => dl_list(),
+        "dl.pause"   => dl_pause(&req),
+        "dl.resume"  => dl_resume(&req),
+        "dl.cancel"  => dl_cancel(&req),
+        "dl.clear"   => dl_clear(&req),
+        "dl.openDir" => dl_open_dir(&req),
         _ => {
             response::SendErrorAndExit(
                 errors::Code::InvalidRequestAction,
@@ -282,7 +299,7 @@ pub fn dl_add(req: &DlRequest) {
     let dir = if req.dir.is_empty() {
         default_download_dir()
     } else {
-        PathBuf::from(&req.dir)
+        expand_home(&req.dir)
     };
     if let Err(e) = fs::create_dir_all(&dir) {
         response::SendErrorAndExit(
@@ -407,6 +424,43 @@ pub fn dl_cancel(req: &DlRequest) {
 // deleteFromDisk additionally unlinks the dest file for any "done" job
 // being cleared (redundant for the other scopes — cancelled jobs already
 // unlinked, failed never finished writing).
+// Open a directory (or reveal a file's parent dir) in the platform file
+// manager. Used by the UI's "Open downloads folder" button + per-row reveal.
+// Path comes from the extension; expand `~` here so the user never sees a
+// literal `~` rendered in the response.
+pub fn dl_open_dir(req: &DlRequest) {
+    let raw = if req.dir.is_empty() {
+        // No path given → open the default-download directory.
+        default_download_dir().to_string_lossy().into_owned()
+    } else {
+        expand_home(&req.dir).to_string_lossy().into_owned()
+    };
+    let path = std::path::Path::new(&raw);
+    // If it's a file path, open its containing dir; if it's a dir, open it.
+    let target = if path.is_file() {
+        path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| path.to_path_buf())
+    } else {
+        path.to_path_buf()
+    };
+    // Ensure the dir exists so the open call doesn't fail on a fresh user.
+    let _ = fs::create_dir_all(&target);
+
+    let opener = if cfg!(target_os = "macos") { "open" }
+                 else if cfg!(target_os = "windows") { "explorer" }
+                 else { "xdg-open" };
+    match Command::new(opener).arg(&target).spawn() {
+        Ok(_) => response::SendOk(serde_json::json!({ "opened": target.to_string_lossy() })),
+        Err(e) => response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.openDir: failed to spawn opener"),
+                (field::ACTION,  "dl.openDir"),
+                (field::ERROR,   &e.to_string()),
+            ])),
+        ),
+    }
+}
+
 pub fn dl_clear(req: &DlRequest) {
     let jobs = list_all_jobs().unwrap_or_default();
     let scope = req.scope.as_str();

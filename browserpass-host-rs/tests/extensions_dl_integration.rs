@@ -450,3 +450,47 @@ fn host_rejects_truly_unknown_argv() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("unknown argument"), "stderr should mention unknown arg: {stderr}");
 }
+
+#[test]
+fn expand_home_resolves_tilde_against_HOME_env() {
+    use browserpass_host_rs::extensions::dl::expand_home;
+    // Set a stable HOME for this test; restore at end.
+    let prior = std::env::var("HOME").ok();
+    std::env::set_var("HOME", "/tmp/zp-expand-home");
+    assert_eq!(expand_home("~/Downloads").to_string_lossy(), "/tmp/zp-expand-home/Downloads");
+    assert_eq!(expand_home("~").to_string_lossy(),           "/tmp/zp-expand-home");
+    // Non-tilde paths unchanged.
+    assert_eq!(expand_home("/absolute/x").to_string_lossy(), "/absolute/x");
+    assert_eq!(expand_home("relative/y").to_string_lossy(),  "relative/y");
+    match prior {
+        Some(v) => std::env::set_var("HOME", v),
+        None    => std::env::remove_var("HOME"),
+    }
+}
+
+#[test]
+fn dl_add_with_tilde_dir_expands_to_home_in_state() {
+    let cache = tempdir("dl-tilde");
+    fs::create_dir_all(&cache).unwrap();
+    let home = tempdir("dl-tilde-home");
+    fs::create_dir_all(&home).unwrap();
+    let resp = run_with_env(
+        &json!({
+            "action": "dl.add",
+            "url":    "https://example.invalid/x.bin",
+            "dir":    "~/somesub",
+            "name":   "x.bin",
+            "cookies": "",
+            "userAgent": "test"
+        }),
+        &[
+            ("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy()),
+            ("HOME",                     &home.to_string_lossy()),
+        ],
+    );
+    let dest = resp["data"]["dest"].as_str().unwrap_or("");
+    assert!(dest.starts_with(&*home.to_string_lossy()), "expected expanded dest, got {dest}");
+    assert!(!dest.contains("~"), "dest must not contain literal ~: {dest}");
+    let _ = fs::remove_dir_all(&cache);
+    let _ = fs::remove_dir_all(&home);
+}
