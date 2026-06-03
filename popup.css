@@ -396,42 +396,62 @@ mark.fzf-hl {
 }
 .dl-strip-row {
   display: grid;
-  grid-template-columns: 24px 1fr 60px;
-  gap: 8px;
-  padding: 4px 12px;
+  grid-template-columns: 22px 1fr 70px;
+  gap: 10px;
+  padding: 8px 12px;
   align-items: center;
   cursor: default;
   font-size: 11px;
-  border-bottom: 1px solid transparent;
+  border-bottom: 1px solid var(--border);
 }
+.dl-strip-row:last-child { border-bottom: none; }
 .dl-strip-row:hover { background: var(--bg-hover); }
-.dl-strip-row .ic { font-size: 13px; text-align: center; color: var(--text-dim); }
+.dl-strip-row .ic {
+  font-size: 14px; text-align: center; color: var(--text-dim);
+  align-self: start;
+  line-height: 18px;
+}
 .dl-strip-row.k-image .ic    { color: var(--magenta); }
 .dl-strip-row.k-video .ic    { color: var(--accent); }
 .dl-strip-row.k-audio .ic    { color: var(--green); }
 .dl-strip-row.k-document .ic { color: var(--cyan); }
 .dl-strip-row.k-archive .ic  { color: var(--yellow); }
 .dl-strip-row.k-other .ic    { color: var(--text-muted); }
+
+/* Middle column stacks: name → meta (tag + size) → progress bar.
+   No more grid-auto-placement collisions, no more overlap. */
+.dl-strip-row .body {
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 0;
+}
 .dl-strip-row .nm {
   font-weight: 700;
   color: var(--text);
+  font-size: 12px;
+  line-height: 1.1;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .dl-strip-row.missing .nm { text-decoration: line-through; color: var(--text-muted); }
 .dl-strip-row.missing     { opacity: .55; }
 .dl-strip-row .meta {
+  display: flex; align-items: center; gap: 8px;
   font-size: 10px;
   color: var(--text-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.dl-strip-row .meta .sz {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
 }
 .dl-strip-row .tag {
   text-transform: uppercase;
-  font-size: 8px;
-  letter-spacing: .7px;
-  padding: 0 4px;
+  font-size: 9px;
+  letter-spacing: .8px;
+  padding: 1px 5px;
   border: 1px solid currentColor;
   border-radius: 2px;
-  margin-right: 4px;
+  flex-shrink: 0;
 }
 .dl-strip-row .tag.active    { color: var(--cyan); }
 .dl-strip-row .tag.paused    { color: var(--yellow); }
@@ -442,19 +462,25 @@ mark.fzf-hl {
 .dl-strip-row .tag.missing   { color: var(--text-muted); border-style: dashed; }
 .dl-strip-row .right {
   text-align: right;
-  font-size: 10px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  align-self: center;
+  white-space: nowrap;
 }
+/* Real progress bar — 6 px so it's actually readable. */
 .dl-strip-row .bar {
-  grid-column: 2 / 4;
-  height: 2px;
+  height: 6px;
   background: var(--bg-primary);
-  border-radius: 1px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
   overflow: hidden;
   margin-top: 2px;
 }
 .dl-strip-row .bar .fill {
   height: 100%;
   background: linear-gradient(90deg, var(--magenta), var(--cyan));
+  box-shadow: 0 0 6px var(--cyan-glow);
   transition: width 200ms linear;
 }

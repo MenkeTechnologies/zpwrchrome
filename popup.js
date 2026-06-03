@@ -818,17 +818,22 @@ function renderStrip(jobs) {
     const tag = isMissing
       ? `<span class="tag missing">missing</span>`
       : `<span class="tag ${stripEsc(j.status)}">${stripEsc(j.status)}</span>`;
-    const sizeStr = j.total > 0
-      ? `${stripBytes(j.done)} / ${stripBytes(j.total)} (${pct}%)`
-      : (j.status === "done" ? stripBytes(j.done) : `${stripBytes(j.done)}`);
-    const showBar = j.status === "active" || j.status === "paused";
+    const showBar = j.status === "active" || j.status === "paused" || j.status === "pending";
+    const rightStr = j.status === "done"
+      ? stripBytes(j.done)
+      : (j.total > 0 ? `${pct}%` : stripBytes(j.done));
+    const subStr = j.total > 0
+      ? `${stripBytes(j.done)} / ${stripBytes(j.total)}`
+      : (j.status === "done" ? stripBytes(j.done) : "—");
     return `
       <div class="${cls}" data-gid="${j.gid}" data-dest="${stripEsc(j.dest || "")}" data-status="${stripEsc(j.status)}">
         <span class="ic">${ico}</span>
-        <span class="nm" title="${stripEsc(j.dest || "")}">${stripEsc(name || "(unnamed)")}</span>
-        <span class="right">${stripBytes(j.total || j.done)}</span>
-        <span class="meta">${tag}<span>${stripEsc(sizeStr)}</span></span>
-        ${showBar ? `<div class="bar"><div class="fill" style="width:${pct}%;"></div></div>` : ""}
+        <div class="body">
+          <span class="nm" title="${stripEsc(j.dest || "")}">${stripEsc(name || "(unnamed)")}</span>
+          <div class="meta">${tag}<span class="sz">${stripEsc(subStr)}</span></div>
+          ${showBar ? `<div class="bar"><div class="fill" style="width:${pct}%;"></div></div>` : ""}
+        </div>
+        <span class="right">${stripEsc(rightStr)}</span>
       </div>
     `;
   }).join("");
