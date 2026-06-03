@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "zpwrchrome",
   "short_name": "zpwrchrome",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "description": "Browser power-tool: UNIX `pass` integration (browserpass-compatible), segmented download manager that replaces Chrome's default, JetBrains-style tab switcher with MRU + scenes + opener-tree + minimap, fzf history search, and Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
@@ -155,6 +155,7 @@
     "pass-copy-otp":       { "description": "Copy the TOTP code for the best-matching `pass` entry to the clipboard" },
     "pass-open-url":       { "description": "Navigate the active tab to the URL stored in the best-matching `pass` entry (parses url/link/website/web/site keys)" },
 
+    "screenshot-full-page": { "description": "Full-page screenshot — scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts)" },
     "dl-paste-url":        { "description": "Download the URL currently on the clipboard via the zpwrchrome segmented downloader" },
     "dl-show-queue":       { "description": "Open the zpwrchrome download manager queue view" },
     "dl-pause-all":        { "description": "Pause every active download in the zpwrchrome download manager" },

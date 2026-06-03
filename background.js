@@ -30,6 +30,7 @@ import { loadInterface as loadDlInterface, DL_INTERFACE_DEFAULTS } from "./scrip
 import { loadRules as loadDlRules } from "./scripts-manager/dl-rules.js";
 import { diagPush, diagRead, diagClear } from "./lib/diag.js";
 import { expandBatchSafe }                from "./lib/dl-batch.js";
+import { screenshotFullPage }             from "./lib/screenshot.js";
 
 const MRU_KEY = "mru";
 const DL_SETTINGS_KEY = "dl.settings";
@@ -112,6 +113,7 @@ async function dispatch(command) {
   if (command === "pass-copy-user")       return passCopyForActive("user");
   if (command === "pass-copy-otp")        return passCopyForActive("otp");
   if (command === "pass-open-url")        return passOpenUrlForActive();
+  if (command === "screenshot-full-page") return doScreenshotFullPage();
   if (command === "dl-paste-url")         return dlPasteUrl();
   if (command === "dl-show-queue")        return dlShowQueue();
   if (command === "dl-pause-all")         return dlPauseAll();
@@ -496,6 +498,33 @@ function collectPageUrls(kind) {
   return out;
 }
 
+async function doScreenshotFullPage() {
+  diagPush("screenshot.start");
+  try {
+    const { dest, bytes, filename } = await screenshotFullPage();
+    diagPush("screenshot.done", { dest, bytes, filename });
+    if (chrome.notifications) {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: "zpwrchrome — screenshot saved",
+        message: dest || filename,
+      });
+    }
+  } catch (e) {
+    const msg = String(e?.message || e);
+    diagPush("screenshot.err", { err: msg });
+    if (chrome.notifications) {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: "zpwrchrome — screenshot failed",
+        message: msg.length > 200 ? msg.slice(0, 200) + "…" : msg,
+      });
+    }
+  }
+}
+
 async function dlPasteUrl() {
   // Read clipboard via injection into the active tab — service workers have
   // no DOM clipboard. The active tab inherits user-activation from the
@@ -758,6 +787,7 @@ const CTX_ACT_EXTFLT = "zpc-act-extfilter";
 const CTX_ACT_RULES  = "zpc-act-rules";
 const CTX_ACT_FOLD   = "zpc-act-folder";
 const CTX_ACT_EXTPG  = "zpc-act-extpage";
+const CTX_ACT_SHOT   = "zpc-act-screenshot";
 const CTX_ACT_HELP   = "zpc-act-help";
 const CTX_ACT_ABOUT  = "zpc-act-about";
 const CTX_ACT_ISSUE  = "zpc-act-issue";
@@ -805,6 +835,7 @@ chrome.runtime.onInstalled.addListener(() => {
   create({ id: CTX_ACT_MGR,    title: "Open download manager",        contexts: act });
   create({ id: CTX_ACT_SCR,    title: "Open userscript manager",      contexts: act });
   create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
+  create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
   create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
   create({ id: CTX_ACT_SET,    title: "Settings — General",           contexts: act });
   create({ id: CTX_ACT_IFACE,  title: "Settings — Interface",         contexts: act });
@@ -843,6 +874,10 @@ if (chrome.contextMenus) {
     }
     if (info.menuItemId === CTX_ACT_EXTPG) {
       chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
+      return;
+    }
+    if (info.menuItemId === CTX_ACT_SHOT) {
+      doScreenshotFullPage();
       return;
     }
     if (info.menuItemId === CTX_ACT_ISSUE) { chrome.tabs.create({ url: ISSUE_URL }); return; }
@@ -1742,6 +1777,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "dl.openFile") {
     bpSend({ action: "dl.openFile", dir: String(msg.path || "") })
       .then((resp) => sendResponse({ ok: true, opened: resp.data?.opened || null }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e), code: e?.code }));
+    return true;
+  }
+  if (msg?.kind === "dl.writeFile") {
+    bpSend({
+      action: "dl.writeFile",
+      dir:    String(msg.dir    || ""),
+      name:   String(msg.name   || ""),
+      base64: String(msg.base64 || ""),
+    })
+      .then((resp) => sendResponse({ ok: true, dest: resp.data?.dest, bytes: resp.data?.bytes }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e), code: e?.code }));
     return true;
   }

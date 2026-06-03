@@ -626,16 +626,44 @@ test("popup strip rows expose pause/resume/cancel/retry buttons per status", () 
   assert.match(popupJs, /j\.status === "paused"/);
   assert.match(popupJs, /data-act="resume"/);
   assert.match(popupJs, /j\.status === "failed" \|\| j\.status === "cancelled"/);
-  // Click handler routes button clicks through dl.pause / dl.resume / dl.cancel.
-  const handler = popupJs.match(/\$stripList\.addEventListener\("click",[\s\S]*?\}\);/);
-  assert.ok(handler, "strip click handler missing");
-  assert.match(handler[0], /button\.act/);
-  assert.match(handler[0], /kind: `dl\.\$\{act\}`/);
+  // Click handler routes button clicks through dl.pause / dl.resume / dl.cancel
+  // (plus open/reveal for done rows added later — those go through
+  // dl.openFile / dl.openDir instead, asserted separately).
+  assert.match(popupJs, /\$stripList\.addEventListener\("click"/);
+  assert.match(popupJs, /button\.act/);
+  assert.match(popupJs, /kind: `dl\.\$\{act\}`/);
   // CSS: dedicated grid column for the actions, plus button styling that
   // doesn't depend on hover (otherwise the previous flicker bug regresses).
   assert.match(popupCss, /grid-template-columns:\s*22px 1fr auto 60px/);
   assert.match(popupCss, /\.dl-strip-row \.act\s*\{/);
   assert.match(popupCss, /\.dl-strip-row \.act\.danger:hover/);
+});
+
+test("popup strip done rows expose open + reveal buttons (gated on dest_exists)", () => {
+  const popupJs = read("popup.js");
+  // Both buttons only appear when status=done AND destOnDisk.
+  assert.match(popupJs, /j\.status === "done" && destOnDisk/);
+  assert.match(popupJs, /data-act="open"\s+data-dest=/);
+  assert.match(popupJs, /data-act="reveal"\s+data-dest=/);
+  // Click handler routes open → dl.openFile, reveal → dl.openDir.
+  assert.match(popupJs, /act === "open" \|\| act === "reveal"/);
+  assert.match(popupJs, /act === "open" \? "dl\.openFile" : "dl\.openDir"/);
+});
+
+test("background.js + screenshot.js route screenshots through dl.writeFile so settings.downloadDir wins", () => {
+  // The takeover path passes the user's downloadDir to the host; screenshots
+  // must do the same instead of using chrome.downloads.download (which can't
+  // override Chrome's default folder).
+  const shot = read("lib/screenshot.js");
+  assert.match(shot, /kind: "dl\.writeFile"/);
+  assert.match(shot, /resolvePreferredDownloadDir/);
+  // SW handler must forward dir + name + base64 unchanged.
+  const handler = bg.match(/msg\?\.kind === "dl\.writeFile"[\s\S]*?return true;/);
+  assert.ok(handler, "dl.writeFile handler missing");
+  assert.match(handler[0], /action: "dl\.writeFile"/);
+  assert.match(handler[0], /dir:\s+String\(msg\.dir/);
+  assert.match(handler[0], /name:\s+String\(msg\.name/);
+  assert.match(handler[0], /base64: String\(msg\.base64/);
 });
 
 test("every settings + manager page imports the shared lib/page-nav.js so the global nav strip injects on load", () => {

@@ -842,10 +842,11 @@ function renderStrip(jobs) {
       ? `${stripBytes(j.done)} / ${stripBytes(j.total)}`
       : (j.status === "done" ? stripBytes(j.done) : "—");
     // Per-row action buttons. Status drives which appear:
-    //   pending|active → pause + cancel
-    //   paused         → resume + cancel
-    //   failed|cancelled → retry (resume)
-    //   done           → no buttons (row click opens the file)
+    //   pending|active   → pause + cancel
+    //   paused           → resume + cancel
+    //   failed|cancelled → retry
+    //   done + present   → open (default app) + reveal (parent dir)
+    //   done + missing   → no buttons (file no longer there)
     const acts = [];
     if (j.status === "active" || j.status === "pending") {
       acts.push(`<button class="act" data-act="pause"  data-gid="${j.gid}" title="Pause">⏸</button>`);
@@ -855,6 +856,9 @@ function renderStrip(jobs) {
       acts.push(`<button class="act danger" data-act="cancel" data-gid="${j.gid}" title="Cancel">✕</button>`);
     } else if (j.status === "failed" || j.status === "cancelled") {
       acts.push(`<button class="act" data-act="resume" data-gid="${j.gid}" title="Retry">↻</button>`);
+    } else if (j.status === "done" && destOnDisk) {
+      acts.push(`<button class="act" data-act="open"   data-dest="${stripEsc(j.dest)}" title="Open file with default app">↗</button>`);
+      acts.push(`<button class="act" data-act="reveal" data-dest="${stripEsc(j.dest)}" title="Reveal in Finder">📁</button>`);
     }
     const actHtml = acts.length ? `<div class="acts">${acts.join("")}</div>` : "";
 
@@ -874,11 +878,20 @@ function renderStrip(jobs) {
   $strip.hidden = false;
 }
 $stripList.addEventListener("click", (e) => {
-  // Per-row action button — pause/resume/cancel via existing SW handlers.
+  // Per-row action button — pause/resume/cancel/open/reveal via existing
+  // SW handlers. open + reveal carry a `data-dest` path (not a gid); the
+  // others carry a gid.
   const btn = e.target.closest("button.act");
   if (btn) {
     e.stopPropagation();
     const act = btn.dataset.act;
+    if (act === "open" || act === "reveal") {
+      const dest = btn.dataset.dest || "";
+      const kind = act === "open" ? "dl.openFile" : "dl.openDir";
+      btn.disabled = true;
+      chrome.runtime.sendMessage({ kind, path: dest }, () => { btn.disabled = false; });
+      return;
+    }
     const gid = Number(btn.dataset.gid);
     if (!act || !Number.isFinite(gid)) return;
     btn.disabled = true;

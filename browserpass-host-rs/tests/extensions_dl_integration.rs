@@ -755,3 +755,68 @@ fn dl_add_with_mask_writes_state_using_masked_filename() {
     let _ = fs::remove_dir_all(&cache);
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn dl_write_file_writes_decoded_bytes_to_dir_name() {
+    let cache = tempdir("dl-writefile");
+    fs::create_dir_all(&cache).unwrap();
+    let dst_dir = tempdir("dl-writefile-out");
+    fs::create_dir_all(&dst_dir).unwrap();
+    // "hello world" → base64 = "aGVsbG8gd29ybGQ="
+    let resp = run_with_env(
+        &json!({
+            "action": "dl.writeFile",
+            "dir":    dst_dir.to_string_lossy(),
+            "name":   "greeting.txt",
+            "base64": "aGVsbG8gd29ybGQ="
+        }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "ok", "dl.writeFile must succeed: {resp}");
+    let dest = resp["data"]["dest"].as_str().unwrap_or("");
+    assert!(dest.ends_with("greeting.txt"), "got {dest}");
+    let got = fs::read_to_string(dest).unwrap();
+    assert_eq!(got, "hello world");
+    assert_eq!(resp["data"]["bytes"], 11);
+    let _ = fs::remove_dir_all(&cache);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn dl_write_file_uses_unique_dest_path_on_conflict() {
+    let cache = tempdir("dl-writefile-conflict");
+    fs::create_dir_all(&cache).unwrap();
+    let dst_dir = tempdir("dl-writefile-conflict-out");
+    fs::create_dir_all(&dst_dir).unwrap();
+    fs::write(dst_dir.join("a.bin"), b"existing").unwrap();
+    let resp = run_with_env(
+        &json!({
+            "action": "dl.writeFile",
+            "dir":    dst_dir.to_string_lossy(),
+            "name":   "a.bin",
+            "base64": "ZnJlc2g="    // "fresh"
+        }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "ok");
+    let dest = resp["data"]["dest"].as_str().unwrap_or("");
+    assert!(dest.contains("a") && dest.ends_with(".bin"));
+    assert_ne!(dest, dst_dir.join("a.bin").to_string_lossy(),
+               "existing file must not be clobbered");
+    let _ = fs::remove_dir_all(&cache);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn dl_write_file_errors_on_missing_name() {
+    let cache = tempdir("dl-writefile-noname");
+    fs::create_dir_all(&cache).unwrap();
+    let resp = run_with_env(
+        &json!({ "action": "dl.writeFile", "base64": "QUE=" }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "error");
+    let msg = resp["params"]["message"].as_str().unwrap_or("");
+    assert!(msg.contains("missing name"), "got {msg}");
+    let _ = fs::remove_dir_all(&cache);
+}

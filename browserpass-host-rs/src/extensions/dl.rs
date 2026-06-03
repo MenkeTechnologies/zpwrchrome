@@ -442,6 +442,7 @@ pub fn dispatch_dl(action: &str, value: &Value) {
         "dl.clear"   => dl_clear(&req),
         "dl.openDir"  => dl_open_dir(&req),
         "dl.openFile" => dl_open_file(&req),
+        "dl.writeFile" => dl_write_file(value),
         _ => {
             response::SendErrorAndExit(
                 errors::Code::InvalidRequestAction,
@@ -707,6 +708,115 @@ pub fn dl_open_dir(req: &DlRequest) {
 /// Open a file with the platform's default application (Finder/Explorer
 /// associates extension → app). Used by the "open" button on done rows.
 /// Refuses to open a file that no longer exists — never silently create.
+/// Write a raw byte buffer (received as base64 from the extension) to a
+/// file under `dir/name`. Used by the screenshot feature to land its PNG
+/// in the user-configured download directory without going through
+/// chrome.downloads.download (which can't override the browser's default
+/// downloads folder). Uses unique_dest_path so existing files aren't
+/// clobbered. dir empty = host default download dir.
+pub fn dl_write_file(value: &Value) {
+    #[derive(Deserialize)]
+    struct WriteReq {
+        #[serde(default)] dir:    String,
+        #[serde(default)] name:   String,
+        #[serde(default)] base64: String,
+    }
+    let req: WriteReq = match serde_json::from_value(value.clone()) {
+        Ok(r) => r,
+        Err(e) => {
+            response::SendErrorAndExit(
+                errors::Code::ParseRequest,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "dl.writeFile: malformed request"),
+                    (field::ACTION,  "dl.writeFile"),
+                    (field::ERROR,   &e.to_string()),
+                ])),
+            );
+        }
+    };
+    if req.name.is_empty() {
+        response::SendErrorAndExit(
+            errors::Code::InvalidRequestAction,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.writeFile: missing name"),
+                (field::ACTION,  "dl.writeFile"),
+            ])),
+        );
+    }
+    let bytes = match base64_decode(&req.base64) {
+        Ok(b) => b,
+        Err(e) => {
+            response::SendErrorAndExit(
+                errors::Code::ParseRequest,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "dl.writeFile: bad base64"),
+                    (field::ACTION,  "dl.writeFile"),
+                    (field::ERROR,   &e),
+                ])),
+            );
+        }
+    };
+    let dir = if req.dir.is_empty() {
+        default_download_dir()
+    } else {
+        expand_home(&req.dir)
+    };
+    if let Err(e) = fs::create_dir_all(&dir) {
+        response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.writeFile: cannot create dir"),
+                (field::ACTION,  "dl.writeFile"),
+                (field::ERROR,   &e.to_string()),
+            ])),
+        );
+    }
+    let dest = unique_dest_path(&dir, &sanitize_filename(&req.name));
+    if let Err(e) = fs::write(&dest, &bytes) {
+        response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.writeFile: write failed"),
+                (field::ACTION,  "dl.writeFile"),
+                (field::ERROR,   &e.to_string()),
+            ])),
+        );
+    }
+    crate::diag::log(&format!("WRITE_FILE dest={} bytes={}", dest.display(), bytes.len()));
+    response::SendOk(serde_json::json!({
+        "dest":  dest.to_string_lossy(),
+        "bytes": bytes.len(),
+    }));
+}
+
+/// Minimal RFC 4648 base64 decoder (no padding required). The extension
+/// passes raw base64 — keep this self-contained to avoid a base64 crate.
+fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
+    let mut out = Vec::with_capacity(s.len() * 3 / 4);
+    let mut buf: u32 = 0;
+    let mut bits: u32 = 0;
+    for c in s.bytes() {
+        let v: u32 = match c {
+            b'A'..=b'Z' => (c - b'A') as u32,
+            b'a'..=b'z' => (c - b'a' + 26) as u32,
+            b'0'..=b'9' => (c - b'0' + 52) as u32,
+            b'+' | b'-' => 62,
+            b'/' | b'_' => 63,
+            b'='        => continue,
+            b' ' | b'\n' | b'\r' | b'\t' => continue,
+            other       => return Err(format!("invalid base64 byte 0x{:02x}", other)),
+        };
+        buf = (buf << 6) | v;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buf >> bits) as u8);
+            buf &= (1 << bits) - 1;
+        }
+    }
+    Ok(out)
+}
+
 pub fn dl_open_file(req: &DlRequest) {
     if req.dir.is_empty() {
         response::SendErrorAndExit(
