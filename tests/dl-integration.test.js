@@ -459,12 +459,34 @@ test("downloads.html toolbar exposes a 📁 button bound to t-open-dir", () => {
   assert.match(dlHtml, /id="t-open-dir"/);
 });
 
-test("downloads.js t-open-dir click sends dl.openDir with empty path (default dir)", () => {
+test("downloads.js t-open-dir prefers settings.lastDir, falls back to default", () => {
   const dljs = read("scripts-manager/downloads.js");
   const block = dljs.match(/t-open-dir[\s\S]*?\}\);\n\}\);/);
   assert.ok(block, "t-open-dir handler not wired");
+  assert.match(block[0], /state\.settings\.saveToLastUsedLocation && state\.settings\.lastDir/);
   assert.match(block[0], /kind: "dl\.openDir"/);
-  assert.match(block[0], /path: ""/);
+});
+
+test("downloads.js renders rows incrementally via _rowCache (no innerHTML thrash, no hover flicker)", () => {
+  const dljs = read("scripts-manager/downloads.js");
+  // Render loop must keep a cache keyed by gid + a stable rowIdentity hash;
+  // full-list innerHTML replacement during the 4Hz poll is what caused
+  // hover state (and the action buttons inside it) to flicker.
+  assert.match(dljs, /function rowIdentity\(j\)/);
+  assert.match(dljs, /const _rowCache = new Map\(\);/);
+  assert.match(dljs, /function applyRowProgress/);
+  // Negative — the destructive innerHTML write inside renderList is gone.
+  const renderFn = dljs.match(/function renderList\(\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(renderFn, "renderList not found");
+  assert.doesNotMatch(renderFn[0], /\$list\.innerHTML\s*=\s*jobs\.map/);
+});
+
+test("downloads.css actions panel is always visible (not hover-gated), so retry/reveal stay clickable", () => {
+  const css = read("scripts-manager/downloads.css");
+  // The old `.dl-row:hover .actions { opacity: 1 }` rule was the symptom
+  // user reported as "no retry button" — pin its removal.
+  assert.doesNotMatch(css, /\.dl-row:hover \.actions/);
+  assert.match(css, /\.dl-row \.actions \{[\s\S]*?opacity: 1;/);
 });
 
 test("downloads.js renders a 'reveal' action on done rows that opens the parent dir via dl.openDir", () => {

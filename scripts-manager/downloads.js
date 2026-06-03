@@ -205,8 +205,8 @@ function rowHtml(job) {
         <span class="meta">
           ${statTag}
           <span>${sizeStr}</span>
-          ${showSpeed ? `<span>${fmtSpeed(job.done, job.elapsed_ms)}</span>` : ""}
-          ${showEta   ? `<span>ETA ${fmtEta(job.done, job.total, bps)}</span>` : ""}
+          ${showSpeed ? `<span class="spd">${fmtSpeed(job.done, job.elapsed_ms)}</span>` : ""}
+          ${showEta   ? `<span class="eta">ETA ${fmtEta(job.done, job.total, bps)}</span>` : ""}
           <span class="dim">gid ${job.gid} · ${job.segments} seg</span>
         </span>
         ${showBar ? `<div class="bar"><div class="fill" style="width:${pct}%;"></div></div>` : ""}
@@ -244,6 +244,43 @@ function renderCats() {
   });
 }
 
+// "Stable identity" hash for a job — when this string changes, the row
+// needs a full rebuild; when it doesn't, only the progress / size / speed
+// numbers update in place. Keeps :hover state intact across the 4Hz poll.
+function rowIdentity(j) {
+  return [
+    j.gid, j.status, j.err || "", j.dest || "", j.url || "",
+    j.segments, j.dest_exists === false ? 0 : 1,
+  ].join("|");
+}
+
+// Map of gid → { el, identity } persisted across renders so the same row
+// element survives a poll cycle. innerHTML thrash was killing the hover
+// state (and therefore the action buttons inside it) at 4 Hz.
+const _rowCache = new Map();
+let _emptyEl = null;
+
+function applyRowProgress(el, j) {
+  // Update only the bits that change tick-to-tick. Everything that drives
+  // a layout (status, err, action list) is gated by rowIdentity above —
+  // when it changes the whole row gets rebuilt.
+  const pct = j.total > 0 ? Math.min(100, Math.round((j.done / j.total) * 100)) : 0;
+  const bps = j.elapsed_ms > 0 ? (j.done * 1000) / j.elapsed_ms : 0;
+  const sizeStr = j.total > 0
+    ? `${fmtBytes(j.done)} / ${fmtBytes(j.total)} (${pct}%)`
+    : (j.status === "done" ? fmtBytes(j.done) : `${fmtBytes(j.done)} / ?`);
+  const sizeEl = el.querySelector(".meta > span:nth-of-type(2)");
+  if (sizeEl) sizeEl.textContent = sizeStr;
+  if (j.status === "active") {
+    const spdEl = el.querySelector(".meta .spd");
+    const etaEl = el.querySelector(".meta .eta");
+    if (spdEl) spdEl.textContent = fmtSpeed(j.done, j.elapsed_ms);
+    if (etaEl) etaEl.textContent = `ETA ${fmtEta(j.done, j.total, bps)}`;
+  }
+  const fill = el.querySelector(".bar .fill");
+  if (fill) fill.style.width = `${pct}%`;
+}
+
 function renderList() {
   const jobs = filterJobs();
   // Newest first within each category: pending/active/paused first then by gid desc.
@@ -251,14 +288,48 @@ function renderList() {
   jobs.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || b.gid - a.gid);
 
   if (!jobs.length) {
-    const msg = state.filter
+    if (_rowCache.size) {
+      for (const { el } of _rowCache.values()) el.remove();
+      _rowCache.clear();
+    }
+    if (!_emptyEl) { _emptyEl = document.createElement("div"); _emptyEl.className = "empty"; $list.appendChild(_emptyEl); }
+    _emptyEl.innerHTML = state.filter
       ? `no downloads match "${escapeHtml(state.filter)}"`
       : (state.category === "all"
           ? "no downloads yet — bind <kbd>dl-paste-url</kbd> or right-click a link → Download with zpwrchrome"
           : `no ${escapeHtml(state.category)} downloads`);
-    $list.innerHTML = `<div class="empty">${msg}</div>`;
-  } else {
-    $list.innerHTML = jobs.map(rowHtml).join("");
+    $count.textContent = "0 items";
+    return;
+  }
+  if (_emptyEl) { _emptyEl.remove(); _emptyEl = null; }
+
+  // Incremental update — for each desired job, reuse the existing row when
+  // its rowIdentity hasn't changed (just patch progress); otherwise rebuild
+  // the row from the template. Then drop any rows for jobs that are gone.
+  const seen = new Set();
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    const id = rowIdentity(j);
+    let entry = _rowCache.get(j.gid);
+    if (!entry || entry.identity !== id) {
+      // (Re)build the row from the same template renderList used to.
+      const tmp = document.createElement("div");
+      tmp.innerHTML = rowHtml(j).trim();
+      const fresh = tmp.firstElementChild;
+      if (entry) entry.el.replaceWith(fresh);
+      else       $list.appendChild(fresh);
+      entry = { el: fresh, identity: id };
+      _rowCache.set(j.gid, entry);
+    } else {
+      // Same identity — only mutate the numbers in place.
+      applyRowProgress(entry.el, j);
+    }
+    // Maintain visual order without recreating nodes.
+    if ($list.children[i] !== entry.el) $list.insertBefore(entry.el, $list.children[i] || null);
+    seen.add(j.gid);
+  }
+  for (const [gid, { el }] of _rowCache.entries()) {
+    if (!seen.has(gid)) { el.remove(); _rowCache.delete(gid); }
   }
   $count.textContent = `${jobs.length} item${jobs.length === 1 ? "" : "s"}`;
 }
@@ -344,8 +415,13 @@ document.getElementById("t-resume-all").addEventListener("click", async () => {
 });
 document.getElementById("t-refresh").addEventListener("click", () => poll());
 document.getElementById("t-open-dir").addEventListener("click", () => {
-  // Open the host's default download directory in Finder/Explorer/Nautilus.
-  chrome.runtime.sendMessage({ kind: "dl.openDir", path: "" }, (r) => {
+  // Prefer the user's last-used directory (set by saveToLastUsedLocation +
+  // populated by the takeover handler). Falls back to empty so the host
+  // opens its default — which is now Chrome's standard ~/Downloads.
+  const path = state.settings.saveToLastUsedLocation && state.settings.lastDir
+    ? state.settings.lastDir
+    : "";
+  chrome.runtime.sendMessage({ kind: "dl.openDir", path }, (r) => {
     if (!r?.ok) $status.textContent = `open dir failed: ${r?.err || "unknown"}`;
     else        $status.textContent = `opened ${r.opened || "downloads folder"}`;
   });

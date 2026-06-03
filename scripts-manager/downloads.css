@@ -246,15 +246,16 @@ a.tbtn { display: inline-flex; align-items: center; justify-content: center; tex
   background: linear-gradient(90deg, var(--magenta), var(--cyan));
   transition: width 200ms linear;
 }
+/* Actions are persistent (not hover-gated) — the retry button on failed
+   downloads has to be reachable without depending on hover, and the 4Hz
+   re-render at poll time was causing the panel to flicker in/out. */
 .dl-row .actions {
   display: flex; gap: 4px;
   position: absolute;
   right: 14px;
   top: 14px;
-  opacity: 0;
-  transition: opacity 0.1s;
+  opacity: 1;
 }
-.dl-row:hover .actions, .dl-row.sel .actions { opacity: 1; }
 .dl-row .actions button {
   background: var(--bg-card);
   border: 1px solid var(--border);

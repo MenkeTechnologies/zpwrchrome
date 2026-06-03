@@ -164,11 +164,14 @@ pub fn list_all_jobs() -> std::io::Result<Vec<JobState>> {
 // ─── Filename helpers (exposed for tests + reused by the worker) ────────────
 
 pub fn default_download_dir() -> PathBuf {
+    // Match Chrome's "Downloads location" default so the toolbar 📁 button
+    // opens the same folder where browser-initiated takeovers land.
+    // Override with ZPWRCHROME_DL_DIR if the user wants a sandbox.
     if let Ok(p) = std::env::var("ZPWRCHROME_DL_DIR") {
         return expand_home(&p);
     }
     if let Ok(home) = std::env::var("HOME") {
-        return PathBuf::from(home).join("Downloads").join("zpwrchrome");
+        return PathBuf::from(home).join("Downloads");
     }
     PathBuf::from("./downloads")
 }
