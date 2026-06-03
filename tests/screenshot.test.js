@@ -32,9 +32,30 @@ test("orchestrator probes page dimensions before scrolling", () => {
   assert.match(shot, /devicePixelRatio/);
 });
 
-test("orchestrator restores original scroll + sticky styles even when capture throws", () => {
-  // Try/finally wraps captureTiles, restoreStickies + scrollTo in the finally.
-  assert.match(shot, /try \{\s*tiles = await captureTiles[\s\S]*?\}\s*finally\s*\{[\s\S]*?restoreStickies[\s\S]*?scrollTo[\s\S]*?\}/);
+test("orchestrator restores scroll + overflow state even when capture throws (try/finally)", () => {
+  // try/finally wraps captureTiles, restoreCaptureState in the finally.
+  // The restore call is itself wrapped in try{} so even an exec failure
+  // (e.g. tab navigated away mid-capture) doesn't propagate over the
+  // original error.
+  assert.match(shot, /try \{\s*tiles = await captureTiles[\s\S]*?\}\s*finally\s*\{[\s\S]*?restoreCaptureState[\s\S]*?\}/);
+});
+
+test("orchestrator uses scroll-overlap (GoFullPage technique) instead of DOM mutation for stickies", () => {
+  // Mutating the DOM to neutralize position:fixed/sticky added reflow
+  // latency that contributed to the captureVisibleTab throttle errors.
+  // Replaced with a 200 px scroll overlap — the lower tile's pixels
+  // overwrite the sticky banner from the upper tile.
+  assert.match(shot, /const SCROLL_OVERLAP_PX\s*=\s*200/);
+  assert.match(shot, /yStep\s*=\s*Math\.max\(1, vh - SCROLL_OVERLAP_PX\)/);
+  // The old DOM-mutating functions are gone.
+  assert.doesNotMatch(shot, /function hideStickies/);
+  assert.doesNotMatch(shot, /function restoreStickies/);
+  assert.doesNotMatch(shot, /data-zpc-screenshot-prev/);
+  // Replacement: suppressScrollChrome saves overflow + scroll, sets
+  // overflow:hidden during capture; restoreCaptureState reverts.
+  assert.match(shot, /function suppressScrollChrome/);
+  assert.match(shot, /function restoreCaptureState/);
+  assert.match(shot, /style\.overflow\s*=\s*"hidden"/);
 });
 
 test("orchestrator caps page size so an infinite-scroll page can't hang the SW", () => {
@@ -45,14 +66,18 @@ test("orchestrator caps page size so an infinite-scroll page can't hang the SW",
   assert.match(shot, /sw \* dpr \* sh \* dpr > MAX_PIXELS/);
 });
 
-test("orchestrator hides fixed/sticky elements before capture, restores after", () => {
-  assert.match(shot, /function hideStickies\(\)/);
-  assert.match(shot, /function restoreStickies\(\)/);
-  // Marker attribute so restore can find them without a closure roundtrip
-  // (the SW-injected functions can't share state with each other).
-  assert.match(shot, /data-zpc-screenshot-prev/);
-  // Both fixed AND sticky positions get neutralized.
-  assert.match(shot, /cs\.position === "fixed" \|\| cs\.position === "sticky"/);
+test("orchestrator captures scroll position so it can restore after", () => {
+  // Scroll position is captured up-front in suppressScrollChrome's saved
+  // bag and passed back through restoreCaptureState's args.
+  const fn = shot.match(/function suppressScrollChrome\(\)[\s\S]*?return saved[\s\S]*?\n\}/);
+  assert.ok(fn, "suppressScrollChrome not found");
+  assert.match(fn[0], /scrollX:\s+window\.scrollX/);
+  assert.match(fn[0], /scrollY:\s+window\.scrollY/);
+  // restoreCaptureState uses scrollTo with behavior:instant so it doesn't
+  // animate the page back to the original position.
+  const r = shot.match(/function restoreCaptureState\(saved\)[\s\S]*?\n\}/);
+  assert.ok(r, "restoreCaptureState not found");
+  assert.match(r[0], /scrollTo\(\{\s*left:\s*saved\.scrollX,\s*top:\s*saved\.scrollY,\s*behavior:\s*"instant"\s*\}\)/);
 });
 
 test("orchestrator waits between captureVisibleTab calls — captureVisibleTab is ~2 Hz", () => {
@@ -64,16 +89,16 @@ test("orchestrator waits between captureVisibleTab calls — captureVisibleTab i
   assert.match(shot, /new Promise\(\(res\) => setTimeout\(res, CAPTURE_GAP_MS\)\)/);
 });
 
-test("orchestrator retries once on MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND throttle", () => {
-  // User hit this in production: Chrome rejected the next capture even
-  // with a 400 ms gap. Now wrapped so the quota error sleeps 1100 ms and
-  // retries — other errors re-throw unchanged.
-  assert.match(shot, /async function captureVisibleTabRetry/);
+test("orchestrator retries with exponential backoff on MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND", () => {
+  // User hit single-retry-not-enough in production. Now three retries
+  // with 1100 → 2500 → 5000 ms backoff. Other errors re-throw immediately.
+  assert.match(shot, /const RETRY_BACKOFF_MS\s*=\s*\[1100, 2500, 5000\]/);
   const fn = shot.match(/async function captureVisibleTabRetry[\s\S]*?\n\}/);
   assert.ok(fn, "captureVisibleTabRetry not found");
   assert.match(fn[0], /MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/);
-  assert.match(fn[0], /setTimeout\(res, 1100\)/);
-  assert.match(fn[0], /throw e/);
+  // Loop bounded by backoff array length so we can't busy-spin.
+  assert.match(fn[0], /attempt <= RETRY_BACKOFF_MS\.length/);
+  assert.match(fn[0], /RETRY_BACKOFF_MS\[attempt\]/);
   // captureTiles uses the wrapper, not the raw API.
   assert.match(shot, /captureVisibleTabRetry\(tab\.windowId\)/);
 });
