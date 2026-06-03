@@ -31,12 +31,28 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            browserpass-host-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('browserpass-host-rs/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Show versions
         run: |
           node --version
           npm --version
           bash --version | head -1
           rsvg-convert --version
+          cargo --version
+          rustc --version
 
       - name: Validate JSON syntax
         run: |

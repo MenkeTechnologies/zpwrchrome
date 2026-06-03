@@ -7,7 +7,7 @@
   "author": "MenkeTechnologies",
   "license": "MIT",
   "scripts": {
-    "test": "node --test --test-reporter=spec tests/*.test.js"
+    "test": "node --test --test-reporter=spec tests/*.test.js && cargo test --manifest-path browserpass-host-rs/Cargo.toml"
   },
   "engines": {
     "node": ">=20"
