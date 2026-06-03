@@ -860,6 +860,11 @@ function renderStrip(jobs) {
       acts.push(`<button class="act" data-act="open"   data-dest="${stripEsc(j.dest)}" title="Open file with default app">↗</button>`);
       acts.push(`<button class="act" data-act="reveal" data-dest="${stripEsc(j.dest)}" title="Reveal in Finder">📁</button>`);
     }
+    // Remove-row button — works on every status. Cancels the underlying job
+    // if it's still in flight (best-effort, ignores host error), then drops
+    // the state file via dl.clear with the row's gid. The disk file is left
+    // alone so the user keeps any partial bytes already downloaded.
+    acts.push(`<button class="act danger" data-act="remove" data-gid="${j.gid}" title="Remove from list (does NOT delete the file)">🗑</button>`);
     const actHtml = acts.length ? `<div class="acts">${acts.join("")}</div>` : "";
 
     return `

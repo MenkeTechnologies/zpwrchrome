@@ -178,6 +178,23 @@ fn dl_add_downloads_file_via_detached_worker_and_marks_state_done() {
     let bytes = fs::read(dest).expect("dest file readable");
     assert_eq!(bytes.len(), payload.len(), "size mismatch");
     assert_eq!(bytes, *payload,            "content mismatch");
+    // Regression pin: a 5.9 MB download was rendering as "DONE  0 B / 5.9 MB"
+    // because run_segmented never copied the atomic done_total into the
+    // in-memory state before returning. Manifest the bug: final state.done
+    // must equal the on-disk file size.
+    assert_eq!(
+        final_state["done"].as_u64().unwrap_or(0),
+        payload.len() as u64,
+        "state.done = {} but file is {} bytes (run_segmented didn't \
+         hoist done_total into state — UI shows 0 B / 5.9 MB)",
+        final_state["done"], payload.len(),
+    );
+    assert_eq!(
+        final_state["total"].as_u64().unwrap_or(0),
+        payload.len() as u64,
+        "state.total mismatch: {} vs {}",
+        final_state["total"], payload.len(),
+    );
 
     let _ = fs::remove_dir_all(&dlroot);
     let _ = fs::remove_dir_all(&cache);
@@ -927,4 +944,28 @@ fn probe_headers_exists_with_head_then_range_get_fallback() {
         "run_worker must call probe_headers, not ureq::head() inline");
     assert!(!worker.contains("ureq::head"),
         "no raw ureq::head call in run_worker — must go through probe_headers");
+}
+
+#[test]
+fn dl_remove_cancels_and_deletes_state_file() {
+    let cache = tempdir("dl-remove");
+    fs::create_dir_all(&cache).unwrap();
+    let st = json!({
+        "gid": 99, "url": "https://example.invalid/x", "dest": "/tmp/x",
+        "total": 100, "done": 30, "status": "active", "err": null,
+        "segments": 1, "started_at": 1, "elapsed_ms": 0,
+        "paused": false, "cancelled": false, "cookies": "", "userAgent": ""
+    });
+    fs::write(cache.join("gid_000099.json"),
+              serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+
+    let resp = run_with_env(
+        &json!({ "action": "dl.remove", "gid": 99 }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "ok", "dl.remove must succeed: {resp}");
+    assert_eq!(resp["data"]["status"], "removed");
+    assert!(!cache.join("gid_000099.json").exists(),
+        "state file must be gone after dl.remove");
+    let _ = fs::remove_dir_all(&cache);
 }

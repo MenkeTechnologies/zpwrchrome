@@ -440,6 +440,7 @@ pub fn dispatch_dl(action: &str, value: &Value) {
         "dl.resume"  => dl_resume(&req),
         "dl.cancel"  => dl_cancel(&req),
         "dl.clear"   => dl_clear(&req),
+        "dl.remove"  => dl_remove(&req),
         "dl.openDir"        => dl_open_dir(&req),
         "dl.openFile"       => dl_open_file(&req),
         "dl.writeFile"      => dl_write_file(value),
@@ -1035,6 +1036,42 @@ pub fn dl_open_file(req: &DlRequest) {
     }
 }
 
+/// Remove a single job by gid: cancel the underlying worker if it's
+/// still in flight, then delete the gid state file. The dest file on
+/// disk is intentionally left alone — the user can re-trigger the
+/// download or hand-delete the bytes themselves.
+pub fn dl_remove(req: &DlRequest) {
+    // Best-effort cancel — flag the running worker so it stops on its
+    // next check_control. If the worker is already gone, this just
+    // mutates the state file we're about to delete anyway.
+    let _ = mutate_state(req.gid, "dl.remove", |s| {
+        s.cancelled = true;
+        s.status = "cancelled".into();
+    });
+    // Give the worker (if any) a moment to notice cancellation before we
+    // yank the state file out from under it. FLAG_CHECK_INTERVAL is the
+    // worker's poll cadence; one cycle is sufficient.
+    std::thread::sleep(FLAG_CHECK_INTERVAL);
+
+    match state_path(req.gid) {
+        Ok(p) => {
+            let _ = fs::remove_file(&p);
+            crate::diag::log(&format!("REMOVE gid={} state_path={}", req.gid, p.display()));
+            response::SendOk(DlActionResponse { gid: req.gid, status: "removed".into() });
+        }
+        Err(e) => {
+            response::SendErrorAndExit(
+                errors::Code::InaccessiblePasswordStore,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "dl.remove: cannot resolve state path"),
+                    (field::ACTION,  "dl.remove"),
+                    (field::ERROR,   &e.to_string()),
+                ])),
+            );
+        }
+    }
+}
+
 pub fn dl_clear(req: &DlRequest) {
     let jobs = list_all_jobs().unwrap_or_default();
     let scope = req.scope.as_str();
@@ -1403,6 +1440,14 @@ fn run_segmented(state: &mut JobState, total: u64, start_instant: Instant) -> Re
             Err(_) => errs.push("segment thread panicked".into()),
         }
     }
+    // Hoist the final byte count out of the shared atomic and into the
+    // caller's in-memory state. Without this, run_worker's "status = done"
+    // write below would stomp the disk state with state.done = 0 because
+    // only progress_pump (on a separate thread, writing to disk) ever
+    // updated it. Job rows then rendered "DONE  0 B / 5.9 MB" on the
+    // manager + popup strip.
+    state.done = done_total.load(Ordering::Relaxed);
+    state.elapsed_ms = start_instant.elapsed().as_millis() as u64;
     if !errs.is_empty() {
         return Err(errs.join("; "));
     }

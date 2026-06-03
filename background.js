@@ -1818,6 +1818,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
+  if (msg?.kind === "dl.remove") {
+    bpDlGid("dl.remove", Number(msg.gid))
+      .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
   if (msg?.kind === "dl.openDir") {
     // path: optional — empty = open the default download dir on the host.
     // The host puts the path in the request's `url` field (re-using the
