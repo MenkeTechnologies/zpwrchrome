@@ -56,11 +56,26 @@ test("orchestrator hides fixed/sticky elements before capture, restores after", 
 });
 
 test("orchestrator waits between captureVisibleTab calls — captureVisibleTab is ~2 Hz", () => {
-  // CAPTURE_GAP_MS must be ≥ 400 to clear Chrome's MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND.
+  // CAPTURE_GAP_MS must comfortably exceed the 500 ms 1/2-Hz budget. 600 ms
+  // gives headroom for SW jitter; the retry below handles the rare miss.
   const m = shot.match(/const CAPTURE_GAP_MS\s*=\s*(\d+)/);
   assert.ok(m, "CAPTURE_GAP_MS not declared");
-  assert.ok(parseInt(m[1], 10) >= 400, `gap is only ${m[1]} ms — Chrome will throttle`);
+  assert.ok(parseInt(m[1], 10) >= 500, `gap is only ${m[1]} ms — Chrome will throttle`);
   assert.match(shot, /new Promise\(\(res\) => setTimeout\(res, CAPTURE_GAP_MS\)\)/);
+});
+
+test("orchestrator retries once on MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND throttle", () => {
+  // User hit this in production: Chrome rejected the next capture even
+  // with a 400 ms gap. Now wrapped so the quota error sleeps 1100 ms and
+  // retries — other errors re-throw unchanged.
+  assert.match(shot, /async function captureVisibleTabRetry/);
+  const fn = shot.match(/async function captureVisibleTabRetry[\s\S]*?\n\}/);
+  assert.ok(fn, "captureVisibleTabRetry not found");
+  assert.match(fn[0], /MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/);
+  assert.match(fn[0], /setTimeout\(res, 1100\)/);
+  assert.match(fn[0], /throw e/);
+  // captureTiles uses the wrapper, not the raw API.
+  assert.match(shot, /captureVisibleTabRetry\(tab\.windowId\)/);
 });
 
 test("orchestrator stitches tiles on OffscreenCanvas (SW-friendly, no DOM)", () => {
@@ -122,6 +137,15 @@ test("background.js wires the command + toolbar-icon context menu + diag trace",
   assert.match(bg, /const CTX_ACT_SHOT/);
   assert.match(bg, /Full-page screenshot \(this tab\)/);
   assert.match(bg, /info\.menuItemId === CTX_ACT_SHOT/);
+});
+
+test("orchestrator allows chrome-extension://<self> but rejects other schemes", () => {
+  // user hit: tried screenshot on our manager page. http(s) + file are
+  // allowed; chrome-extension://<our id>/* is allowed; chrome:// + web
+  // store + other extensions are rejected with a named scheme error.
+  assert.match(shot, /okHttp\s*=\s*\/\^\(https\?\|file\)/);
+  assert.match(shot, /ourOwn\s*=\s*url\.startsWith\(`chrome-extension:\/\/\$\{chrome\.runtime\.id\}\/`\)/);
+  assert.match(shot, /!okHttp && !ourOwn/);
 });
 
 test("orchestrator scrollTo uses behavior:instant — smooth scroll would race the capture", () => {

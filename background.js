@@ -499,28 +499,43 @@ function collectPageUrls(kind) {
 }
 
 async function doScreenshotFullPage(tab) {
+  // Redundant feedback channels — chrome.notifications is silently dropped
+  // when Chrome's macOS notification permission is denied, so we ALSO log
+  // to the SW console and flash the toolbar badge. Whichever channel works
+  // for the user surfaces the outcome.
   diagPush("screenshot.start", { url: tab?.url });
+  console.log("[zpwrchrome] screenshot starting on", tab?.url);
+  await chrome.action?.setBadgeBackgroundColor?.({ color: "#ffb800" });
+  await chrome.action?.setBadgeText?.({ text: "📸" });
   try {
     const { dest, bytes, filename } = await screenshotFullPage(tab);
     diagPush("screenshot.done", { dest, bytes, filename });
+    console.log("[zpwrchrome] screenshot saved →", dest, `(${bytes} bytes)`);
+    await chrome.action?.setBadgeBackgroundColor?.({ color: "#39ff14" });
+    await chrome.action?.setBadgeText?.({ text: "✓" });
+    setTimeout(() => applyMultiplexedBadge(), 3000);
     if (chrome.notifications) {
       chrome.notifications.create({
         type: "basic",
         iconUrl: chrome.runtime.getURL("icons/icon128.png"),
         title: "zpwrchrome — screenshot saved",
         message: dest || filename,
-      });
+      }, () => void chrome.runtime.lastError);
     }
   } catch (e) {
     const msg = String(e?.message || e);
     diagPush("screenshot.err", { err: msg });
+    console.error("[zpwrchrome] screenshot failed:", msg);
+    await chrome.action?.setBadgeBackgroundColor?.({ color: "#ff2a6d" });
+    await chrome.action?.setBadgeText?.({ text: "✕" });
+    setTimeout(() => applyMultiplexedBadge(), 5000);
     if (chrome.notifications) {
       chrome.notifications.create({
         type: "basic",
         iconUrl: chrome.runtime.getURL("icons/icon128.png"),
         title: "zpwrchrome — screenshot failed",
         message: msg.length > 200 ? msg.slice(0, 200) + "…" : msg,
-      });
+      }, () => void chrome.runtime.lastError);
     }
   }
 }
@@ -877,7 +892,11 @@ if (chrome.contextMenus) {
       return;
     }
     if (info.menuItemId === CTX_ACT_SHOT) {
-      doScreenshotFullPage(tab);
+      // Wrap in .catch so a synchronous throw (e.g. screenshot module
+      // failed to import) still surfaces to the SW console.
+      Promise.resolve()
+        .then(() => doScreenshotFullPage(tab))
+        .catch((e) => console.error("[zpwrchrome] screenshot dispatch:", e));
       return;
     }
     if (info.menuItemId === CTX_ACT_ISSUE) { chrome.tabs.create({ url: ISSUE_URL }); return; }
