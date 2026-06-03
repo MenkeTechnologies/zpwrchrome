@@ -477,6 +477,16 @@ mark.fzf-hl {
   white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
+.dl-strip-row .meta .spd,
+.dl-strip-row .meta .eta,
+.dl-strip-row .meta .elp {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.dl-strip-row .meta .spd { color: var(--green); }
+.dl-strip-row .meta .eta { color: var(--cyan); }
 .dl-strip-row .tag {
   text-transform: uppercase;
   font-size: 9px;

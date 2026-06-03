@@ -799,6 +799,24 @@ function stripKind(name) {
   return "other";
 }
 function stripBasename(p) { return (p || "").split("/").pop() || p || ""; }
+function stripDur(sec) {
+  if (!Number.isFinite(sec) || sec < 0) return "—";
+  if (sec < 60)   return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.floor(sec/60)}m ${Math.round(sec%60)}s`;
+  return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+}
+function stripSpeed(bytes, ms) {
+  if (!ms || ms <= 0) return "—";
+  return `${stripBytes((bytes * 1000) / ms)}/s`;
+}
+function stripEta(done, total, bytesPerSec) {
+  if (!total || total <= done) return "—";
+  if (!bytesPerSec)            return "—";
+  return stripDur((total - done) / bytesPerSec);
+}
+function stripElapsed(ms) {
+  return stripDur(Math.max(0, Number(ms) || 0) / 1000);
+}
 function stripBytes(n) {
   if (!n || n <= 0) return "0 B";
   const u = ["B","KB","MB","GB","TB"]; let i = 0, v = Number(n);
@@ -841,6 +859,21 @@ function renderStrip(jobs) {
     const subStr = j.total > 0
       ? `${stripBytes(j.done)} / ${stripBytes(j.total)}`
       : (j.status === "done" ? stripBytes(j.done) : "—");
+    // Speed / ETA / elapsed — surfaced on the meta line. Active downloads
+    // get all three (live values); paused gets size + elapsed; done gets
+    // the final size + total elapsed; everything else just gets the tag
+    // and size summary above.
+    const bps = j.elapsed_ms > 0 ? (j.done * 1000) / j.elapsed_ms : 0;
+    const rateStr = (j.status === "active") ? stripSpeed(j.done, j.elapsed_ms) : "";
+    const etaStr  = (j.status === "active") ? stripEta(j.done, j.total, bps)   : "";
+    const elpStr  = (j.status === "active" || j.status === "paused" || j.status === "done")
+      ? stripElapsed(j.elapsed_ms)
+      : "";
+    const metaExtras = [
+      rateStr ? `<span class="spd">${stripEsc(rateStr)}</span>`        : "",
+      etaStr  ? `<span class="eta">ETA ${stripEsc(etaStr)}</span>`     : "",
+      elpStr  ? `<span class="elp">${stripEsc(elpStr)} elapsed</span>` : "",
+    ].filter(Boolean).join("");
     // Per-row action buttons. Status drives which appear:
     //   pending|active   → pause + cancel
     //   paused           → resume + cancel
@@ -872,7 +905,7 @@ function renderStrip(jobs) {
         <span class="ic">${ico}</span>
         <div class="body">
           <span class="nm" title="${stripEsc(j.dest || "")}">${stripEsc(name || "(unnamed)")}</span>
-          <div class="meta">${tag}<span class="sz">${stripEsc(subStr)}</span></div>
+          <div class="meta">${tag}<span class="sz">${stripEsc(subStr)}</span>${metaExtras}</div>
           ${showBar ? `<div class="bar"><div class="fill" style="width:${pct}%;"></div></div>` : ""}
         </div>
         ${actHtml}
