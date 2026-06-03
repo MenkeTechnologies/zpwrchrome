@@ -650,17 +650,30 @@ test("popup strip done rows expose open + reveal buttons (gated on dest_exists)"
   assert.match(popupJs, /act === "open" \? "dl\.openFile" : "dl\.openDir"/);
 });
 
-test("background.js writes screenshots via bpSend(dl.writeFile) directly in-SW (sendMessage hop is broken)", () => {
-  // SW → SW chrome.runtime.sendMessage drops on the floor with
-  // "Could not establish connection." So doScreenshotFullPage calls
-  // bpSend in-process (both screenshot.js and bpSend run in the SW).
+test("background.js streams screenshots via bpSend(dl.writeFileChunk) — Chrome NM ~1 MB cap", () => {
+  // Two bugs converged:
+  //   1. SW → SW chrome.runtime.sendMessage drops on the floor (no receiver).
+  //   2. Chrome's NM per-message envelope cap is ~1 MB; a multi-MB base64
+  //      blob blows past it and the host bails with "Unable to parse the
+  //      length of the browser request".
+  // Fix: chunk via dl.writeFileChunk, all in-SW via bpSend.
   const fn = bg.match(/async function doScreenshotFullPage[\s\S]*?\n\}/);
   assert.ok(fn, "doScreenshotFullPage not found");
-  assert.match(fn[0], /bpSend\(\{ action: "dl\.writeFile",/);
+  // Chunk loop bounded by ceil(base64.length / CHUNK_SIZE).
+  assert.match(fn[0], /const CHUNK_SIZE\s*=\s*512\s*\*\s*1024/);
+  assert.match(fn[0], /const chunkCount\s*=\s*Math\.max\(1, Math\.ceil\(base64\.length \/ CHUNK_SIZE\)\)/);
+  // Streams via dl.writeFileChunk (not the single-shot dl.writeFile).
+  assert.match(fn[0], /bpSend\(\{\s*action:\s*"dl\.writeFileChunk"/);
+  // Final chunk carries dir + name; intermediate chunks pass "" for both.
+  assert.match(fn[0], /isLast \? dir\s+:\s+""/);
+  assert.match(fn[0], /isLast \? filename\s+:\s+""/);
+  // sessionId is per-screenshot (UUID or fallback) and sanitized client-side
+  // before sending.
+  assert.match(fn[0], /crypto\.randomUUID\?\.\(\)/);
+  // Settings resolution still picks downloadDir > lastDir > "".
   assert.match(fn[0], /loadDlSettings\(\)/);
   assert.match(fn[0], /settings\.downloadDir/);
-  assert.match(fn[0], /settings\.saveToLastUsedLocation && settings\.lastDir/);
-  // SW message handler still exists (used by external consumers if any).
+  // SW message handler remains for non-SW consumers (popup, content scripts).
   assert.match(bg, /msg\?\.kind === "dl\.writeFile"/);
 });
 

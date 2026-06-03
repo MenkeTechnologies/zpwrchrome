@@ -440,9 +440,10 @@ pub fn dispatch_dl(action: &str, value: &Value) {
         "dl.resume"  => dl_resume(&req),
         "dl.cancel"  => dl_cancel(&req),
         "dl.clear"   => dl_clear(&req),
-        "dl.openDir"  => dl_open_dir(&req),
-        "dl.openFile" => dl_open_file(&req),
-        "dl.writeFile" => dl_write_file(value),
+        "dl.openDir"        => dl_open_dir(&req),
+        "dl.openFile"       => dl_open_file(&req),
+        "dl.writeFile"      => dl_write_file(value),
+        "dl.writeFileChunk" => dl_write_file_chunk(value),
         _ => {
             response::SendErrorAndExit(
                 errors::Code::InvalidRequestAction,
@@ -815,6 +816,185 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
         }
     }
     Ok(out)
+}
+
+/// Streaming counterpart to dl.writeFile for payloads bigger than Chrome's
+/// native-messaging per-message cap (~1 MB). The extension generates a
+/// session id, splits the base64 across N requests, and sends each chunk
+/// with `sessionId` set. The first chunk (chunkIndex == 0) creates a
+/// `~/.cache/zpwrchrome/dl/upload-<sessionId>.part` scratch file; later
+/// chunks append. The final request carries `final: true` plus `dir` +
+/// `name` and triggers rename to the user-visible destination via
+/// unique_dest_path.
+pub fn dl_write_file_chunk(value: &Value) {
+    #[derive(Deserialize)]
+    struct ChunkReq {
+        #[serde(default)] sessionId:  String,
+        #[serde(default)] chunkIndex: u32,
+        #[serde(default)] base64:     String,
+        #[serde(default)] final_:     bool,   // serde renamed below
+        #[serde(default)] dir:        String,
+        #[serde(default)] name:       String,
+    }
+    // serde gets `final` from JSON which collides with the Rust keyword.
+    // Patch the Value to rename "final" → "final_" so the struct above
+    // accepts it without `#[serde(rename)]` attribute juggling.
+    let mut v = value.clone();
+    if let Value::Object(ref mut m) = v {
+        if let Some(b) = m.remove("final") {
+            m.insert("final_".into(), b);
+        }
+    }
+    let req: ChunkReq = match serde_json::from_value(v) {
+        Ok(r) => r,
+        Err(e) => {
+            response::SendErrorAndExit(
+                errors::Code::ParseRequest,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "dl.writeFileChunk: malformed request"),
+                    (field::ACTION,  "dl.writeFileChunk"),
+                    (field::ERROR,   &e.to_string()),
+                ])),
+            );
+        }
+    };
+    if req.sessionId.is_empty() {
+        response::SendErrorAndExit(
+            errors::Code::InvalidRequestAction,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.writeFileChunk: missing sessionId"),
+                (field::ACTION,  "dl.writeFileChunk"),
+            ])),
+        );
+    }
+    let bytes = match base64_decode(&req.base64) {
+        Ok(b) => b,
+        Err(e) => {
+            response::SendErrorAndExit(
+                errors::Code::ParseRequest,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "dl.writeFileChunk: bad base64"),
+                    (field::ACTION,  "dl.writeFileChunk"),
+                    (field::ERROR,   &e),
+                ])),
+            );
+        }
+    };
+    let cache = match cache_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            response::SendErrorAndExit(
+                errors::Code::InaccessiblePasswordStore,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "dl.writeFileChunk: cannot resolve cache dir"),
+                    (field::ACTION,  "dl.writeFileChunk"),
+                    (field::ERROR,   &e.to_string()),
+                ])),
+            );
+        }
+    };
+    // Sanitize sessionId so it can't traverse out of the cache dir.
+    let safe_sid: String = req.sessionId.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(64).collect();
+    if safe_sid.is_empty() {
+        response::SendErrorAndExit(
+            errors::Code::InvalidRequestAction,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.writeFileChunk: invalid sessionId"),
+                (field::ACTION,  "dl.writeFileChunk"),
+            ])),
+        );
+    }
+    let part_path = cache.join(format!("upload-{safe_sid}.part"));
+
+    // First chunk: create + write. Subsequent: append. Either way use
+    // OpenOptions so the offset is correct without seeking.
+    let mut f_open = fs::OpenOptions::new();
+    if req.chunkIndex == 0 {
+        f_open.create(true).truncate(true).write(true);
+    } else {
+        f_open.create(true).append(true);
+    }
+    if let Err(e) = f_open.open(&part_path)
+        .and_then(|mut f| f.write_all(&bytes))
+    {
+        response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.writeFileChunk: cannot append chunk"),
+                (field::ACTION,  "dl.writeFileChunk"),
+                (field::ERROR,   &e.to_string()),
+            ])),
+        );
+    }
+
+    if !req.final_ {
+        // More chunks coming — ack receipt and return early. SendOk doesn't
+        // exit the process; if we fell through, the final-chunk block below
+        // would delete the .part file we just wrote.
+        response::SendOk(serde_json::json!({
+            "sessionId":  safe_sid,
+            "chunkIndex": req.chunkIndex,
+            "received":   bytes.len(),
+            "final":      false,
+        }));
+        return;
+    }
+
+    // Final chunk — move the .part file to its destination dir/name.
+    if req.name.is_empty() {
+        let _ = fs::remove_file(&part_path);
+        response::SendErrorAndExit(
+            errors::Code::InvalidRequestAction,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.writeFileChunk: final chunk missing name"),
+                (field::ACTION,  "dl.writeFileChunk"),
+            ])),
+        );
+    }
+    let target_dir = if req.dir.is_empty() {
+        default_download_dir()
+    } else {
+        expand_home(&req.dir)
+    };
+    if let Err(e) = fs::create_dir_all(&target_dir) {
+        let _ = fs::remove_file(&part_path);
+        response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.writeFileChunk: cannot create target dir"),
+                (field::ACTION,  "dl.writeFileChunk"),
+                (field::ERROR,   &e.to_string()),
+            ])),
+        );
+    }
+    let dest = unique_dest_path(&target_dir, &sanitize_filename(&req.name));
+    if let Err(e) = fs::rename(&part_path, &dest) {
+        // rename across mount points fails on Linux; fall back to copy + remove.
+        if let Err(e2) = fs::copy(&part_path, &dest).and_then(|_| fs::remove_file(&part_path)) {
+            response::SendErrorAndExit(
+                errors::Code::InaccessiblePasswordStore,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "dl.writeFileChunk: cannot move part file to dest"),
+                    (field::ACTION,  "dl.writeFileChunk"),
+                    (field::ERROR,   &format!("rename: {e}; copy: {e2}")),
+                ])),
+            );
+        }
+    }
+    let bytes_total = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
+    crate::diag::log(&format!(
+        "WRITE_FILE_CHUNK_FINAL dest={} sessionId={} bytes={}",
+        dest.display(), safe_sid, bytes_total
+    ));
+    response::SendOk(serde_json::json!({
+        "sessionId":  safe_sid,
+        "chunkIndex": req.chunkIndex,
+        "final":      true,
+        "dest":       dest.to_string_lossy(),
+        "bytes":      bytes_total,
+    }));
 }
 
 pub fn dl_open_file(req: &DlRequest) {

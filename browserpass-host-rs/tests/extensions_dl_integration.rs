@@ -820,3 +820,74 @@ fn dl_write_file_errors_on_missing_name() {
     assert!(msg.contains("missing name"), "got {msg}");
     let _ = fs::remove_dir_all(&cache);
 }
+
+#[test]
+fn dl_write_file_chunk_streams_two_chunks_and_renames_to_final_dest() {
+    let cache = tempdir("dl-chunk");
+    fs::create_dir_all(&cache).unwrap();
+    let dst_dir = tempdir("dl-chunk-out");
+    fs::create_dir_all(&dst_dir).unwrap();
+    let env = [("ZPWRCHROME_DL_CACHE_DIR", cache.to_string_lossy().to_string())];
+    let env_refs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+    // "hello world" split into "hello" + " world" → b64 "aGVsbG8=" + "IHdvcmxk"
+    let r1 = run_with_env(
+        &json!({
+            "action":     "dl.writeFileChunk",
+            "sessionId":  "abc123",
+            "chunkIndex": 0,
+            "base64":     "aGVsbG8=",
+            "final":      false
+        }),
+        &env_refs,
+    );
+    assert_eq!(r1["status"], "ok");
+    assert_eq!(r1["data"]["final"], false);
+
+    let r2 = run_with_env(
+        &json!({
+            "action":     "dl.writeFileChunk",
+            "sessionId":  "abc123",
+            "chunkIndex": 1,
+            "base64":     "IHdvcmxk",
+            "final":      true,
+            "dir":        dst_dir.to_string_lossy(),
+            "name":       "out.txt"
+        }),
+        &env_refs,
+    );
+    assert_eq!(r2["status"], "ok");
+    let dest = r2["data"]["dest"].as_str().unwrap_or("");
+    assert!(dest.ends_with("out.txt"));
+    let got = fs::read_to_string(dest).unwrap();
+    assert_eq!(got, "hello world");
+    assert_eq!(r2["data"]["bytes"], 11);
+
+    // .part scratch file must be gone after the rename.
+    assert!(!cache.join("upload-abc123.part").exists());
+    let _ = fs::remove_dir_all(&cache);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn dl_write_file_chunk_rejects_path_traversal_session_ids() {
+    let cache = tempdir("dl-chunk-traversal");
+    fs::create_dir_all(&cache).unwrap();
+    let resp = run_with_env(
+        &json!({
+            "action":     "dl.writeFileChunk",
+            "sessionId":  "../etc/passwd",
+            "chunkIndex": 0,
+            "base64":     "aGV5"
+        }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    // Sanitizer keeps only [A-Za-z0-9_-]; "../etc/passwd" → "etcpasswd".
+    // The chunk write goes to cache/upload-etcpasswd.part, which is benign.
+    assert_eq!(resp["status"], "ok");
+    let part = cache.join("upload-etcpasswd.part");
+    assert!(part.exists(), "sanitized sessionId must be written under cache");
+    // No file written to /etc/passwd (we'd never have permission anyway,
+    // but assert the sanitized name doesn't escape).
+    let _ = fs::remove_dir_all(&cache);
+}

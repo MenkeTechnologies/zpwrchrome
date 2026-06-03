@@ -509,10 +509,12 @@ async function doScreenshotFullPage(tab) {
   await chrome.action?.setBadgeText?.({ text: "📸" });
   try {
     const { blob, filename } = await screenshotFullPage(tab);
-    // Write directly through the host — NOT via chrome.runtime.sendMessage.
-    // SW → SW sendMessage isn't delivered (no receiving end) so the prior
-    // implementation dropped the bytes on the floor. The settings + host
-    // calls below run in this same SW context where bpSend is in scope.
+    // Chunked upload — Chrome's per-message NM cap is ~1 MB so a multi-MB
+    // base64 PNG would otherwise corrupt the framed JSON and the host bails
+    // with "Unable to parse the length of the browser request". Split into
+    // <512 KB chunks (after base64 expansion = ~683 KB of base64 text =
+    // well under 1 MB envelope), stream through dl.writeFileChunk, final
+    // chunk carries dir + name and triggers the rename.
     const base64 = await blobToBase64(blob);
     const settings = await loadDlSettings();
     const dir = (settings.downloadDir && settings.downloadDir.trim())
@@ -520,10 +522,28 @@ async function doScreenshotFullPage(tab) {
       : (settings.saveToLastUsedLocation && settings.lastDir)
         ? settings.lastDir
         : "";
-    const resp = await bpSend({ action: "dl.writeFile", dir, name: filename, base64 });
-    const dest  = resp.data?.dest  || "";
-    const bytes = resp.data?.bytes || blob.size;
-    diagPush("screenshot.done", { dest, bytes, filename });
+    const sessionId = (crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^a-z0-9-]/gi, "");
+    const CHUNK_SIZE = 512 * 1024;          // 512 KB of base64 per chunk
+    const chunkCount = Math.max(1, Math.ceil(base64.length / CHUNK_SIZE));
+    let resp;
+    for (let i = 0; i < chunkCount; i++) {
+      const start = i * CHUNK_SIZE;
+      const slice = base64.slice(start, start + CHUNK_SIZE);
+      const isLast = i === chunkCount - 1;
+      resp = await bpSend({
+        action:     "dl.writeFileChunk",
+        sessionId,
+        chunkIndex: i,
+        base64:     slice,
+        final:      isLast,
+        dir:        isLast ? dir      : "",
+        name:       isLast ? filename : "",
+      });
+      diagPush("screenshot.chunk", { i, of: chunkCount, bytes: slice.length, sessionId });
+    }
+    const dest  = resp?.data?.dest  || "";
+    const bytes = resp?.data?.bytes || blob.size;
+    diagPush("screenshot.done", { dest, bytes, filename, chunks: chunkCount });
     console.log("[zpwrchrome] screenshot saved →", dest, `(${bytes} bytes)`);
     await chrome.action?.setBadgeBackgroundColor?.({ color: "#39ff14" });
     await chrome.action?.setBadgeText?.({ text: "✓" });
