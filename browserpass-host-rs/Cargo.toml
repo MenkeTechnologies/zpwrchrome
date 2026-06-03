@@ -1,6 +1,6 @@
 [package]
 name = "browserpass-host-rs"
-version = "0.7.2"
+version = "0.7.3"
 edition = "2021"
 authors = ["MenkeTechnologies <linux.dev25@gmail.com>"]
 description = "Rust port of browserpass-native (PROTOCOL.md v3.1.2) + extension actions for OTP, whole-store search, and a file-state segmented download manager."

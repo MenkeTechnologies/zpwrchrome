@@ -1155,21 +1155,19 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     state.worker_pid = std::process::id();
     write_state_atomic(&state)?;
 
-    let mut head_req = ureq::head(&state.url);
-    if !state.cookies.is_empty()    { head_req = head_req.set("Cookie", &state.cookies); }
-    if !state.user_agent.is_empty() { head_req = head_req.set("User-Agent", &state.user_agent); }
-    let head = match head_req.call() {
-        Ok(r) => r,
+    // Probe headers. Try HEAD first; some CDNs (GitHub release assets
+    // redirect to objects.githubusercontent.com pre-signed S3 URLs that
+    // reject HEAD with 401 because the signature was computed for GET).
+    // Fall back to a `Range: bytes=0-0` GET — that returns the first byte
+    // plus a Content-Range header from which we recover the total size,
+    // and confirms Range support all in one round-trip.
+    let probe = probe_headers(&state.url, &state.cookies, &state.user_agent);
+    let probe = match probe {
+        Ok(p) => p,
         Err(e) => return finish_err(&mut state, format!("HEAD: {e}")),
     };
-    let total: u64 = head
-        .header("Content-Length")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
-    let accept_ranges = head
-        .header("Accept-Ranges")
-        .map(|v| v.eq_ignore_ascii_case("bytes"))
-        .unwrap_or(false);
+    let total = probe.total;
+    let accept_ranges = probe.accept_ranges;
     state.total = total;
 
     // Rename dest to a Content-Disposition-derived name when (a) the server
@@ -1177,28 +1175,26 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     // CDN URLs whose path is all query-string and Chrome's onCreated didn't
     // populate a sensible filename. Refuse to rename if the dest file
     // already exists with data (rare race), to avoid losing partial bytes.
-    if let Some(cd) = head.header("Content-Disposition") {
-        if let Some(srv_name) = parse_content_disposition_filename(cd) {
-            let cur_name = std::path::Path::new(&state.dest)
-                .file_name().and_then(|n| n.to_str()).unwrap_or("");
-            let is_placeholder = cur_name.starts_with("download-")
-                || looks_like_query_garbage(cur_name);
-            let dest_path = std::path::Path::new(&state.dest);
-            let already_has_data = match fs::metadata(dest_path) {
-                Ok(m) => m.len() > 0,
-                Err(_) => false,
-            };
-            if !already_has_data && (cur_name != srv_name || is_placeholder) {
-                let parent = dest_path.parent()
-                    .unwrap_or(std::path::Path::new("."))
-                    .to_path_buf();
-                let new_dest = unique_dest_path(&parent, &srv_name);
-                crate::diag::log(&format!(
-                    "WORKER_RENAME gid={} from={} to={}",
-                    state.gid, cur_name, new_dest.display(),
-                ));
-                state.dest = new_dest.to_string_lossy().into_owned();
-            }
+    if let Some(srv_name) = probe.content_disposition_filename {
+        let cur_name = std::path::Path::new(&state.dest)
+            .file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let is_placeholder = cur_name.starts_with("download-")
+            || looks_like_query_garbage(cur_name);
+        let dest_path = std::path::Path::new(&state.dest);
+        let already_has_data = match fs::metadata(dest_path) {
+            Ok(m) => m.len() > 0,
+            Err(_) => false,
+        };
+        if !already_has_data && (cur_name != srv_name || is_placeholder) {
+            let parent = dest_path.parent()
+                .unwrap_or(std::path::Path::new("."))
+                .to_path_buf();
+            let new_dest = unique_dest_path(&parent, &srv_name);
+            crate::diag::log(&format!(
+                "WORKER_RENAME gid={} from={} to={}",
+                state.gid, cur_name, new_dest.display(),
+            ));
+            state.dest = new_dest.to_string_lossy().into_owned();
         }
     }
     write_state_atomic(&state)?;
@@ -1223,6 +1219,86 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
         Err(e) => { let _ = finish_err(&mut state, e); }
     }
     Ok(())
+}
+
+struct ProbeResult {
+    total:                        u64,
+    accept_ranges:                bool,
+    content_disposition_filename: Option<String>,
+}
+
+/// Discover Content-Length + Range support + Content-Disposition for a URL.
+///
+/// Tries HEAD first. If HEAD fails or returns non-2xx (common on
+/// pre-signed CDN URLs — e.g. GitHub redirects release downloads to
+/// objects.githubusercontent.com S3 URLs whose signature is bound to
+/// the GET method, so HEAD comes back 401), falls back to a
+/// `Range: bytes=0-0` GET. A 206 response gives us:
+///   - Content-Range: bytes 0-0/<total>   → real total via the suffix
+///   - Content-Length: 1                  → the one byte requested
+///   - And confirms the server supports byte-Range, even if it omits
+///     Accept-Ranges (some servers do).
+/// A 200 response from the Range GET means the server ignored the Range
+/// header; Content-Length is the full size and Range is unsupported.
+fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResult, String> {
+    fn apply_headers(mut r: ureq::Request, cookies: &str, user_agent: &str) -> ureq::Request {
+        if !cookies.is_empty()    { r = r.set("Cookie", cookies); }
+        if !user_agent.is_empty() { r = r.set("User-Agent", user_agent); }
+        r
+    }
+    // First attempt: HEAD.
+    let head_req = apply_headers(ureq::head(url), cookies, user_agent);
+    if let Ok(resp) = head_req.call() {
+        let total = resp.header("Content-Length")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        let accept_ranges = resp.header("Accept-Ranges")
+            .map(|v| v.eq_ignore_ascii_case("bytes"))
+            .unwrap_or(false);
+        let cd = resp.header("Content-Disposition")
+            .and_then(parse_content_disposition_filename);
+        return Ok(ProbeResult {
+            total, accept_ranges, content_disposition_filename: cd,
+        });
+    }
+    // Fallback: Range GET. Discard the body — we only need headers.
+    let get_req = apply_headers(ureq::get(url), cookies, user_agent)
+        .set("Range", "bytes=0-0");
+    let resp = match get_req.call() {
+        Ok(r) => r,
+        Err(e) => return Err(e.to_string()),
+    };
+    let status = resp.status();
+    let cd = resp.header("Content-Disposition")
+        .and_then(parse_content_disposition_filename);
+    if status == 206 {
+        // Parse Content-Range: "bytes 0-0/12345"
+        let total = resp.header("Content-Range")
+            .and_then(|s| s.rsplit('/').next().map(str::to_string))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        // Drain the 1-byte body to free the connection. .into_string()
+        // would error on non-UTF8; read into a vec instead.
+        let mut sink = Vec::with_capacity(8);
+        let _ = std::io::copy(&mut resp.into_reader().take(64), &mut sink);
+        Ok(ProbeResult {
+            total,
+            accept_ranges: true,
+            content_disposition_filename: cd,
+        })
+    } else {
+        // 200 — server ignored Range. Whole body would download here;
+        // we abort the read and just record total size.
+        let total = resp.header("Content-Length")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        drop(resp);
+        Ok(ProbeResult {
+            total,
+            accept_ranges: false,
+            content_disposition_filename: cd,
+        })
+    }
 }
 
 fn finish_err(state: &mut JobState, msg: String) -> std::io::Result<()> {

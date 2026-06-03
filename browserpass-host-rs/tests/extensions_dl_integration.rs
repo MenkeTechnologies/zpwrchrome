@@ -891,3 +891,40 @@ fn dl_write_file_chunk_rejects_path_traversal_session_ids() {
     // but assert the sanitized name doesn't escape).
     let _ = fs::remove_dir_all(&cache);
 }
+
+#[test]
+fn probe_headers_exists_with_head_then_range_get_fallback() {
+    // GitHub release downloads redirect to objects.githubusercontent.com
+    // S3 pre-signed URLs that 401 on HEAD because the signature is bound
+    // to the GET method. probe_headers must fall back to Range:bytes=0-0
+    // GET when HEAD fails. This test pins the shape of that fallback at
+    // the source level — there's no easy way to integration-test it
+    // without an actual misbehaving mock server, but the structural pins
+    // catch the most common drift (someone reverting to head_req.call()).
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/extensions/dl.rs")
+    ).unwrap();
+    assert!(src.contains("fn probe_headers("),
+        "probe_headers helper missing");
+    let probe = src.split("fn probe_headers(").nth(1).unwrap();
+    let probe_end = probe.find("\nfn ").unwrap_or(probe.len());
+    let probe = &probe[..probe_end];
+    assert!(probe.contains("ureq::head(url)"),
+        "probe_headers must try HEAD first");
+    assert!(probe.contains("ureq::get(url)"),
+        "probe_headers must fall back to GET on HEAD failure");
+    assert!(probe.contains(r#"set("Range", "bytes=0-0")"#),
+        "fallback GET must use Range: bytes=0-0 to discover length cheaply");
+    assert!(probe.contains("Content-Range"),
+        "must parse Content-Range from the 206 response");
+    assert!(probe.contains("status == 206"),
+        "must branch on 206 (Range honored) vs 200 (Range ignored)");
+    // Caller uses probe_headers, not raw ureq::head().call() inline.
+    let worker = src.split("pub fn run_worker(").nth(1).unwrap_or("");
+    let worker_end = worker.find("\nfn ").unwrap_or(worker.len());
+    let worker = &worker[..worker_end];
+    assert!(worker.contains("probe_headers(&state.url"),
+        "run_worker must call probe_headers, not ureq::head() inline");
+    assert!(!worker.contains("ureq::head"),
+        "no raw ureq::head call in run_worker — must go through probe_headers");
+}
