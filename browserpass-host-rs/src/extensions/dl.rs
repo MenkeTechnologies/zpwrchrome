@@ -68,6 +68,12 @@ pub struct JobState {
     pub cookies:    String,
     #[serde(default, rename = "userAgent")]
     pub user_agent: String,
+    /// PID of the worker process currently running this gid. Used by
+    /// dl_resume to tell whether the existing worker is still alive (and
+    /// will pick up paused=false on its own) or whether a fresh worker
+    /// needs to be spawned because the previous one died.
+    #[serde(default)]
+    pub worker_pid: u32,
 }
 
 // Env-overridable cache dir. The XDG fallback chain matches `pass`.
@@ -285,7 +291,8 @@ pub fn dispatch_dl(action: &str, value: &Value) {
         "dl.resume"  => dl_resume(&req),
         "dl.cancel"  => dl_cancel(&req),
         "dl.clear"   => dl_clear(&req),
-        "dl.openDir" => dl_open_dir(&req),
+        "dl.openDir"  => dl_open_dir(&req),
+        "dl.openFile" => dl_open_file(&req),
         _ => {
             response::SendErrorAndExit(
                 errors::Code::InvalidRequestAction,
@@ -363,6 +370,7 @@ pub fn dl_add(req: &DlRequest) {
         cancelled:  false,
         cookies:    req.cookies.clone(),
         user_agent: req.userAgent.clone(),
+        worker_pid: 0,
     };
     if let Err(e) = write_state_atomic(&state) {
         response::SendErrorAndExit(
@@ -405,11 +413,39 @@ pub fn dl_pause(req: &DlRequest) {
     response::SendOk(DlActionResponse { gid: req.gid, status: "paused".into() });
 }
 
+/// Return true if a process with this PID still exists. `kill(pid, 0)`
+/// performs no-op signal delivery; success = process alive, ESRCH = gone.
+/// Returns false for pid==0 (never claimed).
+#[cfg(unix)]
+fn worker_alive(pid: u32) -> bool {
+    if pid == 0 { return false; }
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+#[cfg(not(unix))]
+fn worker_alive(_pid: u32) -> bool { false }   // be conservative; respawn
+
 pub fn dl_resume(req: &DlRequest) {
-    let was_terminal = match read_state(req.gid) {
-        Ok(s) => matches!(s.status.as_str(), "failed" | "cancelled"),
-        Err(_) => false,
+    // Two cases trigger a fresh worker spawn:
+    //   1. The previous run reached a terminal state (failed / cancelled)
+    //      and explicitly exited.
+    //   2. The state says "paused" but the worker PID is dead — happens
+    //      when the SW is suspended / Chrome closed / system slept and
+    //      the parent host's detached child got reaped. The state file
+    //      remains, so the user sees "paused" but no one is listening
+    //      for the paused=false flip.
+    let (need_spawn, prior_pid, prior_status) = match read_state(req.gid) {
+        Ok(s) => {
+            let terminal = matches!(s.status.as_str(), "failed" | "cancelled");
+            let dead     = !worker_alive(s.worker_pid);
+            let need     = terminal || dead;
+            (need, s.worker_pid, s.status)
+        }
+        Err(_) => (false, 0, String::new()),
     };
+    crate::diag::log(&format!(
+        "RESUME gid={} prior_status={} prior_pid={} need_spawn={}",
+        req.gid, prior_status, prior_pid, need_spawn,
+    ));
     mutate_state(req.gid, "dl.resume", |s| {
         s.paused = false;
         s.cancelled = false;
@@ -418,8 +454,10 @@ pub fn dl_resume(req: &DlRequest) {
             s.err = None;
         }
     });
-    if was_terminal {
-        let _ = spawn_worker(req.gid);
+    if need_spawn {
+        if let Err(e) = spawn_worker(req.gid) {
+            crate::diag::log(&format!("RESUME_SPAWN_ERR gid={} err={e}", req.gid));
+        }
     }
     response::SendOk(DlActionResponse { gid: req.gid, status: "resumed".into() });
 }
@@ -507,6 +545,47 @@ pub fn dl_open_dir(req: &DlRequest) {
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.openDir: failed to spawn opener"),
                 (field::ACTION,  "dl.openDir"),
+                (field::ERROR,   &e.to_string()),
+            ])),
+        ),
+    }
+}
+
+/// Open a file with the platform's default application (Finder/Explorer
+/// associates extension → app). Used by the "open" button on done rows.
+/// Refuses to open a file that no longer exists — never silently create.
+pub fn dl_open_file(req: &DlRequest) {
+    if req.dir.is_empty() {
+        response::SendErrorAndExit(
+            errors::Code::InvalidRequestAction,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.openFile: missing path"),
+                (field::ACTION,  "dl.openFile"),
+            ])),
+        );
+    }
+    let raw  = expand_home(&req.dir);
+    let path = std::path::Path::new(&raw);
+    if !path.is_file() {
+        response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.openFile: file does not exist (deleted or moved)"),
+                (field::ACTION,  "dl.openFile"),
+                (field::ERROR,   &raw.to_string_lossy()),
+            ])),
+        );
+    }
+    let opener = if cfg!(target_os = "macos") { "open" }
+                 else if cfg!(target_os = "windows") { "explorer" }
+                 else { "xdg-open" };
+    match Command::new(opener).arg(&raw).spawn() {
+        Ok(_) => response::SendOk(serde_json::json!({ "opened": raw.to_string_lossy() })),
+        Err(e) => response::SendErrorAndExit(
+            errors::Code::InaccessiblePasswordStore,
+            Some(response::params_of(&[
+                (field::MESSAGE, "dl.openFile: failed to spawn opener"),
+                (field::ACTION,  "dl.openFile"),
                 (field::ERROR,   &e.to_string()),
             ])),
         ),
@@ -623,11 +702,14 @@ fn spawn_worker(gid: u64) -> std::io::Result<()> {
 // ─── Worker process ─────────────────────────────────────────────────────────
 
 pub fn run_worker(gid: u64) -> std::io::Result<()> {
-    crate::diag::log(&format!("WORKER_START gid={gid}"));
+    crate::diag::log(&format!("WORKER_START gid={gid} pid={}", std::process::id()));
     let mut state = read_state(gid)?;
     state.status = "active".into();
     let start_instant = Instant::now();
     state.elapsed_ms = 0;
+    // Claim ownership of this gid — dl_resume reads this and uses
+    // worker_alive() to decide whether to respawn.
+    state.worker_pid = std::process::id();
     write_state_atomic(&state)?;
 
     let mut head_req = ureq::head(&state.url);

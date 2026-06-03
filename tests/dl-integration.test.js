@@ -480,6 +480,30 @@ test("DL_DEFAULTS.downloadDir is empty by default (= host fallback)", () => {
   assert.match(setJs, /downloadDir: ""/);
 });
 
+test("done rows offer both 'open' and 'reveal' actions; both gated on dest_exists", () => {
+  const dljs = read("scripts-manager/downloads.js");
+  // Both buttons must appear together, only when status=done AND destOnDisk.
+  assert.match(dljs, /\(job\.status === "done" && destOnDisk\)\s*\?\s*`<button data-act="open"   data-dest="\$\{escDest\}">open<\/button>\s*<button data-act="reveal" data-dest="\$\{escDest\}">reveal<\/button>`/);
+  // Click handler dispatches both, mapping open → dl.openFile, reveal → dl.openDir.
+  assert.match(dljs, /act === "reveal" \|\| act === "open"/);
+  assert.match(dljs, /act === "open" \? "dl\.openFile" : "dl\.openDir"/);
+});
+
+test("background.js dl.openFile handler forwards path as `dir` to host", () => {
+  const block = bg.match(/msg\?\.kind === "dl\.openFile"[\s\S]*?return true;/);
+  assert.ok(block, "dl.openFile handler missing");
+  assert.match(block[0], /action: "dl\.openFile"/);
+  assert.match(block[0], /dir: String\(msg\.path/);
+});
+
+test("downloads.js shows elapsed time in row meta (next to ETA)", () => {
+  const dljs = read("scripts-manager/downloads.js");
+  // Helper present + rendered in template + patched in place per tick.
+  assert.match(dljs, /function fmtElapsed\(ms\)/);
+  assert.match(dljs, /<span class="elp">\$\{fmtElapsed\(job\.elapsed_ms\)\} elapsed<\/span>/);
+  assert.match(dljs, /const elpEl = el\.querySelector\(".meta \.elp"\);/);
+});
+
 test("manifest declares a default Ctrl+Shift+L / Cmd+Shift+L binding for pass-fill (customizable at chrome://extensions/shortcuts)", () => {
   const cmd = manifest.commands["pass-fill"];
   assert.ok(cmd, "pass-fill command missing");
@@ -565,12 +589,12 @@ test("downloads.css actions panel is always visible (not hover-gated), so retry/
   assert.match(css, /\.dl-row \.actions \{[\s\S]*?opacity: 1;/);
 });
 
-test("downloads.js renders a 'reveal' action on done rows that opens the parent dir via dl.openDir", () => {
+test("downloads.js renders 'reveal' AND 'open' actions on done rows + maps to the right host action", () => {
   const dljs = read("scripts-manager/downloads.js");
-  // Render-side: only `done` jobs WITH dest_exists get the reveal button.
-  assert.match(dljs, /\(job\.status === "done" && destOnDisk\)\s*\?\s*`<button data-act="reveal" data-dest="\$\{escDest\}">reveal<\/button>`/);
-  // Handler-side: reveal click sends dl.openDir with the dest as path.
-  assert.match(dljs, /act === "reveal"[\s\S]*?kind: "dl\.openDir"[\s\S]*?path: dest/);
+  // Both buttons live in the same `done && destOnDisk` conditional now.
+  assert.match(dljs, /\(job\.status === "done" && destOnDisk\)\s*\?\s*`<button data-act="open"   data-dest="\$\{escDest\}">open<\/button>\s*<button data-act="reveal" data-dest="\$\{escDest\}">reveal<\/button>`/);
+  // Handler-side: open → dl.openFile, reveal → dl.openDir.
+  assert.match(dljs, /act === "open" \? "dl\.openFile" : "dl\.openDir"/);
 });
 
 test("downloads.js marks done rows whose dest is missing and hides reveal/open actions for them", () => {

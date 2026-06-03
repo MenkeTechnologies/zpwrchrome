@@ -65,8 +65,15 @@ function fmtSpeed(bytes, ms) {
 function fmtEta(done, total, bytesPerSec) {
   if (!total || total <= done) return "—";
   if (!bytesPerSec) return "—";
-  const sec = Math.round((total - done) / bytesPerSec);
-  if (sec < 60) return `${sec}s`;
+  return fmtDur(Math.round((total - done) / bytesPerSec));
+}
+function fmtElapsed(ms) {
+  if (!ms || ms <= 0) return "0s";
+  return fmtDur(Math.round(ms / 1000));
+}
+function fmtDur(sec) {
+  if (sec < 0) sec = 0;
+  if (sec < 60)   return `${sec}s`;
   if (sec < 3600) return `${Math.floor(sec/60)}m ${sec%60}s`;
   return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
 }
@@ -207,6 +214,7 @@ function rowHtml(job) {
           <span>${sizeStr}</span>
           ${showSpeed ? `<span class="spd">${fmtSpeed(job.done, job.elapsed_ms)}</span>` : ""}
           ${showEta   ? `<span class="eta">ETA ${fmtEta(job.done, job.total, bps)}</span>` : ""}
+          ${(showBar || job.status === "done") ? `<span class="elp">${fmtElapsed(job.elapsed_ms)} elapsed</span>` : ""}
           <span class="dim">gid ${job.gid} · ${job.segments} seg</span>
         </span>
         ${showBar ? `<div class="bar"><div class="fill" style="width:${pct}%;"></div></div>` : ""}
@@ -218,7 +226,8 @@ function rowHtml(job) {
         ${job.status === "paused"  ? `<button data-act="resume" data-gid="${job.gid}">resume</button>` : ""}
         ${(job.status === "failed" || job.status === "cancelled") ? `<button data-act="resume" data-gid="${job.gid}">retry</button>` : ""}
         ${(job.status === "done" && destOnDisk)
-            ? `<button data-act="reveal" data-dest="${escDest}">reveal</button>` : ""}
+            ? `<button data-act="open"   data-dest="${escDest}">open</button>
+               <button data-act="reveal" data-dest="${escDest}">reveal</button>` : ""}
         ${(job.status === "active" || job.status === "paused" || job.status === "pending")
             ? `<button class="danger" data-act="cancel" data-gid="${job.gid}">cancel</button>` : ""}
       </div>
@@ -277,6 +286,8 @@ function applyRowProgress(el, j) {
     if (spdEl) spdEl.textContent = fmtSpeed(j.done, j.elapsed_ms);
     if (etaEl) etaEl.textContent = `ETA ${fmtEta(j.done, j.total, bps)}`;
   }
+  const elpEl = el.querySelector(".meta .elp");
+  if (elpEl) elpEl.textContent = `${fmtElapsed(j.elapsed_ms)} elapsed`;
   const fill = el.querySelector(".bar .fill");
   if (fill) fill.style.width = `${pct}%`;
 }
@@ -350,13 +361,14 @@ $list.addEventListener("click", async (e) => {
   if (actBtn) {
     e.stopPropagation();
     const act = actBtn.dataset.act;
-    if (act === "reveal") {
-      // Open the file's parent directory in the platform file manager.
+    if (act === "reveal" || act === "open") {
+      // reveal → open parent dir; open → open file with default app.
       const dest = actBtn.dataset.dest || "";
+      const kind = act === "open" ? "dl.openFile" : "dl.openDir";
       actBtn.disabled = true;
-      chrome.runtime.sendMessage({ kind: "dl.openDir", path: dest }, (r) => {
+      chrome.runtime.sendMessage({ kind, path: dest }, (r) => {
         actBtn.disabled = false;
-        if (!r?.ok) $status.textContent = `reveal failed: ${r?.err || "unknown"}`;
+        if (!r?.ok) $status.textContent = `${act} failed: ${r?.err || "unknown"}`;
       });
       return;
     }

@@ -1512,6 +1512,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
+  if (msg?.kind === "dl.openFile") {
+    bpSend({ action: "dl.openFile", dir: String(msg.path || "") })
+      .then((resp) => sendResponse({ ok: true, opened: resp.data?.opened || null }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e), code: e?.code }));
+    return true;
+  }
   if (msg?.kind === "dl.clear") {
     // scope: done | failed | missing | all; deleteFromDisk: bool
     bpSend({ action: "dl.clear", scope: String(msg.scope || "done"), deleteFromDisk: !!msg.deleteFromDisk })

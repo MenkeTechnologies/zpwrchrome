@@ -540,3 +540,77 @@ fn dl_open_dir_refuses_to_reveal_a_path_that_does_not_exist() {
     assert!(msg.contains("does not exist"), "expected does-not-exist error, got: {msg}");
     let _ = fs::remove_dir_all(&cache);
 }
+
+#[test]
+fn dl_resume_respawns_worker_when_state_paused_but_old_pid_is_dead() {
+    // Mirrors the user-reported "resume sticks on pending" symptom:
+    // worker died (Chrome closed, SW reaped) while paused; resume must
+    // detect the dead PID and start a fresh worker, not just flip the flag.
+    use std::time::Duration;
+    let cache = tempdir("dl-resume-dead");
+    fs::create_dir_all(&cache).unwrap();
+    // Pick a PID that is guaranteed-dead — PID 0x7FFFFFFE is far above any
+    // real process and `kill(pid, 0)` will return ESRCH.
+    let st = json!({
+        "gid": 7, "url": "https://example.invalid/x.bin", "dest": "/tmp/zp-resume-dead.bin",
+        "total": 100, "done": 30, "status": "paused", "err": null,
+        "segments": 1, "started_at": 1, "elapsed_ms": 0,
+        "paused": true, "cancelled": false, "cookies": "", "userAgent": "",
+        "worker_pid": 0x7FFFFFFE_u32,
+    });
+    fs::write(cache.join("gid_000007.json"),
+              serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+
+    let resp = run_with_env(
+        &json!({ "action": "dl.resume", "gid": 7 }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "ok", "dl.resume must succeed: {resp}");
+
+    // Give the spawned worker time to start, fail-fast on the invalid URL,
+    // and reach a terminal state. We don't need it to succeed — we just need
+    // proof a worker actually ran (status changed away from "pending").
+    std::thread::sleep(Duration::from_millis(500));
+    let on_disk = fs::read_to_string(cache.join("gid_000007.json")).unwrap();
+    let job: serde_json::Value = serde_json::from_str(&on_disk).unwrap();
+    let status = job["status"].as_str().unwrap_or("");
+    assert!(
+        matches!(status, "active" | "failed" | "done"),
+        "expected a worker to have started; status stayed {status:?} (full state: {job:#})",
+    );
+    let _ = fs::remove_dir_all(&cache);
+}
+
+#[test]
+fn dl_resume_leaves_old_worker_alone_when_pid_is_alive() {
+    // Inverse case: paused state with a LIVE worker_pid. dl_resume must
+    // NOT spawn a second worker — only flip paused=false so the existing
+    // one breaks out of its sleep loop. Use std::process::id() of the
+    // current test process as the "alive" pid.
+    let cache = tempdir("dl-resume-alive");
+    fs::create_dir_all(&cache).unwrap();
+    let my_pid = std::process::id();
+    let st = json!({
+        "gid": 8, "url": "https://example.invalid/y.bin", "dest": "/tmp/zp-resume-alive.bin",
+        "total": 100, "done": 30, "status": "paused", "err": null,
+        "segments": 1, "started_at": 1, "elapsed_ms": 0,
+        "paused": true, "cancelled": false, "cookies": "", "userAgent": "",
+        "worker_pid": my_pid,
+    });
+    fs::write(cache.join("gid_000008.json"),
+              serde_json::to_vec_pretty(&st).unwrap()).unwrap();
+
+    let resp = run_with_env(
+        &json!({ "action": "dl.resume", "gid": 8 }),
+        &[("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy())],
+    );
+    assert_eq!(resp["status"], "ok");
+
+    // Immediately after: only the flag was flipped, nothing has run a worker yet.
+    let job: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(cache.join("gid_000008.json")).unwrap()).unwrap();
+    assert_eq!(job["paused"], false, "paused flag must be cleared");
+    assert_eq!(job["status"], "pending", "no new worker, status stays pending until live worker picks up");
+    assert_eq!(job["worker_pid"], my_pid, "live worker_pid must NOT be overwritten");
+    let _ = fs::remove_dir_all(&cache);
+}
