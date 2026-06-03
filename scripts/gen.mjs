@@ -91,7 +91,11 @@ const totalFiles = (function walk(dir, acc = 0) {
   try {
     for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
       const rel = dir === "." ? e.name : `${dir}/${e.name}`;
+      // Skip dot-dirs, node_modules, and Rust/Cargo build caches so the
+      // count matches a fresh CI checkout regardless of whether the dev
+      // has run `cargo build` locally (target/ is huge).
       if (e.name.startsWith(".") || e.name === "node_modules") continue;
+      if (e.name === "target" || e.name === "dist" || e.name === "build") continue;
       if (e.isDirectory()) acc = walk(rel, acc);
       else acc += 1;
     }

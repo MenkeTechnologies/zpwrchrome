@@ -161,7 +161,10 @@ test("report.html repo file count is derived not hardcoded stale", () => {
   const walk = (dir, acc = 0) => {
     for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
       const rel = dir === "." ? e.name : `${dir}/${e.name}`;
+      // Must match the skip list in scripts/gen.mjs so the derived value
+      // doesn't drift between local (with build caches) and CI (clean).
       if (e.name.startsWith(".") || e.name === "node_modules") continue;
+      if (e.name === "target" || e.name === "dist" || e.name === "build") continue;
       if (e.isDirectory()) acc = walk(rel, acc);
       else acc += 1;
     }
