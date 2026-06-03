@@ -63,7 +63,9 @@ html, body {
   box-shadow:
     0 0 30px var(--cyan-glow),
     inset 0 0 24px rgba(5, 217, 232, 0.04);
-  display: grid; grid-template-rows: auto 1fr auto auto;
+  /* rows: header / body / resizer / strip / footer.
+     resizer = 0 (hidden) or 5px when the strip is visible. */
+  display: grid; grid-template-rows: auto 1fr auto auto auto;
   overflow: hidden;
 }
 
@@ -366,11 +368,42 @@ mark.fzf-hl {
 .dl-strip {
   border-top: 1px solid var(--border);
   background: var(--bg-secondary);
-  max-height: 180px;
+  /* Initial height; overridden by inline style from popup.js after load. */
+  height: 180px;
+  min-height: 60px;
+  max-height: 420px;
   display: flex;
   flex-direction: column;
 }
 .dl-strip[hidden] { display: none; }
+
+/* Drag handle that sits between the body list and the downloads strip.
+   Hidden while the strip is hidden. 5 px tall with a thicker hit area
+   via padding (margin-block: -2px on the inner span). */
+.dl-strip-resizer {
+  height: 5px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  cursor: ns-resize;
+  position: relative;
+  user-select: none;
+}
+.dl-strip-resizer[hidden] { display: none; }
+.dl-strip-resizer::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px; height: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--magenta));
+  border-radius: 1px;
+  box-shadow: 0 0 4px var(--cyan-glow);
+  opacity: 0.6;
+  transition: opacity .12s;
+}
+.dl-strip-resizer:hover::after { opacity: 1; }
+.dl-strip-resizer.dragging { background: var(--bg-hover); }
+.dl-strip-resizer.dragging::after { opacity: 1; }
 .dl-strip-hd {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 12px;

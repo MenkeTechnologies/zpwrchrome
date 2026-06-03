@@ -780,8 +780,9 @@ document.getElementById("open-downloads").addEventListener("click", (e) => {
 // having to leave the popup. Strip auto-hides when there's nothing to show.
 
 const STRIP_MAX_ROWS = 6;
-const $strip       = document.getElementById("dl-strip");
-const $stripList   = document.getElementById("dl-strip-list");
+const $strip        = document.getElementById("dl-strip");
+const $stripList    = document.getElementById("dl-strip-list");
+const $stripResizer = document.getElementById("dl-strip-resizer");
 const $stripCount  = document.getElementById("dl-strip-count");
 const $stripOpen   = document.getElementById("dl-strip-open");
 const STRIP_ICONS  = { image:"🖼", video:"🎬", audio:"🎵", document:"📄", archive:"🗂", other:"📦" };
@@ -810,8 +811,10 @@ function stripEsc(s) {
 function renderStrip(jobs) {
   if (!Array.isArray(jobs) || jobs.length === 0) {
     $strip.hidden = true;
+    if ($stripResizer) $stripResizer.hidden = true;
     return;
   }
+  if ($stripResizer) $stripResizer.hidden = false;
   // Sort active/pending/paused first, then by recency.
   const ord = { pending: 0, active: 1, paused: 2, failed: 3, cancelled: 4, done: 5 };
   const sorted = jobs.slice().sort((a, b) => (ord[a.status] ?? 9) - (ord[b.status] ?? 9) || b.gid - a.gid);
@@ -919,6 +922,52 @@ chrome.runtime.sendMessage({ kind: "dl.snapshot.cached" }, (r) => {
   pollStrip();
 });
 setInterval(pollStrip, 1000);
+
+// ── resizable downloads strip ────────────────────────────────────────
+// Drag the handle just above the strip up/down to grow/shrink. Bounded
+// by the CSS min-height (60px) and max-height (420px). Persisted to
+// chrome.storage.local["dl.popupStripHeight"] so subsequent popups
+// remember the user's chosen size.
+const STRIP_HEIGHT_KEY = "dl.popupStripHeight";
+const STRIP_MIN = 60;
+const STRIP_MAX = 420;
+function clampHeight(px) { return Math.max(STRIP_MIN, Math.min(STRIP_MAX, px)); }
+
+chrome.storage.local.get("dl.popupStripHeight", (bag) => {
+  const h = Number(bag?.[STRIP_HEIGHT_KEY]);
+  if (Number.isFinite(h) && h > 0) $strip.style.height = clampHeight(h) + "px";
+});
+
+let _dragStartY = 0;
+let _dragStartH = 0;
+function onDragMove(e) {
+  // Drag direction: moving the handle UP (negative dy) grows the strip.
+  const dy = e.clientY - _dragStartY;
+  const next = clampHeight(_dragStartH - dy);
+  $strip.style.height = next + "px";
+}
+function onDragEnd() {
+  $stripResizer.classList.remove("dragging");
+  document.removeEventListener("mousemove", onDragMove);
+  document.removeEventListener("mouseup",   onDragEnd);
+  document.body.style.cursor = "";
+  const px = parseFloat($strip.style.height) || 0;
+  chrome.storage.local.set({ [STRIP_HEIGHT_KEY]: clampHeight(px) });
+}
+$stripResizer.addEventListener("mousedown", (e) => {
+  e.preventDefault();
+  _dragStartY = e.clientY;
+  _dragStartH = $strip.offsetHeight;
+  $stripResizer.classList.add("dragging");
+  document.body.style.cursor = "ns-resize";
+  document.addEventListener("mousemove", onDragMove);
+  document.addEventListener("mouseup",   onDragEnd);
+});
+// Double-click resets to the default 180.
+$stripResizer.addEventListener("dblclick", () => {
+  $strip.style.height = "180px";
+  chrome.storage.local.set({ [STRIP_HEIGHT_KEY]: 180 });
+});
 
 // ── clipboard URL monitor — checks once on popup open ─────────────────
 // Opening the popup IS a user gesture, so navigator.clipboard.readText()

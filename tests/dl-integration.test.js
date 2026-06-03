@@ -595,6 +595,27 @@ test("popup.html exposes a quick 'downloads ▸' link in the header next to scri
   assert.match(popupJs, /scripts-manager\/downloads\.html/);
 });
 
+test("popup downloads strip is resizable via a drag handle + persists height to chrome.storage.local", () => {
+  const popupHtml = read("popup.html");
+  const popupCss  = read("popup.css");
+  const popupJs   = read("popup.js");
+  // HTML: handle element exists, hidden by default.
+  assert.match(popupHtml, /id="dl-strip-resizer"[^>]*hidden/);
+  // CSS: handle has ns-resize cursor + grows the modal grid by one row.
+  assert.match(popupCss, /\.dl-strip-resizer\s*\{[\s\S]*?cursor:\s*ns-resize/);
+  assert.match(popupCss, /grid-template-rows:\s*auto 1fr auto auto auto/);
+  // CSS: strip has both min and max heights so the drag is bounded.
+  assert.match(popupCss, /\.dl-strip\s*\{[\s\S]*?min-height:\s*60px[\s\S]*?max-height:\s*420px/);
+  // JS: clamp + persist + restore.
+  assert.match(popupJs, /STRIP_HEIGHT_KEY\s*=\s*"dl\.popupStripHeight"/);
+  assert.match(popupJs, /function clampHeight/);
+  assert.match(popupJs, /chrome\.storage\.local\.get\("dl\.popupStripHeight"/);
+  assert.match(popupJs, /chrome\.storage\.local\.set\(\{ \[STRIP_HEIGHT_KEY\]/);
+  // JS: handler binds mousedown / mousemove / mouseup + a double-click reset.
+  assert.match(popupJs, /\$stripResizer\.addEventListener\("mousedown"/);
+  assert.match(popupJs, /\$stripResizer\.addEventListener\("dblclick"/);
+});
+
 test("popup strip rows expose pause/resume/cancel/retry buttons per status", () => {
   const popupJs  = read("popup.js");
   const popupCss = read("popup.css");
