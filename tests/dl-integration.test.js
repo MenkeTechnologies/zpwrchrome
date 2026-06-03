@@ -496,6 +496,28 @@ test("background.js dl.openFile handler forwards path as `dir` to host", () => {
   assert.match(block[0], /dir: String\(msg\.path/);
 });
 
+test("downloads.html ships a right-side details drawer + collapse toggle, driven by slideInDetailsOnClick", () => {
+  assert.match(dlHtml, /id="drawer"/);
+  assert.match(dlHtml, /id="drawer-body"/);
+  assert.match(dlHtml, /id="drawer-toggle"/);
+  // CSS must shift the grid columns when the drawer is open.
+  const css = read("scripts-manager/downloads.css");
+  assert.match(css, /\.main\.has-drawer\s*\{[\s\S]*?grid-template-columns:\s*220px 1fr 340px/);
+  // JS must honor the slideInDetailsOnClick interface setting and toggle the
+  // class when a row is selected.
+  const dljs = read("scripts-manager/downloads.js");
+  assert.match(dljs, /function renderDrawer\(\)/);
+  assert.match(dljs, /settings\.slideInDetailsOnClick !== false/);
+  assert.match(dljs, /\$main\.classList\.add\("has-drawer"\)/);
+  assert.match(dljs, /\$main\.classList\.remove\("has-drawer"\)/);
+  // Live updates: poll + dl.event listener both call renderDrawer.
+  const poll = dljs.match(/function poll\(\)[\s\S]*?\n\}/);
+  assert.ok(poll, "poll() not found");
+  assert.match(poll[0], /renderDrawer\(\)/);
+  const listener = dljs.match(/chrome\.runtime\.onMessage\.addListener\(\(msg\) => \{[\s\S]*?\n\}\);/);
+  assert.match(listener[0], /renderDrawer\(\)/);
+});
+
 test("downloads.js shows elapsed time in row meta (next to ETA)", () => {
   const dljs = read("scripts-manager/downloads.js");
   // Helper present + rendered in template + patched in place per tick.

@@ -383,8 +383,11 @@ $list.addEventListener("click", async (e) => {
   const row = e.target.closest(".dl-row");
   if (row) {
     const gid = Number(row.dataset.gid);
+    const isNewSel = state.selected !== gid;
     state.selected = state.selected === gid ? null : gid;
+    if (isNewSel) _drawerCollapsed = false;
     document.querySelectorAll(".dl-row").forEach((r) => r.classList.toggle("sel", Number(r.dataset.gid) === state.selected));
+    renderDrawer();
   }
 });
 
@@ -494,6 +497,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     $status.textContent = "live";
     renderCats();
     renderList();
+    renderDrawer();
   }
 });
 
@@ -509,6 +513,7 @@ function poll() {
     $status.textContent = "live";
     renderCats();
     renderList();
+    renderDrawer();
     const anyActive = state.jobs.some((j) => j.status === "active");
     schedule(anyActive ? 250 : 1500);
   });
@@ -519,6 +524,103 @@ function schedule(ms) {
   state.pollTimer = setTimeout(poll, ms);
 }
 
+// ── details drawer (Chrono-style right-side panel) ─────────────────
+const $main         = document.querySelector(".main");
+const $drawer       = document.getElementById("drawer");
+const $drawerBody   = document.getElementById("drawer-body");
+const $drawerToggle = document.getElementById("drawer-toggle");
+
+let _drawerCollapsed = false;   // user-toggled override; survives until selection change
+
+function renderDrawer() {
+  const settings = state.settings;
+  const sel  = state.selected;
+  const job  = sel != null ? state.jobs.find((j) => j.gid === sel) : null;
+  const want = !!job && settings.slideInDetailsOnClick !== false && !_drawerCollapsed;
+  if (!want) {
+    $main.classList.remove("has-drawer");
+    $drawer.hidden = true;
+    return;
+  }
+  $main.classList.add("has-drawer");
+  $drawer.hidden = false;
+
+  const name   = basename(job.dest);
+  const kind   = classify(name);
+  const ico    = { image:"🖼", video:"🎬", audio:"🎵", document:"📄", archive:"🗂", other:"📦" }[kind] || "📄";
+  const dir    = (job.dest || "").replace(/\/[^/]+$/, "/");
+  const pct    = job.total > 0 ? Math.min(100, Math.round((job.done / job.total) * 100)) : 0;
+  const bps    = job.elapsed_ms > 0 ? (job.done * 1000) / job.elapsed_ms : 0;
+  const startStr  = job.started_at ? new Date(job.started_at * 1000).toLocaleString() : "—";
+  const sizeStr   = job.total > 0
+    ? `${fmtBytes(job.done)} / ${fmtBytes(job.total)} (${pct}%)`
+    : (job.status === "done" ? fmtBytes(job.done) : `${fmtBytes(job.done)} / ?`);
+  const destOnDisk = job.dest_exists !== false;
+
+  $drawerBody.innerHTML = `
+    <div class="hd">
+      <span class="ico">${ico}</span>
+      <span class="nm" title="${escapeHtml(job.dest)}">${escapeHtml(name)}</span>
+    </div>
+    <div class="sub" title="${escapeHtml(job.dest)}">${escapeHtml(dir)}</div>
+    <div class="row"><span class="k">URL</span>       <span class="v"><a href="${escapeHtml(job.url || "#")}" target="_blank" rel="noopener">${escapeHtml(job.url || "")}</a></span></div>
+    <div class="row"><span class="k">Status</span>    <span class="v ${job.status === "failed" ? "err" : ""}"><code>${escapeHtml(job.status)}</code>${destOnDisk ? "" : " <code style='color:var(--text-muted);border-color:var(--text-muted);'>file missing</code>"}</span></div>
+    <div class="row"><span class="k">File size</span> <span class="v">${escapeHtml(sizeStr)}${job.total > 0 ? ` <span style="color:var(--text-muted);">(${job.total.toLocaleString()} bytes)</span>` : ""}</span></div>
+    <div class="row"><span class="k">Segments</span>  <span class="v">${job.segments}</span></div>
+    <div class="row"><span class="k">Speed</span>     <span class="v">${job.status === "active" ? fmtSpeed(job.done, job.elapsed_ms) : (job.status === "done" ? `avg ${fmtSpeed(job.done, job.elapsed_ms)}` : "—")}</span></div>
+    <div class="row"><span class="k">Elapsed</span>   <span class="v">${fmtElapsed(job.elapsed_ms)}</span></div>
+    <div class="row"><span class="k">ETA</span>       <span class="v">${job.status === "active" ? fmtEta(job.done, job.total, bps) : "—"}</span></div>
+    <div class="row"><span class="k">Started</span>   <span class="v">${escapeHtml(startStr)}</span></div>
+    <div class="row"><span class="k">GID</span>       <span class="v"><code>${job.gid}</code></span></div>
+    ${job.err ? `<div class="row"><span class="k">Error</span> <span class="v err">${escapeHtml(job.err)}</span></div>` : ""}
+    <div class="drawer-actions">
+      ${(job.status === "done" && destOnDisk)
+          ? `<button data-act="open"   data-dest="${escapeHtml(job.dest)}">open</button>
+             <button data-act="reveal" data-dest="${escapeHtml(job.dest)}">reveal</button>`
+          : ""}
+      ${job.status === "active" ? `<button data-act="pause"  data-gid="${job.gid}">pause</button>`  : ""}
+      ${job.status === "paused" ? `<button data-act="resume" data-gid="${job.gid}">resume</button>` : ""}
+      ${(job.status === "failed" || job.status === "cancelled") ? `<button data-act="resume" data-gid="${job.gid}">retry</button>` : ""}
+      ${(job.status === "active" || job.status === "paused" || job.status === "pending")
+          ? `<button class="danger" data-act="cancel" data-gid="${job.gid}">cancel</button>` : ""}
+      <button class="danger" data-act="deselect" title="Close details">close</button>
+    </div>
+  `;
+}
+
+$drawerBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-act], a[data-act]");
+  if (!btn) return;
+  const act = btn.dataset.act;
+  if (act === "deselect") { state.selected = null; renderList(); renderDrawer(); return; }
+  if (act === "open" || act === "reveal") {
+    const kind = act === "open" ? "dl.openFile" : "dl.openDir";
+    const dest = btn.dataset.dest || "";
+    btn.disabled = true;
+    chrome.runtime.sendMessage({ kind, path: dest }, (r) => {
+      btn.disabled = false;
+      if (!r?.ok) $status.textContent = `${act} failed: ${r?.err || "unknown"}`;
+    });
+    return;
+  }
+  const gid = Number(btn.dataset.gid);
+  btn.disabled = true;
+  const r = await sendAct(act, gid);
+  btn.disabled = false;
+  if (!r?.ok) $status.textContent = `${act} failed: ${r?.err || "unknown"}`;
+  poll();
+});
+
+$drawerToggle.addEventListener("click", () => {
+  _drawerCollapsed = true;
+  renderDrawer();
+});
+
+// Re-render drawer whenever the underlying job changes (covers live polling).
+const _origRender = renderList;
+function renderListAndDrawer() { _origRender(); renderDrawer(); }
+// We can't reassign const renderList; instead, append a hook from poll/event callers.
+
 // rehydrate from cached snapshot before first live poll
 chrome.runtime.sendMessage({ kind: "dl.snapshot.cached" }, (r) => {
   if (r?.snapshot?.jobs) {
@@ -526,8 +628,10 @@ chrome.runtime.sendMessage({ kind: "dl.snapshot.cached" }, (r) => {
     $status.textContent = "cached";
     renderCats();
     renderList();
+    renderDrawer();
   }
   poll();
 });
 
 renderCats();
+renderDrawer();
