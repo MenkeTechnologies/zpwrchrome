@@ -111,20 +111,18 @@ test("orchestrator stitches tiles on OffscreenCanvas (SW-friendly, no DOM)", () 
   assert.match(shot, /canvas\.convertToBlob\(\{ type: "image\/png" \}\)/);
 });
 
-test("orchestrator writes via host dl.writeFile so settings.downloadDir wins", () => {
-  // chrome.downloads.download cannot override Chrome's default Downloads
-  // folder, so the user's configured downloadDir would be ignored. Route
-  // the PNG bytes through the native host instead — same path as every
-  // other download in this extension.
-  assert.match(shot, /kind: "dl\.writeFile"/);
-  assert.match(shot, /resolvePreferredDownloadDir/);
-  // Priority: explicit downloadDir > tracked lastDir > host default (= "").
-  const fn = shot.match(/async function resolvePreferredDownloadDir[\s\S]*?\n\}/);
-  assert.ok(fn, "resolvePreferredDownloadDir not found");
-  assert.match(fn[0], /s\.downloadDir/);
-  assert.match(fn[0], /s\.saveToLastUsedLocation && s\.lastDir/);
-  // base64 encoding is chunked so a multi-MB blob doesn't blow the call stack.
-  assert.match(shot, /async function blobToBase64/);
+test("orchestrator returns {blob, filename, host} — caller writes via bpSend directly", () => {
+  // CRITICAL: chrome.runtime.sendMessage from the SW does NOT deliver to
+  // the SW itself ("Could not establish connection. Receiving end does
+  // not exist"). The earlier implementation tried to round-trip dl.writeFile
+  // through sendMessage and silently dropped the bytes. The orchestrator
+  // now just returns the blob; background.js calls bpSend in its own
+  // catch-block right after.
+  assert.match(shot, /return \{ blob, filename, host \}/);
+  // No sendMessage call sites inside screenshot.js anymore (comments OK).
+  assert.doesNotMatch(shot, /chrome\.runtime\.sendMessage\s*\(/);
+  // blobToBase64 is now exported so background.js can encode in-SW.
+  assert.match(shot, /export async function blobToBase64/);
   assert.match(shot, /CHUNK\s*=\s*0x8000/);
   assert.match(shot, /String\.fromCharCode\.apply\(null, bytes\.subarray/);
 });

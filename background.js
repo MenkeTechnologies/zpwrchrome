@@ -30,7 +30,7 @@ import { loadInterface as loadDlInterface, DL_INTERFACE_DEFAULTS } from "./scrip
 import { loadRules as loadDlRules } from "./scripts-manager/dl-rules.js";
 import { diagPush, diagRead, diagClear } from "./lib/diag.js";
 import { expandBatchSafe }                from "./lib/dl-batch.js";
-import { screenshotFullPage }             from "./lib/screenshot.js";
+import { screenshotFullPage, blobToBase64 } from "./lib/screenshot.js";
 
 const MRU_KEY = "mru";
 const DL_SETTINGS_KEY = "dl.settings";
@@ -508,7 +508,21 @@ async function doScreenshotFullPage(tab) {
   await chrome.action?.setBadgeBackgroundColor?.({ color: "#ffb800" });
   await chrome.action?.setBadgeText?.({ text: "📸" });
   try {
-    const { dest, bytes, filename } = await screenshotFullPage(tab);
+    const { blob, filename } = await screenshotFullPage(tab);
+    // Write directly through the host — NOT via chrome.runtime.sendMessage.
+    // SW → SW sendMessage isn't delivered (no receiving end) so the prior
+    // implementation dropped the bytes on the floor. The settings + host
+    // calls below run in this same SW context where bpSend is in scope.
+    const base64 = await blobToBase64(blob);
+    const settings = await loadDlSettings();
+    const dir = (settings.downloadDir && settings.downloadDir.trim())
+      ? settings.downloadDir.trim()
+      : (settings.saveToLastUsedLocation && settings.lastDir)
+        ? settings.lastDir
+        : "";
+    const resp = await bpSend({ action: "dl.writeFile", dir, name: filename, base64 });
+    const dest  = resp.data?.dest  || "";
+    const bytes = resp.data?.bytes || blob.size;
     diagPush("screenshot.done", { dest, bytes, filename });
     console.log("[zpwrchrome] screenshot saved →", dest, `(${bytes} bytes)`);
     await chrome.action?.setBadgeBackgroundColor?.({ color: "#39ff14" });

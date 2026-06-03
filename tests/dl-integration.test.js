@@ -650,20 +650,18 @@ test("popup strip done rows expose open + reveal buttons (gated on dest_exists)"
   assert.match(popupJs, /act === "open" \? "dl\.openFile" : "dl\.openDir"/);
 });
 
-test("background.js + screenshot.js route screenshots through dl.writeFile so settings.downloadDir wins", () => {
-  // The takeover path passes the user's downloadDir to the host; screenshots
-  // must do the same instead of using chrome.downloads.download (which can't
-  // override Chrome's default folder).
-  const shot = read("lib/screenshot.js");
-  assert.match(shot, /kind: "dl\.writeFile"/);
-  assert.match(shot, /resolvePreferredDownloadDir/);
-  // SW handler must forward dir + name + base64 unchanged.
-  const handler = bg.match(/msg\?\.kind === "dl\.writeFile"[\s\S]*?return true;/);
-  assert.ok(handler, "dl.writeFile handler missing");
-  assert.match(handler[0], /action: "dl\.writeFile"/);
-  assert.match(handler[0], /dir:\s+String\(msg\.dir/);
-  assert.match(handler[0], /name:\s+String\(msg\.name/);
-  assert.match(handler[0], /base64: String\(msg\.base64/);
+test("background.js writes screenshots via bpSend(dl.writeFile) directly in-SW (sendMessage hop is broken)", () => {
+  // SW → SW chrome.runtime.sendMessage drops on the floor with
+  // "Could not establish connection." So doScreenshotFullPage calls
+  // bpSend in-process (both screenshot.js and bpSend run in the SW).
+  const fn = bg.match(/async function doScreenshotFullPage[\s\S]*?\n\}/);
+  assert.ok(fn, "doScreenshotFullPage not found");
+  assert.match(fn[0], /bpSend\(\{ action: "dl\.writeFile",/);
+  assert.match(fn[0], /loadDlSettings\(\)/);
+  assert.match(fn[0], /settings\.downloadDir/);
+  assert.match(fn[0], /settings\.saveToLastUsedLocation && settings\.lastDir/);
+  // SW message handler still exists (used by external consumers if any).
+  assert.match(bg, /msg\?\.kind === "dl\.writeFile"/);
 });
 
 test("every settings + manager page imports the shared lib/page-nav.js so the global nav strip injects on load", () => {
