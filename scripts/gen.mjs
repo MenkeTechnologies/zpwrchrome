@@ -22,6 +22,21 @@ const version = manifest.version;
 // Count tests dynamically by parsing each tests/*.test.js for `test(` calls.
 const testDir = join(ROOT, "tests");
 const testFiles = readdirSync(testDir).filter((f) => f.endsWith(".test.js"));
+// Host crate version is read directly from Cargo.toml so the architecture
+// diagram doesn't depend on environment ($npm_package_version) which only
+// resolves under `npm test`. Without this the docs drift between local
+// (where bash scripts/gen.sh is called bare) and CI (where npm test calls
+// gen.sh with the env set).
+const hostCrateVersion = (() => {
+  try {
+    const toml = readFileSync(join(ROOT, "browserpass-host-rs/Cargo.toml"), "utf8");
+    const m = toml.match(/^version\s*=\s*"([^"]+)"/m);
+    return m ? m[1] : "";
+  } catch {
+    return "";
+  }
+})();
+
 const testCount = testFiles.reduce((sum, f) => {
   const src = readFileSync(join(testDir, f), "utf8");
   return sum + (src.match(/^test\(/gm) || []).length;
@@ -1227,7 +1242,7 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
 
         <rect class="box host" x="780" y="64" width="262" height="80" />
         <text class="lbl"  x="792" y="84">browserpass-host-rs</text>
-        <text class="sub"  x="792" y="100">crates.io · v${process.env.npm_package_version || ""}</text>
+        <text class="sub"  x="792" y="100">crates.io · v${hostCrateVersion}</text>
         <text class="sub"  x="792" y="114">one process per NM message</text>
         <text class="sub"  x="792" y="128">stdio: length-prefixed JSON</text>
 
