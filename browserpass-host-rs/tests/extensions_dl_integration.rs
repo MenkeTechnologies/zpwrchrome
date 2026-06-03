@@ -614,3 +614,75 @@ fn dl_resume_leaves_old_worker_alone_when_pid_is_alive() {
     assert_eq!(job["worker_pid"], my_pid, "live worker_pid must NOT be overwritten");
     let _ = fs::remove_dir_all(&cache);
 }
+
+#[test]
+fn looks_like_query_garbage_recognizes_cdn_path_components() {
+    use browserpass_host_rs::extensions::dl::looks_like_query_garbage;
+    // Real basenames pass.
+    assert!(!looks_like_query_garbage("True_Samples.zip"));
+    assert!(!looks_like_query_garbage("setup.exe"));
+    assert!(!looks_like_query_garbage("notes.md"));
+    // Query-string-as-path → reject.
+    assert!(looks_like_query_garbage(
+        "J6bpmRyOJonT3VoXnDag%3D%3D&limit=0&content_type=application%2Fzip&owner_uid=1425749744"
+    ));
+    assert!(looks_like_query_garbage("foo=1&bar=2&baz=3"));
+    // No extension at all → reject (worker will rename via Content-Disposition).
+    assert!(looks_like_query_garbage("noextension"));
+    // Extension >8 chars → reject.
+    assert!(looks_like_query_garbage("file.toolongext"));
+    // Extension containing query chars → reject.
+    assert!(looks_like_query_garbage("file.zip%3D"));
+}
+
+#[test]
+fn parse_content_disposition_filename_handles_all_three_forms() {
+    use browserpass_host_rs::extensions::dl::parse_content_disposition_filename as p;
+    assert_eq!(p("attachment; filename=\"True Samples.zip\""), Some("True Samples.zip".into()));
+    assert_eq!(p("attachment; filename=plain.zip"),            Some("plain.zip".into()));
+    assert_eq!(p("attachment; filename*=UTF-8''True%20Samples.zip"),
+               Some("True Samples.zip".into()));
+    // RFC 5987 wins when both are present.
+    assert_eq!(
+        p("attachment; filename=fallback.zip; filename*=UTF-8''Real%20Name.zip"),
+        Some("Real Name.zip".into()),
+    );
+    // Path traversal stripped.
+    assert_eq!(
+        p("attachment; filename=\"../../etc/passwd\""),
+        Some("passwd".into()),
+    );
+    // No filename token → None.
+    assert_eq!(p("inline"), None);
+}
+
+#[test]
+fn guess_filename_rejects_query_garbage_so_worker_can_rename_later() {
+    use browserpass_host_rs::extensions::dl::guess_filename;
+    // Real filename in path → kept.
+    assert_eq!(
+        guess_filename("https://example.com/files/setup.exe"),
+        Some("setup.exe".into()),
+    );
+    // CDN URL whose only path component is a query-string-style blob → None.
+    let bad = "https://cdn.example.com/J6bpmRyOJonT3VoXnDag%3D%3D&limit=0&content_type=application%2Fzip";
+    assert_eq!(guess_filename(bad), None,
+        "CDN garbage must be rejected so the worker's HEAD rename wins");
+    // Percent-encoded but otherwise valid filename → decoded.
+    assert_eq!(
+        guess_filename("https://example.com/dir/My%20File.pdf"),
+        Some("My File.pdf".into()),
+    );
+}
+
+#[test]
+fn percent_decode_handles_utf8_and_invalid_escapes() {
+    use browserpass_host_rs::extensions::dl::percent_decode;
+    assert_eq!(percent_decode("hello%20world"),    "hello world");
+    assert_eq!(percent_decode("a%2Fb"),            "a/b");
+    // Invalid % escapes left literal.
+    assert_eq!(percent_decode("%ZZ"),              "%ZZ");
+    assert_eq!(percent_decode("trailing%2"),       "trailing%2");
+    // Multi-byte UTF-8 (caf%C3%A9 = "café").
+    assert_eq!(percent_decode("caf%C3%A9"),        "café");
+}

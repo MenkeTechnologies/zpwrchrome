@@ -206,7 +206,82 @@ pub fn guess_filename(url: &str) -> Option<String> {
     let no_query = basename.split('?').next().unwrap_or("");
     let no_frag  = no_query.split('#').next().unwrap_or("");
     if no_frag.is_empty() { return None; }
-    Some(sanitize_filename(no_frag))
+    if looks_like_query_garbage(no_frag) { return None; }
+    let decoded = percent_decode(no_frag);
+    Some(sanitize_filename(&decoded))
+}
+
+/// Heuristic: reject URL-derived basenames that look like opaque query
+/// strings rather than real filenames. The worker will later rename the
+/// dest using Content-Disposition from the HEAD response, so failing here
+/// just buys us a clean "download-{ts}.bin" placeholder until then.
+pub fn looks_like_query_garbage(s: &str) -> bool {
+    let len = s.chars().count();
+    if len == 0 || len > 80 { return true; }
+    // Many query separators / equals signs = obviously a query string body.
+    let amp_eq = s.chars().filter(|c| matches!(*c, '&' | '=')).count();
+    if amp_eq >= 3 { return true; }
+    // No extension at all (or extension is itself > 8 chars / has = & %) is suspect.
+    let after_last_dot = s.rsplit('.').next().unwrap_or("");
+    if !s.contains('.') { return true; }
+    if after_last_dot.is_empty() || after_last_dot.len() > 8 { return true; }
+    if after_last_dot.chars().any(|c| matches!(c, '=' | '&' | '%' | '?')) { return true; }
+    false
+}
+
+/// Percent-decode `%xx` escapes; invalid sequences are left as literal.
+pub fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let h = (bytes[i + 1] as char).to_digit(16);
+            let l = (bytes[i + 2] as char).to_digit(16);
+            if let (Some(h), Some(l)) = (h, l) {
+                out.push(((h << 4) | l) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Parse a filename out of a Content-Disposition header value. Handles:
+/// * RFC 5987 extended form: `filename*=UTF-8''True%20Samples.zip`
+/// * Quoted form:            `filename="True Samples.zip"`
+/// * Bare form:              `filename=True_Samples.zip`
+/// Strips any path components (defends against `filename=../etc/passwd`).
+/// Returns None if no filename token is present.
+pub fn parse_content_disposition_filename(header: &str) -> Option<String> {
+    let mut best: Option<String> = None;
+    let mut star: Option<String> = None;
+    for part in header.split(';') {
+        let part = part.trim();
+        let lower = part.to_ascii_lowercase();
+        if let Some(rest) = lower.strip_prefix("filename*=") {
+            let orig = &part[part.len() - rest.len()..];
+            let mut it = orig.splitn(3, '\'');
+            let _charset = it.next().unwrap_or("");
+            let _lang    = it.next().unwrap_or("");
+            let value    = it.next().unwrap_or("");
+            let decoded = percent_decode(value);
+            star = Some(decoded);
+        } else if let Some(rest) = lower.strip_prefix("filename=") {
+            let orig = &part[part.len() - rest.len()..];
+            let v = orig.trim_matches('"').trim();
+            if !v.is_empty() { best = Some(v.to_string()); }
+        }
+    }
+    // RFC 5987 says filename* takes precedence over filename.
+    let raw = star.or(best)?;
+    // Strip any path component to avoid traversal.
+    let name = raw.rsplit(|c| c == '/' || c == '\\').next().unwrap_or("").to_string();
+    if name.is_empty() { return None; }
+    Some(sanitize_filename(&name))
 }
 
 pub fn sanitize_filename(s: &str) -> String {
@@ -728,6 +803,36 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
         .map(|v| v.eq_ignore_ascii_case("bytes"))
         .unwrap_or(false);
     state.total = total;
+
+    // Rename dest to a Content-Disposition-derived name when (a) the server
+    // gave one and (b) the dest file hasn't been touched yet. This fixes
+    // CDN URLs whose path is all query-string and Chrome's onCreated didn't
+    // populate a sensible filename. Refuse to rename if the dest file
+    // already exists with data (rare race), to avoid losing partial bytes.
+    if let Some(cd) = head.header("Content-Disposition") {
+        if let Some(srv_name) = parse_content_disposition_filename(cd) {
+            let cur_name = std::path::Path::new(&state.dest)
+                .file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let is_placeholder = cur_name.starts_with("download-")
+                || looks_like_query_garbage(cur_name);
+            let dest_path = std::path::Path::new(&state.dest);
+            let already_has_data = match fs::metadata(dest_path) {
+                Ok(m) => m.len() > 0,
+                Err(_) => false,
+            };
+            if !already_has_data && (cur_name != srv_name || is_placeholder) {
+                let parent = dest_path.parent()
+                    .unwrap_or(std::path::Path::new("."))
+                    .to_path_buf();
+                let new_dest = unique_dest_path(&parent, &srv_name);
+                crate::diag::log(&format!(
+                    "WORKER_RENAME gid={} from={} to={}",
+                    state.gid, cur_name, new_dest.display(),
+                ));
+                state.dest = new_dest.to_string_lossy().into_owned();
+            }
+        }
+    }
     write_state_atomic(&state)?;
 
     let do_segments = total >= MIN_SEGMENT_BYTES && accept_ranges && state.segments > 1;
