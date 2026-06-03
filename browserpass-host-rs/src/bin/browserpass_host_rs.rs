@@ -76,7 +76,19 @@ fn main() {
                 }
                 return;
             }
+            // Chrome (and other Chromium-family browsers) launch native
+            // messaging hosts with the calling extension's origin URL as a
+            // positional argument — e.g. `chrome-extension://<id>/`. The
+            // host must accept and ignore it; otherwise the parser dies
+            // before reading stdin and the browser reports "Native host
+            // has exited." Upstream browserpass-native does the same.
+            other if other.starts_with("chrome-extension://")
+                  || other.starts_with("moz-extension://")
+                  || other.starts_with("--parent-window=") => {
+                diag::log(&format!("ARG_IGNORED arg={other}"));
+            }
             other => {
+                diag::log(&format!("ARG_UNKNOWN arg={other}"));
                 eprintln!("browserpass-host-rs: unknown argument: {other}");
                 std::process::exit(2);
             }

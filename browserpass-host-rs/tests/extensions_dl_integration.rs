@@ -407,3 +407,46 @@ fn spawn_worker_detaches_worker_from_inherited_fds() {
     assert!(head.contains("libc::close"),  "spawn_worker must close inherited FDs");
     assert!(head.contains("pre_exec"),     "spawn_worker must use pre_exec hook");
 }
+
+// Regression: Chrome (Chromium-family) launches every native messaging
+// host with the calling extension's origin URL as positional argv[1] —
+// e.g. `chrome-extension://<id>/`. If the host treats unknown args as
+// fatal, it exits with code 2 before reading stdin and the browser
+// reports "Native host has exited." This bit us in v0.5.x prior to 0.5.3.
+#[test]
+fn host_ignores_chrome_extension_origin_in_argv() {
+    use std::process::{Command, Stdio};
+    use std::io::Write;
+    let bin = env!("CARGO_BIN_EXE_browserpass-host-rs");
+    let mut child = Command::new(bin)
+        .arg("chrome-extension://ojnilaicjhpoamcfconboophcbfpegbk/")
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().expect("spawn host");
+    let payload = br#"{"action":"dl.list"}"#;
+    let len = (payload.len() as u32).to_le_bytes();
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        stdin.write_all(&len).unwrap();
+        stdin.write_all(payload).unwrap();
+    }
+    let out = child.wait_with_output().expect("wait host");
+    assert!(out.status.success(), "host exited {:?}; stderr={}", out.status, String::from_utf8_lossy(&out.stderr));
+    let stdout = out.stdout;
+    assert!(stdout.len() >= 4, "no framed response");
+    let resp_body = std::str::from_utf8(&stdout[4..]).expect("utf-8 response");
+    assert!(resp_body.contains("\"status\":\"ok\""), "unexpected body: {resp_body}");
+}
+
+#[test]
+fn host_rejects_truly_unknown_argv() {
+    use std::process::{Command, Stdio};
+    let bin = env!("CARGO_BIN_EXE_browserpass-host-rs");
+    let out = Command::new(bin)
+        .arg("--nonsense")
+        .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().expect("spawn host")
+        .wait_with_output().expect("wait host");
+    assert!(!out.status.success(), "host should exit non-zero on unknown args");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("unknown argument"), "stderr should mention unknown arg: {stderr}");
+}
