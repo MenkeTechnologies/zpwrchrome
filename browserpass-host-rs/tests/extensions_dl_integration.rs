@@ -469,7 +469,7 @@ fn host_rejects_truly_unknown_argv() {
 }
 
 #[test]
-fn expand_home_resolves_tilde_against_HOME_env() {
+fn expand_home_resolves_tilde_against_home_env() {
     use browserpass_host_rs::extensions::dl::expand_home;
     // Set a stable HOME for this test; restore at end.
     let prior = std::env::var("HOME").ok();
