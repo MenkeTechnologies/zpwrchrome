@@ -4,6 +4,7 @@
 // active, backs off to 1/s when idle. Re-hydrates from the SW's cached
 // snapshot before the first live poll so the list paints instantly.
 
+import "../lib/page-nav.js";
 import { loadSettings, DL_DEFAULTS } from "./dl-settings.js";
 
 const $list   = document.getElementById("list");

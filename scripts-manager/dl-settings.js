@@ -1,9 +1,11 @@
-// zpwrchrome — download settings page.
+// zpwrchrome — settings page (General tab).
+// Covers download manager, pass autofill, and other cross-cutting prefs.
 //
 // All settings live in chrome.storage.local["dl.settings"]. Background.js
 // reads the same key when intercepting downloads and when responding to
 // browser-side hooks (chrome://downloads override, builtin-UI hide).
 
+import "../lib/page-nav.js";
 const KEY = "dl.settings";
 
 export const DL_DEFAULTS = Object.freeze({
@@ -116,7 +118,7 @@ function bootSettingsPage() {
   });
 
   $reset?.addEventListener("click", async () => {
-    if (!confirm("Reset all download settings to defaults?")) return;
+    if (!confirm("Reset all General settings to defaults?")) return;
     await saveSettings({ ...DL_DEFAULTS });
     await hydrate();
     flash("reset");

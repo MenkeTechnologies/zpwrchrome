@@ -20,7 +20,8 @@ body {
   background: var(--bg-primary);
   color: var(--text);
   display: grid;
-  grid-template-rows: 56px 1fr 28px;
+  /* leading auto row reserves space for the injected global nav. */
+  grid-template-rows: auto 56px 1fr 28px;
 }
 
 /* ── topbar ───────────────────────────────────────────────────────── */

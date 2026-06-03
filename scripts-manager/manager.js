@@ -1,3 +1,4 @@
+import "../lib/page-nav.js";
 import {
   parseMetadata,
   validateUserscript,

@@ -5,6 +5,7 @@
 // downloads.js (and the Rule System engine) consult these buckets when
 // classifying finished jobs.
 
+import "../lib/page-nav.js";
 const KEY = "dl.extFilters";
 
 export const DL_EXTFILTER_DEFAULTS = Object.freeze({

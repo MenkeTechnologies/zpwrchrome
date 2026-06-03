@@ -5,6 +5,7 @@
 //   { matchMode: "first"|"all", defaultMask: "*name*.*ext*",
 //     rows: [{ active, asTasksFilter, name, internal, condition, mask }] }
 
+import "../lib/page-nav.js";
 const KEY = "dl.rules";
 
 export const DL_RULES_DEFAULTS = Object.freeze({

@@ -1,5 +1,6 @@
 // zpwrchrome — Help page; only side effect is the Panic Button.
 
+import "../lib/page-nav.js";
 const PANIC_KEYS = ["dl.settings", "dl.interface", "dl.extFilters", "dl.rules"];
 
 const $btn = document.getElementById("panic");

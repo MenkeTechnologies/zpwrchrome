@@ -3,6 +3,7 @@
 // Persists under chrome.storage.local["dl.interface"]. The badge-count
 // + notification settings are read directly by background.js.
 
+import "../lib/page-nav.js";
 const KEY = "dl.interface";
 
 export const DL_INTERFACE_DEFAULTS = Object.freeze({

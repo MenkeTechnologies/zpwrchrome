@@ -450,6 +450,46 @@ test("popup strip rows expose pause/resume/cancel/retry buttons per status", () 
   assert.match(popupCss, /\.dl-strip-row \.act\.danger:hover/);
 });
 
+test("every settings + manager page imports the shared lib/page-nav.js so the global nav strip injects on load", () => {
+  // The library lives at /lib/page-nav.js; pages must import it via a
+  // relative path so the bundled extension picks it up.
+  for (const path of [
+    "scripts-manager/downloads.js",
+    "scripts-manager/dl-settings.js",
+    "scripts-manager/dl-interface.js",
+    "scripts-manager/dl-extfilter.js",
+    "scripts-manager/dl-rules.js",
+    "scripts-manager/dl-help.js",
+    "scripts-manager/dl-about.js",
+    "scripts-manager/dl-diag.js",
+    "scripts-manager/manager.js",
+  ]) {
+    assert.match(read(path), /import "\.\.\/lib\/page-nav\.js";/,
+      `${path} must import ../lib/page-nav.js`);
+  }
+});
+
+test("lib/page-nav.js builds links to every settings page and the chrome://extensions self-page", () => {
+  const nav = read("lib/page-nav.js");
+  for (const href of [
+    "/scripts-manager/downloads.html",
+    "/scripts-manager/dl-settings.html",
+    "/scripts-manager/dl-interface.html",
+    "/scripts-manager/dl-extfilter.html",
+    "/scripts-manager/dl-rules.html",
+    "/scripts-manager/manager.html",
+    "/scripts-manager/dl-diag.html",
+    "/scripts-manager/dl-help.html",
+    "/scripts-manager/dl-about.html",
+  ]) {
+    assert.match(nav, new RegExp(href.replace(/\//g, "\\/")),
+      `page-nav.js must link ${href}`);
+  }
+  // chrome:// URLs must be opened via chrome.tabs.create (anchor href blocked).
+  assert.match(nav, /chrome:\/\/extensions\/\?id=\$\{chrome\.runtime\.id\}/);
+  assert.match(nav, /chrome\.tabs\.create\(\{\s*url\s*\}\)/);
+});
+
 test("popup ships a persistent bottom downloads strip that auto-refreshes every 1s", () => {
   const popupHtml = read("popup.html");
   const popupCss  = read("popup.css");

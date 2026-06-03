@@ -1,6 +1,7 @@
 // zpwrchrome — diagnostics page. Reads the SW's diag ring buffer + can
 // ping the native host to verify end-to-end transport.
 
+import "../lib/page-nav.js";
 const $list    = document.getElementById("list");
 const $filter  = document.getElementById("filter");
 const $alive   = document.getElementById("alive");

@@ -18,7 +18,8 @@ body {
   background: var(--bg-primary);
   color: var(--text);
   display: grid;
-  grid-template-rows: 56px 1fr;
+  /* auto row reserves space for the injected global nav; rest unchanged. */
+  grid-template-rows: auto 56px 1fr;
 }
 
 .topbar {
