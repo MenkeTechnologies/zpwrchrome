@@ -34,6 +34,9 @@ export const DL_DEFAULTS = Object.freeze({
   clearSearchOnFilter: false,
   cancelOnTrash: false,
 
+  // Pass autofill
+  passAutoSubmit: false,
+
   // Internal (not user-editable in UI): last directory used by dl.add.
   lastDir: "",
 });
@@ -133,6 +136,36 @@ function bootSettingsPage() {
     const el = document.querySelector('[data-key="downloadDir"]');
     el.value = "";
     await persist();
+  });
+
+  // Pass keyboard shortcuts — populated from chrome.commands.getAll() so the
+  // user sees their current binding (defaults included). Chrome controls
+  // rebinding; we just send them to the right page.
+  const $kbRows = document.getElementById("kb-rows");
+  const $openShortcuts = document.getElementById("open-shortcuts");
+  if ($kbRows && chrome.commands?.getAll) {
+    chrome.commands.getAll((cmds) => {
+      const wanted = [
+        ["pass-fill",       "Autofill best-matching pass entry"],
+        ["pass-open-popup", "Open popup → Pass category"],
+        ["pass-copy-pw",    "Copy password to clipboard"],
+        ["pass-copy-user",  "Copy username to clipboard"],
+        ["pass-copy-otp",   "Copy TOTP code to clipboard"],
+        ["pass-open-url",   "Open URL stored in pass entry"],
+      ];
+      const map = new Map((cmds || []).map((c) => [c.name, c.shortcut || ""]));
+      $kbRows.innerHTML = wanted.map(([name, label]) => {
+        const sc = (map.get(name) || "").trim();
+        const kbd = sc
+          ? sc.split(/\s*\+\s*/).map((k) => `<kbd>${k}</kbd>`).join("+")
+          : `<span style="color: var(--text-muted);">(unbound)</span>`;
+        return `<tr><td>${label}<br><code style="color: var(--text-muted); font-size: 11px;">${name}</code></td><td>${kbd}</td></tr>`;
+      }).join("");
+    });
+  }
+  $openShortcuts?.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
   });
 
   hydrate();

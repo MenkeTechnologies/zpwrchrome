@@ -126,6 +126,24 @@
       </label>
     </fieldset>
 
+    <fieldset>
+      <legend>Pass autofill <span class="help" title="UNIX `pass` integration — autofills credentials from ~/.password-store into the active tab's login form">?</span></legend>
+      <label class="opt">
+        <input type="checkbox" data-key="passAutoSubmit">
+        <span>Auto-submit the form after filling</span>
+      </label>
+      <p class="dt-hint" style="margin-top:6px;">
+        Current keyboard shortcuts (rebind any of these at
+        <a href="#" id="open-shortcuts" style="color: var(--cyan);">chrome://extensions/shortcuts</a>):
+      </p>
+      <table id="kb-table" class="dt" style="margin-top:0;">
+        <thead>
+          <tr><th style="width: 50%;">Command</th><th>Shortcut</th></tr>
+        </thead>
+        <tbody id="kb-rows"></tbody>
+      </table>
+    </fieldset>
+
     <div class="actions">
       <button id="reset" class="btn-ghost">Reset to defaults</button>
       <span id="status" class="status"></span>

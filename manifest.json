@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "zpwrchrome",
   "short_name": "zpwrchrome",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "Browser power-tool: UNIX `pass` integration (browserpass-compatible), segmented download manager that replaces Chrome's default, JetBrains-style tab switcher with MRU + scenes + opener-tree + minimap, fzf history search, and Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
@@ -143,7 +143,13 @@
     "kill-heaviest":       { "description": "Close the open tab consuming the most memory (Chrome dev/canary only — requires chrome.processes API)" },
 
     "pass-open-popup":     { "description": "Open popup focused on the PASS category (matches credentials for the active tab from ~/.password-store via the zpwrchrome native host)" },
-    "pass-fill":           { "description": "Autofill the best-matching `pass` credential into the active tab's login form (requires the native host)" },
+    "pass-fill": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac":     "Command+Shift+L"
+      },
+      "description": "Autofill the best-matching `pass` credential into the active tab's login form (requires the native host) — customize at chrome://extensions/shortcuts"
+    },
     "pass-copy-pw":        { "description": "Copy the best-matching `pass` password for the active tab to the clipboard (auto-clears after 45 s)" },
     "pass-copy-user":      { "description": "Copy the best-matching `pass` username for the active tab to the clipboard" },
     "pass-copy-otp":       { "description": "Copy the TOTP code for the best-matching `pass` entry to the clipboard" },

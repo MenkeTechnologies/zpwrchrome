@@ -22,7 +22,7 @@
 
 ## `[CYBERPUNK HUD]`
 
-A Chrome MV3 extension that bundles four daily-driver tools into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, and a Tampermonkey-equivalent userscript engine. 45 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
+A Chrome MV3 extension that bundles four daily-driver tools into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, and a Tampermonkey-equivalent userscript engine. 44 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
 
 ### [`Live Site`](https://menketechnologies.github.io/zpwrchrome/) &middot; [`Source`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [`Theme`](theme/)
 
@@ -56,7 +56,7 @@ A Chrome MV3 extension that bundles four daily-driver tools into one toolbar ico
 - **Cmd+Y / Ctrl+Y history** — replaces Chrome’s built-in chrome://history page with an fzf-fuzzy search over up to 5000 entries, Backspace deletes the highlighted URL from history
 - **UNIX `pass` integration** — replaces browserpass via a vendored Rust native-messaging host that walks `~/.password-store` with eTLD+1 + multi-label PSL matching, shells to `pass show`/`pass otp`, returns credentials over a length-prefixed JSON port. PASS popup category with fill / user / pw / otp buttons. Hotkeys: `pass-fill` autofills the active tab via injected `HTMLInputElement.value` setter (React/Vue safe) + input/change dispatch; `pass-copy-{pw,user,otp}` write to clipboard with 45 s auto-clear matching `pass -c`
 - **Segmented download manager** — same Rust host vendors a multi-connection downloader (HEAD probe → N parallel `Range` segments, default 4, pre-allocated dest file). Cookie + User-Agent forwarded from `chrome.cookies.getAll` so logged-in downloads work; transient errors retry with 200 ms × 3ⁿ backoff and resume via `Range` from the segment-local offset; queue mirrored to `chrome.storage.local` so the UI paints instantly across service-worker restarts. Right-click `Download with zpwrchrome` on links / images / video / audio; `dl-paste-url` reads the clipboard via injected `navigator.clipboard.readText`. Live queue UI at `scripts-manager/downloads.html` subscribes to host push events. Filename collisions auto-rename `foo.zip` → `foo (1).zip`. Pure-Rust, vendorable TLS (`ureq`+rustls), no `aria2` or other runtime binary
-- **45 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
+- **44 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
 - **Sub-popup live filter** — type to filter open + closed tabs; `↑`/`↓`/`Enter`/`Delete`/`Esc` nav
 - **Companion Chrome theme** — `theme/` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from `strykelang/docs/hud-static.css` (`--cyan #05d9e8`, `--accent #ff2a6d`, `--magenta #d300c5`, CRT scanlines, neon-border-glow card frames)
@@ -77,7 +77,7 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 1. Open `chrome://extensions`
 2. Enable **Developer mode** (top-right)
 3. Click **Load unpacked**, pick the cloned directory
-4. Open `chrome://extensions/shortcuts` to bind any of the 45 user-configurable commands
+4. Open `chrome://extensions/shortcuts` to bind any of the 44 user-configurable commands
 
 #### Native messaging host (required for `pass` and downloads)
 
@@ -108,7 +108,7 @@ cargo install browserpass-host-rs
 
 ## [0x02] KEYBOARD COMMANDS
 
-Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **3** default-keyed and **45** user-bindable, for **48 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
+Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **44** user-bindable, for **48 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
 
 | Command | Default | Description |
 | --- | --- | --- |
@@ -151,7 +151,7 @@ Chrome’s MV3 manifest allows at most **4** commands with default-suggested key
 | `restore-scene-5` | *(user-set in `chrome://extensions/shortcuts`)* | Restore scene #5 |
 | `kill-heaviest` | *(user-set in `chrome://extensions/shortcuts`)* | Close the open tab consuming the most memory (Chrome dev/canary only — requires chrome.processes API) |
 | `pass-open-popup` | *(user-set in `chrome://extensions/shortcuts`)* | Open popup focused on the PASS category (matches credentials for the active tab from ~/.password-store via the zpwrchrome native host) |
-| `pass-fill` | *(user-set in `chrome://extensions/shortcuts`)* | Autofill the best-matching `pass` credential into the active tab's login form (requires the native host) |
+| `pass-fill` | Ctrl+Shift+L | Autofill the best-matching `pass` credential into the active tab's login form (requires the native host) — customize at chrome://extensions/shortcuts |
 | `pass-copy-pw` | *(user-set in `chrome://extensions/shortcuts`)* | Copy the best-matching `pass` password for the active tab to the clipboard (auto-clears after 45 s) |
 | `pass-copy-user` | *(user-set in `chrome://extensions/shortcuts`)* | Copy the best-matching `pass` username for the active tab to the clipboard |
 | `pass-copy-otp` | *(user-set in `chrome://extensions/shortcuts`)* | Copy the TOTP code for the best-matching `pass` entry to the clipboard |
@@ -294,10 +294,10 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 
 | | |
 | --- | --- |
-| Total chrome.commands | **48** (manifest cap on default keys is 4 — this ext ships 3; the other 45 are user-bindable at `chrome://extensions/shortcuts`) |
+| Total chrome.commands | **48** (manifest cap on default keys is 4 — this ext ships 4; the other 44 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **2682** `node:test` cases (JS) + 74 `cargo test` cases (Rust) |
+| Test suite | **2688** `node:test` cases (JS) + 74 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -334,7 +334,7 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2682 tests across 168 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2688 tests across 168 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes

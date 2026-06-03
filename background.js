@@ -124,30 +124,42 @@ async function openPassInPopup() {
 async function passMatchActive() {
   const t = await getActive();
   const h = hostnameOf(t?.url || "");
-  if (!h) return { matches: [] };
+  if (!h) {
+    diagPush("pass.match.no_host", { url: t?.url });
+    return { matches: [], host: "" };
+  }
   try {
     const matches = await bpMatchByHost(h);
-    return { matches };
+    diagPush("pass.match.ok", { host: h, count: matches.length });
+    return { matches, host: h };
   } catch (e) {
+    diagPush("pass.match.err", { host: h, err: String(e?.message || e), code: e?.code });
     console.warn("[zpwrchrome] pass.match:", e?.message || e);
-    return { matches: [] };
+    return { matches: [], host: h };
   }
 }
 
 async function passCopyForActive(field) {
-  const { matches } = await passMatchActive();
-  if (!matches.length) return;
+  diagPush("pass.copy.start", { field });
+  const { matches, host } = await passMatchActive();
+  if (!matches.length) { diagPush("pass.copy.skip", { reason: "no_matches", host }); return; }
   const m = matches[0];
+  diagPush("pass.copy.match", { field, host, path: m.path, total: matches.length });
   try {
     if (field === "otp") {
       const code = await bpOtpCode(m.path);
-      if (code) await passClipboardCopy(code);
+      if (!code) { diagPush("pass.copy.no_otp", { path: m.path }); return; }
+      await passClipboardCopy(code);
+      diagPush("pass.copy.ok", { field, path: m.path });
       return;
     }
     const entry = await bpFetchParsed(m.path);
     const text = field === "user" ? entry.username : entry.password;
-    if (text) await passClipboardCopy(text);
+    if (!text) { diagPush("pass.copy.empty_field", { field, path: m.path }); return; }
+    await passClipboardCopy(text);
+    diagPush("pass.copy.ok", { field, path: m.path });
   } catch (e) {
+    diagPush("pass.copy.err", { field, err: String(e?.message || e), code: e?.code });
     console.warn("[zpwrchrome] pass copy", field, "failed:", e?.message || e);
   }
 }
@@ -240,13 +252,15 @@ async function passFillFromPath(path, _store) {
     return false;
   }
   const settings = await getPassSettings();
+  const dlSettings = await loadDlSettings();
+  const autoSubmit = !!(dlSettings.passAutoSubmit || settings.autoSubmit);
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: t.id, allFrames: true },
       func: fillLoginForm,
-      args: [String(entry.username || ""), String(entry.password || ""), !!settings.autoSubmit],
+      args: [String(entry.username || ""), String(entry.password || ""), autoSubmit],
     });
-    return Array.isArray(results) && results.some((r) => r?.result === true);
+    return Array.isArray(results) && results.some((r) => r?.result?.filled === true);
   } catch (e) {
     console.warn("[zpwrchrome] pass.fill inject:", e?.message || e);
     return false;
@@ -254,36 +268,68 @@ async function passFillFromPath(path, _store) {
 }
 
 async function passFillActive() {
+  diagPush("pass.fill.start");
   const t = await getActive();
-  if (!t?.id) return;
+  if (!t?.id) { diagPush("pass.fill.skip", { reason: "no_active_tab" }); return; }
   const h = hostnameOf(t.url || "");
-  if (!h) return;
+  if (!h)     { diagPush("pass.fill.skip", { reason: "no_hostname", url: t.url }); return; }
+  diagPush("pass.fill.host", { host: h, tabId: t.id });
   let matches;
   try {
     matches = await bpMatchByHost(h);
   } catch (e) {
+    diagPush("pass.fill.match_err", { host: h, err: String(e?.message || e), code: e?.code });
     console.warn("[zpwrchrome] pass-fill match:", e?.message || e);
     return;
   }
-  if (!matches.length) return;
+  diagPush("pass.fill.matches", { host: h, count: matches.length, paths: matches.slice(0, 5).map((m) => m.path) });
+  if (!matches.length) { diagPush("pass.fill.skip", { reason: "no_matches", host: h }); return; }
   if (matches.length > 1) {
+    diagPush("pass.fill.disambiguate", { host: h, count: matches.length });
     return openPassInPopup();
   }
   let entry;
   try {
     entry = await bpFetchParsed(matches[0].path);
   } catch (e) {
+    diagPush("pass.fill.fetch_err", { path: matches[0].path, err: String(e?.message || e), code: e?.code });
     console.warn("[zpwrchrome] pass-fill fetch:", e?.message || e);
     return;
   }
+  diagPush("pass.fill.entry", {
+    path: matches[0].path,
+    hasUsername: !!entry.username,
+    hasPassword: !!entry.password,
+    fieldKeys: Object.keys(entry).filter((k) => k !== "password" && k !== "raw"),
+  });
   const settings = await getPassSettings();
+  const dlSettings = await loadDlSettings();
+  const autoSubmit = !!(dlSettings.passAutoSubmit || settings.autoSubmit);
   try {
-    await chrome.scripting.executeScript({
+    const results = await chrome.scripting.executeScript({
       target: { tabId: t.id, allFrames: true },
       func: fillLoginForm,
-      args: [String(entry.username || ""), String(entry.password || ""), !!settings.autoSubmit],
+      args: [String(entry.username || ""), String(entry.password || ""), autoSubmit],
     });
+    const summary = (results || []).map((r) => ({
+      origin:  r?.result?.origin,
+      filled:  !!r?.result?.filled,
+      reason:  r?.result?.reason,
+      userFilled: !!r?.result?.userFilled,
+      submitted:  !!r?.result?.submitted,
+    }));
+    const filledCount = summary.filter((s) => s.filled).length;
+    diagPush("pass.fill.injected", {
+      frames:      summary.length,
+      filled:      filledCount,
+      autoSubmit:  autoSubmit,
+      perFrame:    summary,
+    });
+    if (filledCount === 0) {
+      diagPush("pass.fill.no_password_field", { reasons: summary.map((s) => s.reason).filter(Boolean) });
+    }
   } catch (e) {
+    diagPush("pass.fill.inject_err", { err: String(e?.message || e) });
     console.warn("[zpwrchrome] pass-fill inject:", e?.message || e);
   }
 }
@@ -318,8 +364,11 @@ function fillLoginForm(username, password, autoSubmit) {
     return true;
   }
   const pw = [...document.querySelectorAll('input[type="password"]')].find(visible);
-  if (!pw) return false;
+  if (!pw) {
+    return { filled: false, reason: "no_visible_password_field", origin: location?.origin || "" };
+  }
   if (password) nativeSet(pw, password);
+  let userFilled = false;
   if (username) {
     const sel = 'input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="reset"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="image"])';
     const all = pw.form
@@ -328,9 +377,10 @@ function fillLoginForm(username, password, autoSubmit) {
     const visibleAll = all.filter(visible);
     const before = visibleAll.filter((c) => pw.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING);
     const target = before.length ? before[before.length - 1] : visibleAll[0];
-    if (target) nativeSet(target, username);
+    if (target) { nativeSet(target, username); userFilled = true; }
   }
   pw.focus();
+  let submitted = false;
   if (autoSubmit) {
     // Walk up to the enclosing form, then prefer an explicit submit button
     // (so onClick handlers run); fall back to form.submit() if no button is
@@ -343,12 +393,13 @@ function fillLoginForm(username, password, autoSubmit) {
         form.querySelector('button:not([type="button"]):not([type="reset"])');
       if (submitBtn && !submitBtn.disabled) {
         submitBtn.click();
+        submitted = true;
       } else {
-        try { form.submit(); } catch {}
+        try { form.submit(); submitted = true; } catch {}
       }
     }
   }
-  return true;
+  return { filled: !!password, userFilled, submitted, origin: location?.origin || "" };
 }
 
 async function dlPasteUrl() {

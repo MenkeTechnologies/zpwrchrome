@@ -480,6 +480,61 @@ test("DL_DEFAULTS.downloadDir is empty by default (= host fallback)", () => {
   assert.match(setJs, /downloadDir: ""/);
 });
 
+test("manifest declares a default Ctrl+Shift+L / Cmd+Shift+L binding for pass-fill (customizable at chrome://extensions/shortcuts)", () => {
+  const cmd = manifest.commands["pass-fill"];
+  assert.ok(cmd, "pass-fill command missing");
+  assert.equal(cmd.suggested_key?.default, "Ctrl+Shift+L");
+  assert.equal(cmd.suggested_key?.mac,     "Command+Shift+L");
+  // Description must point users at the rebind page so they know it's customizable.
+  assert.match(cmd.description, /chrome:\/\/extensions\/shortcuts/);
+});
+
+test("settings page renders a Pass-autofill section with a keyboard shortcut table sourced from chrome.commands.getAll", () => {
+  const setHtml = read("scripts-manager/dl-settings.html");
+  const setJs   = read("scripts-manager/dl-settings.js");
+  assert.match(setHtml, /data-key="passAutoSubmit"/);
+  assert.match(setHtml, /id="kb-rows"/);
+  assert.match(setHtml, /id="open-shortcuts"/);
+  assert.match(setJs, /chrome\.commands\.getAll/);
+  assert.match(setJs, /chrome:\/\/extensions\/shortcuts/);
+  for (const cmd of ["pass-fill", "pass-open-popup", "pass-copy-pw", "pass-copy-user", "pass-copy-otp", "pass-open-url"]) {
+    assert.match(setJs, new RegExp(`"${cmd}"`), `keyboard-shortcut table must list "${cmd}"`);
+  }
+});
+
+test("DL_DEFAULTS.passAutoSubmit defaults to false (matches upstream browserpass)", () => {
+  const setJs = read("scripts-manager/dl-settings.js");
+  assert.match(setJs, /passAutoSubmit: false/);
+});
+
+test("background.js pass-fill code reads autoSubmit from dl.settings.passAutoSubmit (with pass.settings.autoSubmit as legacy fallback)", () => {
+  // Both fill paths (passFillActive + passFillFromPath) must read the new key.
+  const allBlocks = bg.match(/loadDlSettings\(\);\s*const autoSubmit = !!\(dlSettings\.passAutoSubmit \|\| settings\.autoSubmit\);/g);
+  assert.ok(allBlocks && allBlocks.length >= 2, "both pass fill paths must read dl.settings.passAutoSubmit");
+});
+
+test("background.js pass-fill keystroke handler diag-traces every step", () => {
+  // Every meaningful step in passFillActive — host lookup, match, fetch,
+  // inject, error — must emit a diagPush so failures show up in the
+  // Diagnostics page without needing the SW DevTools.
+  const fn = bg.match(/async function passFillActive\(\)[\s\S]*?\n\}/);
+  assert.ok(fn, "passFillActive not found");
+  for (const label of [
+    "pass.fill.start", "pass.fill.host", "pass.fill.matches",
+    "pass.fill.entry", "pass.fill.injected",
+  ]) {
+    assert.match(fn[0], new RegExp(`diagPush\\("${label.replace(/\./g, "\\.")}"`), `passFillActive must diagPush("${label}")`);
+  }
+});
+
+test("fillLoginForm returns structured result so diag can record per-frame outcome", () => {
+  const fn = bg.match(/function fillLoginForm\([\s\S]*?\n\}/);
+  assert.ok(fn, "fillLoginForm not found");
+  // Old contract was `return true;` — must now be a structured object.
+  assert.match(fn[0], /return \{ filled: false, reason: "no_visible_password_field"/);
+  assert.match(fn[0], /return \{ filled: !!password, userFilled, submitted, origin:/);
+});
+
 test("takeover handler honors downloadDir > lastDir > ~/Downloads", () => {
   const block = bg.match(/chrome\.downloads\.onCreated\.addListener[\s\S]+?bpDlAdd/);
   assert.ok(block, "takeover block missing");
