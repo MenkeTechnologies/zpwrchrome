@@ -427,3 +427,41 @@ test("popup.html exposes a quick 'downloads ▸' link in the header next to scri
   assert.match(popupJs, /open-downloads/);
   assert.match(popupJs, /scripts-manager\/downloads\.html/);
 });
+
+test("badge filter only counts active+pending jobs (never done/failed/cancelled/paused)", () => {
+  // Pins the badge regression where the toolbar count stayed visible after
+  // a job transitioned to failed/done — the snapshot itself was correct,
+  // the badge just wasn't recomputed. See bpDlBroadcast self-poll below.
+  const fn = bg.match(/async function applyToolbarBadge[\s\S]*?\n\}/);
+  assert.ok(fn, "applyToolbarBadge not found");
+  assert.match(fn[0], /j\.status === "active" \|\| j\.status === "pending"/);
+  // Negative pins — these status values MUST NOT appear inside the filter.
+  for (const bad of ["done", "failed", "cancelled", "paused"]) {
+    const dangerous = new RegExp(`j\\.status === "${bad}"`);
+    assert.doesNotMatch(fn[0], dangerous, `badge filter must not count "${bad}" jobs`);
+  }
+});
+
+test("bpDlBroadcast re-polls every 1.5s while any active/pending job exists, then stops", () => {
+  // The host can't push lifecycle events back to the SW (one-shot NM), so
+  // the SW polls until nothing remains active — which is what clears stale
+  // badges after a download fails or completes.
+  const fn = bg.match(/async function bpDlBroadcast[\s\S]*?\n\}\n/);
+  assert.ok(fn, "bpDlBroadcast not found");
+  assert.match(fn[0], /stillInFlight/);
+  assert.match(fn[0], /scheduleBgPoll\(1500\)/);
+  assert.match(fn[0], /cancelBgPoll\(\)/);
+  assert.match(bg, /function scheduleBgPoll\(ms\)/);
+  assert.match(bg, /function cancelBgPoll\(\)/);
+});
+
+test("SW fires one bpDlBroadcast on install + startup to clear any stale badge", () => {
+  // Pattern: both runtime.onInstalled and runtime.onStartup get a listener
+  // that calls bpDlBroadcast() unconditionally so a SW resume after Chrome
+  // restart doesn't leave a number on the icon for downloads that already
+  // finished/failed while the SW was suspended.
+  const installHooks = bg.match(/runtime\.onInstalled\.addListener\(\(\)\s*=>\s*\{\s*bpDlBroadcast\(\)/);
+  const startupHooks = bg.match(/runtime\.onStartup\.addListener\(\(\)\s*=>\s*\{\s*bpDlBroadcast\(\)/);
+  assert.ok(installHooks, "onInstalled must call bpDlBroadcast() to clear stale badge");
+  assert.ok(startupHooks, "onStartup must call bpDlBroadcast() to clear stale badge");
+});

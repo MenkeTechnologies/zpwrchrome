@@ -574,6 +574,11 @@ async function applyDownloadsUiVisibility() {
 }
 chrome.runtime.onInstalled.addListener(applyDownloadsUiVisibility);
 chrome.runtime.onStartup.addListener(applyDownloadsUiVisibility);
+// One sync broadcast on SW start clears any stale badge left over from a
+// previous session (e.g. badge stuck at the last-seen pending count when
+// the SW was suspended mid-download).
+chrome.runtime.onInstalled.addListener(() => { bpDlBroadcast(); });
+chrome.runtime.onStartup.addListener(()   => { bpDlBroadcast(); });
 
 // ---------------------------------------------------------------------------
 // Right-click "Download with zpwrchrome" on links + media (phase 7 opt-in).
@@ -1758,9 +1763,28 @@ async function bpDlBroadcast() {
     chrome.runtime.sendMessage({ kind: "dl.event", event: { kind: "dl.progress", jobs } }).catch(() => {});
     await applyToolbarBadge(jobs);
     await notifyJobTransitions(jobs);
+    // NM is one-shot — the worker can't notify us when it finishes/fails.
+    // If anything is still in flight, re-poll soon so the badge + completion
+    // notifications self-correct as states transition; stop polling when no
+    // job remains active, which clears the badge naturally.
+    const stillInFlight = jobs.some((j) => j.status === "active" || j.status === "pending");
+    if (stillInFlight) scheduleBgPoll(1500);
+    else               cancelBgPoll();
   } catch (e) {
     // worker process not registered → silently skip
   }
+}
+
+// SW-level polling timer. Used to keep the badge + completion notifications
+// in sync with worker-side lifecycle transitions even when no page is open
+// to drive the polling itself.
+let _bgPollTimer = null;
+function scheduleBgPoll(ms) {
+  cancelBgPoll();
+  _bgPollTimer = setTimeout(() => { _bgPollTimer = null; bpDlBroadcast(); }, ms);
+}
+function cancelBgPoll() {
+  if (_bgPollTimer) { clearTimeout(_bgPollTimer); _bgPollTimer = null; }
 }
 
 // Toolbar badge — "Show number of downloading tasks over toolbar icon"
