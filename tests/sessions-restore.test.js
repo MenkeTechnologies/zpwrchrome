@@ -68,9 +68,13 @@ test("manifest declares sessions permission for restore feature", () => {
   assert.ok(manifest.permissions.includes("sessions"));
 });
 
-test("switchPreviousTab uses mruPrevious not sessions API", () => {
+test("switchPreviousTab reads MRU directly (no sessions.restore call)", () => {
+  // After the Cmd+E flake fix we walk the MRU in a for…of loop instead of
+  // delegating to mruPrevious. The negative assertion (no sessions.restore)
+  // is the load-bearing one — restoreLastClosed handles that path.
   const fn = fnBody("switchPreviousTab");
-  assert.match(fn, /mruPrevious\(/);
+  assert.match(fn, /await readMru\(\)/);
+  assert.match(fn, /for \(const id of mru\)/);
   assert.ok(!fn.includes("sessions.restore"));
 });
 

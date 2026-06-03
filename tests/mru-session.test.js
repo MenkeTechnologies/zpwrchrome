@@ -78,14 +78,18 @@ test("background.js imports MRU_CAP_DEFAULT from lib/util.js", () => {
   assert.match(bg, /import[\s\S]+MRU_CAP_DEFAULT[\s\S]+from "\.\/lib\/util\.js"/);
 });
 
-test("switchPreviousTab drops stale MRU entry when tab.get throws", () => {
+test("switchPreviousTab drops stale MRU entry when tab.get throws (in-loop)", () => {
+  // After the Cmd+E flake fix, the catch lives inside the for…of loop and
+  // drops by `id` (the loop variable), not by `prev`.
   const fn = fnBody("switchPreviousTab");
-  assert.match(fn, /catch \{ await dropFromMru\(prev\); \}/);
+  assert.match(fn, /catch \{\s*await dropFromMru\(id\)/);
 });
 
-test("mruStep drops stale MRU entry when tab.get throws", () => {
+test("mruStep drops stale MRU entry when tab.get throws (in-loop, then refreshes)", () => {
+  // Same fix on the cycle path: drop + re-read mru + iterate.
   const fn = fnBody("mruStep");
-  assert.match(fn, /catch \{ await dropFromMru\(next\); \}/);
+  assert.match(fn, /catch \{\s*await dropFromMru\(next\)/);
+  assert.match(fn, /mru = await readMru\(\)/);
 });
 
 test("mruStep returns early when computed next equals active tab", () => {

@@ -156,10 +156,27 @@ test("dispatch routes jump-to-* through resolveJumpIndex", () => {
   assert.match(fn[0], /resolveJumpIndex\(command, tabs\.length\)/);
 });
 
-test("switchPreviousTab uses mruPrevious from lib/util.js", () => {
-  const fn = bg.match(/async function switchPreviousTab\([\s\S]*?\n\}/);
-  assert.ok(fn);
-  assert.match(fn[0], /mruPrevious\(/);
+test("switchPreviousTab walks the MRU, self-heals the head, and drops stale tab ids", () => {
+  // The Cmd+E flake comes from: SW was suspended → onActivated /
+  // onRemoved missed → MRU is stale. Fix asserts:
+  //   1. Re-push the real active tab so the next non-self entry is
+  //      genuinely "previous", even if SW missed an onActivated.
+  //   2. Iterate the list and skip any tab id chrome.tabs.get() rejects,
+  //      dropping each stale entry as it surfaces so the MRU self-heals.
+  const fn = bg.match(/async function switchPreviousTab\([\s\S]*?\n\}\n/);
+  assert.ok(fn, "switchPreviousTab not found");
+  assert.match(fn[0], /if \(active\?\.id != null\) await pushMru\(active\.id\)/,
+    "must self-heal MRU head with the real active tab");
+  assert.match(fn[0], /for \(const id of mru\)/,
+    "must iterate the MRU, not bail on the first stale id");
+  assert.match(fn[0], /await dropFromMru\(id\)/,
+    "must drop stale ids as they surface so future Cmd+E starts clean");
+  // mruStep gets the same treatment.
+  const stepFn = bg.match(/async function mruStep\(delta\)[\s\S]*?\n\}\n/);
+  assert.ok(stepFn, "mruStep not found");
+  assert.match(stepFn[0], /if \(active\?\.id != null\) await pushMru\(active\.id\)/);
+  assert.match(stepFn[0], /await dropFromMru\(next\)/);
+  assert.match(stepFn[0], /mru = await readMru\(\)/);
 });
 
 test("tab activation events feed pushMru on tabs.onActivated", () => {

@@ -16,31 +16,35 @@ function fnBody(name) {
   return m[0];
 }
 
-test("switchPreviousTab uses mruPrevious on readMru with active tab id", () => {
+test("switchPreviousTab self-heals MRU head with the real active tab before reading", () => {
   const fn = fnBody("switchPreviousTab");
-  assert.match(fn, /mruPrevious\(await readMru\(\), active\?\.id\)/);
+  assert.match(fn, /if \(active\?\.id != null\) await pushMru\(active\.id\)/);
 });
 
-test("switchPreviousTab returns early when mruPrevious yields no candidate", () => {
+test("switchPreviousTab iterates the MRU instead of bailing on the first stale entry", () => {
+  // Old behavior was: read one candidate via mruPrevious; if chrome.tabs.get
+  // threw, drop it and STOP. New behavior: keep walking the MRU so a single
+  // closed-tab id at the head never blocks the Cmd+E shortcut.
   const fn = fnBody("switchPreviousTab");
-  assert.match(fn, /if \(typeof prev !== "number"\) return/);
+  assert.match(fn, /for \(const id of mru\)/);
+  assert.match(fn, /if \(id === active\?\.id\) continue/);
 });
 
 test("switchPreviousTab activates previous tab then focuses its window when cross-window", () => {
   const fn = fnBody("switchPreviousTab");
-  assert.match(fn, /await chrome\.tabs\.update\(prev, \{ active: true \}\)/);
+  assert.match(fn, /await chrome\.tabs\.update\(id, \{ active: true \}\)/);
   assert.match(fn, /if \(tab\.windowId !== active\?\.windowId\)/);
   assert.match(fn, /chrome\.windows\.update\(tab\.windowId, \{ focused: true \}\)/);
 });
 
-test("switchPreviousTab drops stale MRU entry when tabs.get throws", () => {
+test("switchPreviousTab drops stale MRU entries inside the iteration loop", () => {
   const fn = fnBody("switchPreviousTab");
-  assert.match(fn, /catch \{ await dropFromMru\(prev\); \}/);
+  assert.match(fn, /catch \{\s*await dropFromMru\(id\);/);
 });
 
 test("mruStep delegates stepping to mruStepPure alias from lib/util.js", () => {
   const fn = fnBody("mruStep");
-  assert.match(fn, /mruStepPure\(await readMru\(\), active\?\.id, delta\)/);
+  assert.match(fn, /mruStepPure\(mru, active\?\.id, delta\)/);
   assert.match(bg, /mruStep as mruStepPure/);
 });
 
@@ -55,9 +59,10 @@ test("mruStep focuses destination window when MRU tab is in another window", () 
   assert.match(fn, /chrome\.windows\.update\(tab\.windowId, \{ focused: true \}\)/);
 });
 
-test("mruStep drops stale MRU id on tabs.get failure", () => {
+test("mruStep retries on stale tab id instead of bailing — drops + refreshes MRU + continues", () => {
   const fn = fnBody("mruStep");
-  assert.match(fn, /catch \{ await dropFromMru\(next\); \}/);
+  assert.match(fn, /catch \{\s*await dropFromMru\(next\)/);
+  assert.match(fn, /mru = await readMru\(\)/);
 });
 
 test("dispatch mru-next routes to mruStep with positive delta", () => {

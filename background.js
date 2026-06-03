@@ -904,28 +904,55 @@ async function withActive(fn) {
 
 async function switchPreviousTab() {
   const active = await getActive();
-  const prev = mruPrevious(await readMru(), active?.id);
-  if (typeof prev !== "number") return;
-  try {
-    const tab = await chrome.tabs.get(prev);
-    await chrome.tabs.update(prev, { active: true });
-    if (tab.windowId !== active?.windowId) {
-      await chrome.windows.update(tab.windowId, { focused: true });
+  // Self-heal: if the SW was suspended during a recent tab switch,
+  // chrome.tabs.onActivated never fired and the MRU head doesn't reflect
+  // the real current tab. Re-push the real current tab so the first
+  // non-self entry is genuinely "the previous tab".
+  if (active?.id != null) await pushMru(active.id);
+  // SW suspension can miss tabs.onRemoved, leaving stale IDs at the head
+  // of the MRU. Walk down the list and skip any tab id that no longer
+  // resolves; drop them from the persistent MRU as we go so the next
+  // shortcut starts clean.
+  const mru = await readMru();
+  for (const id of mru) {
+    if (id === active?.id) continue;
+    if (typeof id !== "number") continue;
+    try {
+      const tab = await chrome.tabs.get(id);
+      await chrome.tabs.update(id, { active: true });
+      if (tab.windowId !== active?.windowId) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+      return;                                    // success
+    } catch {
+      await dropFromMru(id);                     // stale → drop and try next
     }
-  } catch { await dropFromMru(prev); }
+  }
 }
 
 async function mruStep(delta) {
+  // Same stale-id problem as switchPreviousTab: walk in delta direction
+  // skipping any tab id that no longer exists. Drop stale entries as
+  // we go so the persistent MRU self-heals.
   const active = await getActive();
-  const next = mruStepPure(await readMru(), active?.id, delta);
-  if (typeof next !== "number" || next === active?.id) return;
-  try {
-    const tab = await chrome.tabs.get(next);
-    await chrome.tabs.update(next, { active: true });
-    if (tab.windowId !== active?.windowId) {
-      await chrome.windows.update(tab.windowId, { focused: true });
+  if (active?.id != null) await pushMru(active.id);  // self-heal MRU head
+  let mru = await readMru();
+  // Cap iterations at the MRU length so a fully-stale list terminates.
+  for (let i = 0; i < mru.length; i++) {
+    const next = mruStepPure(mru, active?.id, delta);
+    if (typeof next !== "number" || next === active?.id) return;
+    try {
+      const tab = await chrome.tabs.get(next);
+      await chrome.tabs.update(next, { active: true });
+      if (tab.windowId !== active?.windowId) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+      return;                                    // success
+    } catch {
+      await dropFromMru(next);                   // stale → drop and try again
+      mru = await readMru();                     // refresh local copy
     }
-  } catch { await dropFromMru(next); }
+  }
 }
 
 async function jumpTo(command) {

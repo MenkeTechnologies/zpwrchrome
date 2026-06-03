@@ -38,27 +38,31 @@ test("dropFromMru skips write when tab id was not in the stack", () => {
   assert.match(fn, /if \(next\.length !== mru\.length\) await writeMru\(next\)/);
 });
 
-test("switchPreviousTab uses mruPrevious then activates cross-window if needed", () => {
+test("switchPreviousTab walks the MRU + activates cross-window when needed", () => {
+  // Post-fix the iteration replaces the single-shot mruPrevious lookup so
+  // the SW can self-heal stale MRU heads. Pin the loop + the focus call.
   const fn = fnBody("switchPreviousTab");
-  assert.match(fn, /mruPrevious\(await readMru\(\), active\?\.id\)/);
+  assert.match(fn, /await readMru\(\)/);
+  assert.match(fn, /for \(const id of mru\)/);
   assert.match(fn, /tab\.windowId !== active\?\.windowId/);
   assert.match(fn, /chrome\.windows\.update\(tab\.windowId, \{ focused: true \}\)/);
 });
 
-test("switchPreviousTab drops stale MRU entries when tab.get throws", () => {
+test("switchPreviousTab drops stale MRU entries inside the iteration catch", () => {
   const fn = fnBody("switchPreviousTab");
-  assert.match(fn, /catch \{ await dropFromMru\(prev\)/);
+  assert.match(fn, /catch \{\s*await dropFromMru\(id\)/);
 });
 
 test("mruStep uses mruStepPure and focuses foreign windows", () => {
   const fn = fnBody("mruStep");
-  assert.match(fn, /mruStepPure\(await readMru\(\), active\?\.id, delta\)/);
+  assert.match(fn, /mruStepPure\(mru, active\?\.id, delta\)/);
   assert.match(fn, /tab\.windowId !== active\?\.windowId/);
 });
 
-test("mruStep drops stale entries on tab.get failure", () => {
+test("mruStep drops stale entries on tab.get failure (then refreshes MRU + retries)", () => {
   const fn = fnBody("mruStep");
-  assert.match(fn, /catch \{ await dropFromMru\(next\)/);
+  assert.match(fn, /catch \{\s*await dropFromMru\(next\)/);
+  assert.match(fn, /mru = await readMru\(\)/);
 });
 
 test("mruStep returns early when next equals current tab", () => {
