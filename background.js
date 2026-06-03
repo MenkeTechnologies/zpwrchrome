@@ -498,10 +498,10 @@ function collectPageUrls(kind) {
   return out;
 }
 
-async function doScreenshotFullPage() {
-  diagPush("screenshot.start");
+async function doScreenshotFullPage(tab) {
+  diagPush("screenshot.start", { url: tab?.url });
   try {
-    const { dest, bytes, filename } = await screenshotFullPage();
+    const { dest, bytes, filename } = await screenshotFullPage(tab);
     diagPush("screenshot.done", { dest, bytes, filename });
     if (chrome.notifications) {
       chrome.notifications.create({
@@ -852,7 +852,7 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 if (chrome.contextMenus) {
-  chrome.contextMenus.onClicked.addListener(async (info) => {
+  chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // Toolbar-icon menu — open the matching extension page in a new tab.
     // Append #downloadDir for the change-folder item so the General settings
     // page can scroll to the field and focus its input.
@@ -877,7 +877,7 @@ if (chrome.contextMenus) {
       return;
     }
     if (info.menuItemId === CTX_ACT_SHOT) {
-      doScreenshotFullPage();
+      doScreenshotFullPage(tab);
       return;
     }
     if (info.menuItemId === CTX_ACT_ISSUE) { chrome.tabs.create({ url: ISSUE_URL }); return; }

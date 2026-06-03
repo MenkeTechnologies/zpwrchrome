@@ -114,7 +114,7 @@ test("background.js wires the command + toolbar-icon context menu + diag trace",
   // to the diag ring buffer.
   const fn = bg.match(/async function doScreenshotFullPage[\s\S]*?\n\}/);
   assert.ok(fn, "doScreenshotFullPage not found");
-  assert.match(fn[0], /diagPush\("screenshot\.start"\)/);
+  assert.match(fn[0], /diagPush\("screenshot\.start"/);
   assert.match(fn[0], /diagPush\("screenshot\.done"/);
   assert.match(fn[0], /diagPush\("screenshot\.err"/);
   assert.match(fn[0], /chrome\.notifications\.create/);
