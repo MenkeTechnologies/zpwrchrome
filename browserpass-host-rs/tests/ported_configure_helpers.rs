@@ -3,12 +3,21 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use browserpass_host_rs::ported::request::configure::{
     getDefaultPasswordStorePath, readDefaultSettings,
 };
 
+// Rust runs unit tests in parallel by default. The two getDefaultPasswordStorePath
+// tests both mutate PASSWORD_STORE_DIR / HOME, so they must not interleave —
+// on Linux CI they raced and produced a flaky failure where test #2 saw test
+// #1's PASSWORD_STORE_DIR still set. Same locking pattern as ENV_LOCK in
+// tests/extensions_dl_state.rs.
+static ENV_LOCK: Mutex<()> = Mutex::new(());
+
 #[test]
 fn default_path_uses_password_store_dir_env_when_set() {
+    let _g = ENV_LOCK.lock().unwrap();
     let old = std::env::var("PASSWORD_STORE_DIR").ok();
     unsafe { std::env::set_var("PASSWORD_STORE_DIR", "/tmp/zp-port-defstore") };
     assert_eq!(getDefaultPasswordStorePath().unwrap(), PathBuf::from("/tmp/zp-port-defstore"));
@@ -18,6 +27,7 @@ fn default_path_uses_password_store_dir_env_when_set() {
 
 #[test]
 fn default_path_falls_back_to_home_password_store() {
+    let _g = ENV_LOCK.lock().unwrap();
     let old_psd  = std::env::var("PASSWORD_STORE_DIR").ok();
     let old_home = std::env::var("HOME").ok();
     unsafe { std::env::remove_var("PASSWORD_STORE_DIR") };
