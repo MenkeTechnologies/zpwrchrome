@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>browserpass-host-rs — Rust port of browserpass-native + extension actions</title>
+  <meta name="description" content="Rust port of browserpass-native (PROTOCOL.md v3.1.2) for the browserpass browser extension, plus additive OTP / whole-store search / segmented download manager actions. Single static binary, pure-Rust dependency tree, wire-compatible with upstream Go.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    /* Palette + animations lifted from strykelang docs/hud-static.css. */
+    html { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    ::selection { background: rgba(5, 217, 232, 0.3); color: #fff; }
+    :root {
+      --bg-primary: #05050a; --bg-secondary: #0a0a14; --bg-card: #0d0d1a;
+      --bg-hover: #12122a;
+      --accent: #ff2a6d; --accent-light: #ff6b9d; --accent-glow: rgba(255, 42, 109, 0.4);
+      --cyan: #05d9e8; --cyan-glow: rgba(5, 217, 232, 0.4); --cyan-dim: rgba(5, 217, 232, 0.15);
+      --magenta: #d300c5; --magenta-glow: rgba(211, 0, 197, 0.3);
+      --green: #39ff14; --red: #ff073a;
+      --text: #e0f0ff; --text-dim: #7a8ba8; --text-muted: #3d4f6a;
+      --border: #1a1a3e;
+      --cyber-grid-line: rgba(5, 217, 232, 0.042);
+      --cyber-grid-cross: rgba(5, 217, 232, 0.034);
+    }
+    body {
+      font-family: 'Share Tech Mono', 'SF Mono', 'Fira Code', monospace;
+      background-color: var(--bg-primary);
+      background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(5, 217, 232, 0.045) 0%, transparent 52%),
+        radial-gradient(ellipse at 80% 20%, rgba(211, 0, 197, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 82%, rgba(255, 42, 109, 0.035) 0%, transparent 48%),
+        linear-gradient(var(--cyber-grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--cyber-grid-cross) 1px, transparent 1px);
+      background-size: auto, auto, auto, 52px 52px, 52px 52px;
+      background-attachment: fixed;
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.55;
+    }
+    .crt::after {
+      content: ''; position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(5,217,232,.015) 2px, rgba(5,217,232,.015) 4px);
+      pointer-events: none; z-index: 9999;
+    }
+    .crt::before {
+      content: ''; position: fixed; inset: 0;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,.5) 100%);
+      pointer-events: none; z-index: 9998;
+    }
+    .scanline {
+      position: fixed; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent 0%, rgba(5,217,232,.03) 20%, rgba(5,217,232,.08) 50%, rgba(5,217,232,.03) 80%, transparent 100%);
+      box-shadow: 0 0 15px 5px rgba(5,217,232,.04);
+      pointer-events: none; z-index: 9997;
+      animation: hscan 12s linear infinite;
+    }
+    @keyframes hscan { 0% { top: -2px; opacity: 0; } 5%, 95% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(5,5,10,.5); }
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, var(--cyan), var(--magenta));
+      border-radius: 4px; box-shadow: 0 0 8px var(--cyan-glow);
+    }
+
+    header.hero {
+      padding: 60px 24px 40px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #070714 0%, #0d0d22 42%, var(--bg-secondary) 100%);
+      position: relative;
+      text-align: center;
+      box-shadow: 0 4px 28px rgba(0,0,0,.55), 0 1px 0 rgba(5,217,232,.1), inset 0 1px 0 rgba(5,217,232,.06);
+    }
+    header.hero::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), var(--accent), var(--cyan), transparent);
+      opacity: .6;
+    }
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(1.4rem, 4.5vw, 2.6rem);
+      font-weight: 900;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, var(--cyan), #fff, var(--accent), var(--cyan));
+      background-size: 300% 100%;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      filter: drop-shadow(0 0 12px var(--cyan-glow));
+      animation: shimmer 6s linear infinite;
+      margin-bottom: 14px;
+    }
+    @keyframes shimmer { 0% { background-position: 0% 0%; } 100% { background-position: 300% 0%; } }
+    .tagline { color: var(--text-dim); font-size: 14px; letter-spacing: .5px; max-width: 56rem; margin: 0 auto 26px; }
+    .stat-row {
+      display: flex; gap: 18px; justify-content: center; flex-wrap: wrap;
+      margin: 28px auto 0; max-width: 64rem;
+    }
+    .stat {
+      padding: 14px 22px;
+      background: var(--bg-card); border: 1px solid var(--cyan); border-radius: 2px;
+      box-shadow: 0 0 16px var(--cyan-glow);
+      min-width: 8rem;
+    }
+    .stat .n { font-family: 'Orbitron', sans-serif; font-size: 26px; font-weight: 900; color: var(--cyan); letter-spacing: 2px; }
+    .stat .l { font-size: 10px; letter-spacing: 1.5px; color: var(--text-muted); text-transform: uppercase; margin-top: 2px; }
+    .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+    .btn {
+      padding: 10px 18px; border-radius: 2px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+      transition: all .2s;
+      background-image: linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.02) 40%, transparent 60%);
+    }
+    .btn-primary { background: transparent; color: var(--accent); border: 1px solid var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+    .btn-primary:hover { background: rgba(255,42,109,.08); box-shadow: 0 0 18px var(--accent-glow); transform: translateY(-1px); }
+    .btn-secondary { background: transparent; color: var(--cyan); border: 1px solid var(--cyan); box-shadow: 0 0 8px var(--cyan-dim); }
+    .btn-secondary:hover { background: rgba(5,217,232,.08); box-shadow: 0 0 15px var(--cyan-glow); transform: translateY(-1px); }
+
+    main { max-width: 80rem; margin: 0 auto; padding: 36px 20px 60px; position: relative; z-index: 1; }
+    section.card {
+      background-color: var(--bg-card);
+      background-image: linear-gradient(180deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,.02) 30%, transparent 50%);
+      border: 1px solid var(--cyan);
+      border-radius: 2px;
+      padding: 22px 26px;
+      margin: 22px 0;
+      position: relative;
+      box-shadow: 0 0 30px var(--cyan-glow);
+      backdrop-filter: blur(12px) saturate(1.4);
+      animation: glow 3.5s ease-in-out infinite;
+    }
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 20px var(--cyan-glow), 0 0 4px var(--cyan-glow); border-color: var(--cyan); }
+      50%      { box-shadow: 0 0 40px var(--cyan-glow), 0 0 12px var(--magenta-glow); border-color: var(--accent); }
+    }
+    h2 {
+      font-family: 'Orbitron', sans-serif; font-size: 14px; color: var(--cyan);
+      text-transform: uppercase; letter-spacing: 2.5px;
+      padding-bottom: 12px; margin-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 14px; }
+    .feature {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--cyan);
+      background: var(--bg-secondary);
+      font-size: 12px;
+      color: var(--text);
+    }
+    .feature strong { color: var(--accent-light); display: block; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 1px; margin-bottom: 4px; text-transform: uppercase; }
+
+    .install ol { margin: 0 0 0 1.2rem; }
+    .install li { margin: 6px 0; font-size: 13px; }
+    .install code { background: var(--bg-secondary); border: 1px solid var(--border); padding: 1px 6px; border-radius: 2px; color: var(--cyan); font-size: 12px; }
+
+    .table-wrap { overflow-x: auto; margin-top: 10px; }
+    table { border-collapse: collapse; width: 100%; min-width: 50rem; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; font-size: 12px; }
+    th { background: var(--bg-secondary); color: var(--cyan); font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+    td code { background: var(--bg-secondary); border: 1px solid var(--border); padding: 1px 6px; border-radius: 2px; font-size: 11px; color: var(--text); }
+    .muted { color: var(--text-muted); font-style: italic; font-size: 11px; }
+    .tag { display: inline-block; padding: 1px 6px; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; border-radius: 2px; border: 1px solid var(--cyan); color: var(--cyan); background: var(--bg-secondary); }
+    .tag.ext { border-color: var(--accent); color: var(--accent); }
+
+    pre.code {
+      margin: 0.5rem 0; padding: 0.85rem 1rem; border-left: 2px solid var(--cyan);
+      background: var(--bg-secondary); font-family: 'Share Tech Mono', ui-monospace, monospace;
+      font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-word;
+      line-height: 1.6; overflow-x: auto;
+    }
+    pre.code .comment { color: var(--text-muted); }
+
+    footer { text-align: center; padding: 24px 16px 40px; color: var(--text-muted); font-size: 11px; letter-spacing: .5px; }
+    footer a { color: var(--cyan); text-decoration: none; }
+    footer a:hover { color: var(--accent-light); text-shadow: 0 0 8px var(--cyan-glow); }
+  </style>
+</head>
+<body class="crt">
+  <div class="scanline"></div>
+
+  <header class="hero">
+    <h1>browserpass-host-rs</h1>
+    <p class="tagline">Rust port of <a href="https://github.com/browserpass/browserpass-native" style="color: var(--cyan);">browserpass-native</a> &middot; PROTOCOL.md v3.1.2 wire-compatible &middot; single static binary &middot; pure-Rust dep tree &middot; <span style="color: var(--accent);">+3 additive extension actions</span> for OTP, whole-store search, and segmented downloads.<br>Cyberpunk HUD palette by MenkeTechnologies.</p>
+    <div class="stat-row">
+      <div class="stat"><div class="n">v0.7.5</div><div class="l">version</div></div>
+      <div class="stat"><div class="n">v3.1.2</div><div class="l">protocol pin</div></div>
+      <div class="stat"><div class="n">7</div><div class="l">ported actions</div></div>
+      <div class="stat"><div class="n">3</div><div class="l">extension actions</div></div>
+      <div class="stat"><div class="n">4,680</div><div class="l">LOC Rust</div></div>
+      <div class="stat"><div class="n">102</div><div class="l">#[test] fns</div></div>
+    </div>
+    <div class="ctas">
+      <a class="btn btn-primary"   href="https://github.com/MenkeTechnologies/zpwrchrome">▸ source on github</a>
+      <a class="btn btn-secondary" href="https://crates.io/crates/browserpass-host-rs">▸ crates.io</a>
+      <a class="btn btn-secondary" href="port_report.html">▸ port report</a>
+      <a class="btn btn-secondary" href="#install">▸ install</a>
+      <a class="btn btn-secondary" href="#actions">▸ actions</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>what it is</h2>
+      <p style="font-size: 13px; color: var(--text); margin-bottom: 14px;">
+        A drop-in replacement for the Go binary that the
+        <a href="https://github.com/browserpass/browserpass-extension" style="color: var(--cyan);">browserpass</a>
+        browser extension talks to via Chrome / Firefox native messaging — <strong style="color: var(--accent);">plus</strong>
+        three additive actions that <code>browserpass-extension</code> doesn't call but are wired into
+        <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">zpwrchrome</a>:
+        TOTP retrieval, whole-store fuzzy + substring search, and a multi-segment HTTP/HTTPS download manager.
+      </p>
+      <div class="features">
+        <div class="feature"><strong>Single static binary</strong>Pure-Rust dep tree: <code>serde</code>, <code>serde_json</code>, <code>ureq</code> with rustls. No aria2, no system OpenSSL, no Go toolchain at runtime.</div>
+        <div class="feature"><strong>Wire-compatible with upstream</strong>Every action documented in <a href="https://github.com/browserpass/browserpass-native/blob/master/PROTOCOL.md" style="color: var(--cyan);">browserpass-native's PROTOCOL.md v3.1.2</a> is implemented. Error codes 10–32 pin to the same integers; exit code = error code; version reported as <code>3.1.2</code> (packed int <code>3_001_002</code>).</div>
+        <div class="feature"><strong>Strict 1:1 port discipline</strong>Every <code>src/ported/</code> file mirrors a single upstream Go file. Every Rust fn carries <code>/// Port of &lt;name&gt;() from &lt;go_file&gt;:&lt;line&gt;</code>. Every Go comment carries over with <code>// go:NN</code> citation. Identifiers preserved verbatim (<code>DetectGpgBinary</code>, <code>MakeConfigureResponse</code>).</div>
+        <div class="feature"><strong>OTP <span class="tag ext">ext</span></strong>Shells <code>pass otp &lt;entry&gt;</code> with <code>PASSWORD_STORE_DIR</code> set to the matching store. Returns the current TOTP code.</div>
+        <div class="feature"><strong>Search <span class="tag ext">ext</span></strong>Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores.</div>
+        <div class="feature"><strong>Segmented downloads <span class="tag ext">ext</span></strong>N-segment <code>Range</code> GETs with retry / resume. Chrome cookies + User-Agent forwarded. File-state JSON tracker.</div>
+        <div class="feature"><strong>Audit-friendly identifiers</strong>Go's PascalCase / camelCase preserved. File-level <code>#![allow(non_snake_case)]</code> makes this an explicit, documented decision rather than a style accident.</div>
+        <div class="feature"><strong>Drift pinned by tests</strong><code>tests/ported_errors.rs</code> pins every error code to its PROTOCOL.md value. <code>tests/ported_version.rs</code> pins version triple + packed int. <code>tests/ported_integration.rs</code> exercises every action end-to-end against the compiled binary.</div>
+      </div>
+    </section>
+
+    <section class="card" id="actions">
+      <h2>ported actions (PROTOCOL.md v3.1.2)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>action</th><th>implementation</th><th>test pin</th></tr></thead>
+          <tbody>
+            <tr><td><code>configure</code></td><td><code>ported/request/configure.rs</code></td><td><code>tests/ported_configure_helpers.rs</code> + integration</td></tr>
+            <tr><td><code>list</code></td><td><code>ported/request/list.rs</code></td><td><code>tests/ported_integration.rs</code> (4 cases)</td></tr>
+            <tr><td><code>tree</code></td><td><code>ported/request/tree.rs</code></td><td><code>tests/ported_integration.rs</code></td></tr>
+            <tr><td><code>fetch</code></td><td><code>ported/request/fetch.rs</code></td><td><code>tests/ported_integration.rs</code></td></tr>
+            <tr><td><code>save</code></td><td><code>ported/request/save.rs</code></td><td><code>tests/ported_integration.rs</code></td></tr>
+            <tr><td><code>delete</code></td><td><code>ported/request/delete.rs</code></td><td><code>tests/ported_integration.rs</code> (incl. parent cleanup)</td></tr>
+            <tr><td><code>echo</code></td><td><code>bin/browserpass_host_rs.rs</code></td><td><code>tests/ported_integration.rs</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="extensions">
+      <h2>extension actions <span class="tag ext">additive</span></h2>
+      <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;">
+        These are additive — <code>browserpass-extension</code> never sends them, so wire compatibility with upstream is preserved.
+        They live under <code>src/extensions/</code>.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>action</th><th>behavior</th><th>wire shape</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>otp</code></td>
+              <td>Shells <code>pass otp &lt;entry&gt;</code> with <code>PASSWORD_STORE_DIR</code> set to the matching store. Returns the current TOTP code.</td>
+              <td><code>{action:"otp", storeId, file, settings}</code> → <code>{code:"123456"}</code></td>
+            </tr>
+            <tr>
+              <td><code>search</code></td>
+              <td>Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores.</td>
+              <td><code>{action:"search", settings, echoResponse:"&lt;query&gt;"}</code> → <code>{matches:[{store, path}, …]}</code></td>
+            </tr>
+            <tr>
+              <td><code>download-start</code> / <code>download-status</code> / <code>download-cancel</code></td>
+              <td>Multi-segment HTTP/HTTPS downloader. N-segment <code>Range</code> GETs with retry / resume. Chrome cookies + UA forwarded for logged-in URLs.</td>
+              <td><code>{action:"download-start", url, cookie, segments}</code> → file-state JSON; <code>{action:"download-status", id}</code>; <code>{action:"download-cancel", id}</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card install" id="install">
+      <h2>install</h2>
+      <ol>
+        <li><code>cargo install browserpass-host-rs</code></li>
+        <li>Register the binary for an extension ID: <code>browserpass-host-rs --install &lt;ext-id&gt;</code> &mdash; get the ext-id at <code>chrome://extensions</code> with <strong>Developer mode</strong> enabled.</li>
+        <li><code>pass</code> support requires GPG configured locally. <code>otp</code> requires <code>pass-otp</code> in <code>$PATH</code>.</li>
+        <li>Used by <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">zpwrchrome</a> (a Chrome extension); also a drop-in for the upstream <a href="https://github.com/browserpass/browserpass-extension" style="color: var(--cyan);">browserpass-extension</a> with the OTP / search / download actions silently ignored.</li>
+      </ol>
+      <p style="margin-top: 10px; font-size: 12px; color: var(--text-dim);">
+        Alternative: clone and <code>cargo build --release</code>, then install the resulting binary at the upstream-expected path (<code>$XDG_CONFIG_HOME/&lt;browser&gt;/NativeMessagingHosts/com.github.browserpass.native.json</code>). The <code>--install</code> flag does this automatically per browser.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>port discipline reference</h2>
+      <p style="font-size: 13px; color: var(--text); margin-bottom: 10px;">
+        The <code>src/ported/</code> tree is a <strong>1:1 Rust mirror</strong> of the upstream Go source. Discipline borrowed from the
+        <a href="https://github.com/MenkeTechnologies/zshrs/blob/main/docs/PORT.md" style="color: var(--cyan);">zshrs PORT.md</a> rules, adapted to a Go→Rust port:
+      </p>
+      <div class="features">
+        <div class="feature"><strong>Stem mirror</strong>Every file under <code>src/ported/</code> mirrors a single upstream Go file by stem and relative subpath. <code>errors/errors.go</code> → <code>src/ported/errors/errors.rs</code>.</div>
+        <div class="feature"><strong>Doc-comment citation</strong>Every Rust fn carries <code>/// Port of &lt;name&gt;() from &lt;go_file&gt;:&lt;line&gt;</code>.</div>
+        <div class="feature"><strong>Inline-comment citation</strong>Every Go inline comment carries over to the Rust port with a <code>// go:NN</code> line-number citation on the corresponding Rust statement.</div>
+        <div class="feature"><strong>Identifiers verbatim</strong>Go's PascalCase / camelCase identifiers preserved (<code>DetectGpgBinary</code>, <code>MakeConfigureResponse</code>, <code>parseRequestLength</code>). File-level <code>#![allow(non_snake_case)]</code> documents the choice.</div>
+        <div class="feature"><strong>Local-name verbatim</strong>Local variable names match Go's (<code>gpgPath</code>, <code>normalizedStorePath</code>, <code>parentDir</code>, <code>responseData</code>).</div>
+        <div class="feature"><strong>No invented helpers</strong>The two recursive store walkers inside <code>list.rs</code> and <code>tree.rs</code> are inlined private fns at the call site — they replace external Go deps (<code>mattn/go-zglob</code>, <code>mattn/go-zglob/fastwalk</code>), not Go-source fns.</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>error codes (pinned to PROTOCOL.md)</h2>
+      <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;">
+        Every PROTOCOL.md error code pins to the same integer; exit code equals the error code (matches upstream <code>errors.ExitWithCode</code>).
+        Drift caught by <code>tests/ported_errors.rs</code>.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>code</th><th>name</th><th>cause</th></tr></thead>
+          <tbody>
+            <tr><td>10</td><td><code>UnknownAction</code></td><td>Action string not recognized</td></tr>
+            <tr><td>11</td><td><code>ParseRequestLength</code></td><td>Native-messaging frame length invalid</td></tr>
+            <tr><td>12</td><td><code>ParseRequest</code></td><td>Request JSON malformed</td></tr>
+            <tr><td>13</td><td><code>MissingHostsConfiguration</code></td><td>No configured store path</td></tr>
+            <tr><td>14</td><td><code>InaccessiblePasswordStore</code></td><td><code>~/.password-store</code> unreadable</td></tr>
+            <tr><td>15</td><td><code>InaccessibleDefaultPasswordStore</code></td><td>Default store path missing</td></tr>
+            <tr><td>16</td><td><code>InaccessibleGpgHome</code></td><td><code>$GNUPGHOME</code> unreadable</td></tr>
+            <tr><td>17</td><td><code>InaccessibleDefaultGpgHome</code></td><td>Default GPG home missing</td></tr>
+            <tr><td>18</td><td><code>InvalidGpgPath</code></td><td>GPG binary not found</td></tr>
+            <tr><td>19</td><td><code>InvalidGpgHome</code></td><td>GPG home path invalid</td></tr>
+            <tr><td>20</td><td><code>InvalidPasswordStore</code></td><td>Password store path invalid</td></tr>
+            <tr><td>21</td><td><code>InvalidStoreId</code></td><td>Store-id not in configuration</td></tr>
+            <tr><td>22</td><td><code>InvalidPasswordFileExtension</code></td><td>File extension not <code>.gpg</code></td></tr>
+            <tr><td>23</td><td><code>UnableToListFilesInPasswordStore</code></td><td>Recursive walk failed</td></tr>
+            <tr><td>24</td><td><code>UnableToDetermineRelativeFilePath</code></td><td>Path-relative computation failed</td></tr>
+            <tr><td>25</td><td><code>UnableToReadPasswordFile</code></td><td>File-system read failed</td></tr>
+            <tr><td>26</td><td><code>UnableToDecryptPasswordFile</code></td><td>GPG decryption failed</td></tr>
+            <tr><td>27</td><td><code>UnableToEncryptPasswordFile</code></td><td>GPG encryption failed</td></tr>
+            <tr><td>28</td><td><code>UnableToCopyEncryptedPasswordFile</code></td><td>Atomic-rename to target failed</td></tr>
+            <tr><td>29</td><td><code>UnableToWriteToTemporaryFile</code></td><td>Temp-file write failed</td></tr>
+            <tr><td>30</td><td><code>UnableToWriteToFile</code></td><td>Final-file write failed</td></tr>
+            <tr><td>31</td><td><code>UnableToCreateDirectory</code></td><td>Parent directory creation failed</td></tr>
+            <tr><td>32</td><td><code>UnableToRemoveFile</code></td><td>File-system delete failed</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>example request / response</h2>
+      <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;">
+        Native-messaging frame: little-endian 4-byte length prefix + UTF-8 JSON. Same wire format as upstream.
+      </p>
+      <pre class="code"><span class="comment"># list every entry in the "personal" store</span>
+{"action":"list","settings":{"stores":[{"id":"personal","path":"~/.password-store"}]}}
+
+<span class="comment"># → ok response: tree-shaped list</span>
+{"status":"ok","data":{"personal":["work/gmail","work/slack","banking/chase"]}}
+
+<span class="comment"># fetch + decrypt one entry</span>
+{"action":"fetch","settings":{"stores":[...]},"storeId":"personal","file":"work/gmail.gpg","echoResponse":""}
+
+<span class="comment"># → ok response: { plain text from gpg --decrypt }</span>
+{"status":"ok","data":{"contents":"hunter2\nuser: jacob@menketechnologies.com\notpauth://totp/..."}}</pre>
+    </section>
+
+    <section class="card">
+      <h2>links</h2>
+      <ul style="list-style: none; padding: 0; font-size: 13px; line-height: 1.9;">
+        <li>▸ <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">github.com/MenkeTechnologies/zpwrchrome</a> &middot; parent extension</li>
+        <li>▸ <a href="https://crates.io/crates/browserpass-host-rs" style="color: var(--cyan);">crates.io/crates/browserpass-host-rs</a></li>
+        <li>▸ <a href="port_report.html" style="color: var(--cyan);">port_report.html</a> &middot; Go→Rust port mapping (machine-readable)</li>
+        <li>▸ <a href="https://github.com/browserpass/browserpass-native" style="color: var(--cyan);">browserpass/browserpass-native</a> &middot; upstream Go reference (PROTOCOL.md v3.1.2)</li>
+        <li>▸ <a href="https://github.com/browserpass/browserpass-extension" style="color: var(--cyan);">browserpass/browserpass-extension</a> &middot; the browser extension talking to this binary</li>
+        <li>▸ <a href="https://github.com/MenkeTechnologies/zshrs/blob/main/docs/PORT.md" style="color: var(--cyan);">zshrs PORT.md</a> &middot; the port-discipline rules adapted here</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      <a href="https://github.com/MenkeTechnologies">// menketechnologies</a> &middot;
+      <a href="https://github.com/MenkeTechnologies/zpwrchrome">zpwrchrome</a> &middot;
+      MIT license &middot; pure-Rust dep tree
+    </p>
+  </footer>
+</body>
+</html>
