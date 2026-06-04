@@ -82,6 +82,120 @@ test("formatEntry: notes as string is split on newlines", () => {
   assert.equal(text, "p\nline1\nline2\n");
 });
 
+// ─── Notes storage in the .gpg entry file ───────────────────────────
+// Notes are NOT a separate field on disk — they are trailing free-form
+// lines in the same .gpg file as the password, key:value fields, and
+// otpauth URI. The tests below pin the on-disk byte shape so a refactor
+// can't accidentally route notes through a sidecar / separate store.
+
+test("notes: live inline in the .gpg file after fields + otpauth", () => {
+  // The bytes that round-trip through `pass show` (and that bpSaveEntry
+  // sends to the host's `save` action) must be: password\nfields\notp\nnotes
+  const text = formatEntry({
+    password: "pw",
+    username: "alice",
+    url:      "https://x.test/",
+    otpUrl:   "otpauth://totp/x?secret=S",
+    notes:    ["recovery: keep offline", "second note"],
+  });
+  assert.equal(
+    text,
+    "pw\nlogin: alice\nurl: https://x.test/\notpauth://totp/x?secret=S\nrecovery: keep offline\nsecond note\n",
+  );
+});
+
+test("notes: round-trip — text written by formatEntry parses back into entry.notes", () => {
+  const original = "pw\nlogin: alice\nfirst note\nsecond note\nthird note\n";
+  const parsed = parseEntry(original);
+  assert.deepEqual(parsed.notes, ["first note", "second note", "third note"]);
+  const reformatted = formatEntry(parsed);
+  // Re-parse to confirm semantics; byte-identity is not required.
+  const reparsed = parseEntry(reformatted);
+  assert.deepEqual(reparsed.notes, ["first note", "second note", "third note"]);
+});
+
+test("notes: blank lines between notes are NOT preserved (parseEntry skips empty lines)", () => {
+  // Documents the lossy behavior — useful as a regression pin if we ever
+  // decide to preserve blanks. parseEntry's `if (!line) continue` is the
+  // source: see lib/bp-pass.js parseEntry().
+  const original = "pw\nline a\n\nline b\n";
+  const parsed = parseEntry(original);
+  assert.deepEqual(parsed.notes, ["line a", "line b"]);
+});
+
+test("notes: a line that LOOKS like otpauth:// is captured as otpUrl, not notes", () => {
+  // Important consequence: a user can't write `otpauth://...` as a
+  // note — it'll get pulled out into the OTP row.
+  const parsed = parseEntry("pw\nsome note\notpauth://totp/foo?secret=S\ntrailing note\n");
+  assert.equal(parsed.otpUrl, "otpauth://totp/foo?secret=S");
+  assert.deepEqual(parsed.notes, ["some note", "trailing note"]);
+});
+
+test("notes: a line with a space-bearing 'key' falls into notes, not fields", () => {
+  // parseEntry rejects `key: value` when the key contains whitespace
+  // (`if (key && !key.includes(" "))`). So `Recovery Codes: foo` is a note.
+  const parsed = parseEntry("pw\nRecovery Codes: aaa-bbb-ccc\n");
+  assert.deepEqual(parsed.fields, {});
+  assert.deepEqual(parsed.notes, ["Recovery Codes: aaa-bbb-ccc"]);
+});
+
+test("notes: a line WITHOUT a colon falls into notes", () => {
+  const parsed = parseEntry("pw\nfree form sentence no colon at all\n");
+  assert.deepEqual(parsed.notes, ["free form sentence no colon at all"]);
+});
+
+test("notes: re-parsing a save survives unicode + punctuation + leading whitespace", () => {
+  const noteLines = [
+    "  indented note",
+    "✅ done · 2026-06-03",
+    "see https://example.com/path?q=1&r=2",
+    "$ shell line — no colon",
+  ];
+  const text = formatEntry({ password: "pw", notes: noteLines });
+  const reparsed = parseEntry(text);
+  // The "see https://..." line DOES contain a colon (https:); parseEntry
+  // splits on the first colon, key = "see https" which contains a space,
+  // so it falls into notes. The "✅ done · 2026-06-03" line has a colon
+  // inside the date (none — em-dash). The "$ shell line" has no colon.
+  // All four lines must survive verbatim.
+  assert.deepEqual(reparsed.notes, noteLines);
+});
+
+test("notes: every other field can be empty and notes still serialize cleanly", () => {
+  // Edge case — entry that is ONLY notes (no password, no fields, no otp).
+  // Useful for the user storing free-form encrypted scratch text.
+  const text = formatEntry({ password: "", notes: ["just text", "and more"] });
+  assert.equal(text, "\njust text\nand more\n");
+  const reparsed = parseEntry(text);
+  assert.equal(reparsed.password, "");
+  assert.deepEqual(reparsed.notes, ["just text", "and more"]);
+});
+
+test("notes: large note bodies (200 lines) survive a full round-trip", () => {
+  const noteLines = Array.from({ length: 200 }, (_, i) => `note line ${i + 1}`);
+  const text = formatEntry({ password: "pw", notes: noteLines });
+  const reparsed = parseEntry(text);
+  assert.equal(reparsed.notes.length, 200);
+  assert.equal(reparsed.notes[0],   "note line 1");
+  assert.equal(reparsed.notes[199], "note line 200");
+});
+
+test("notes: order is stable across a parse → format → parse cycle", () => {
+  const noteLines = ["zebra", "alpha", "middle", "yankee", "bravo"];
+  const text = formatEntry({ password: "pw", notes: noteLines });
+  const reparsed = parseEntry(text);
+  assert.deepEqual(reparsed.notes, noteLines);
+});
+
+test("notes: trailing newline is preserved exactly once (no double-\\n at EOF)", () => {
+  // The host's `save` action writes the bytes literally. Two trailing
+  // newlines would change `pass show` output and could fail strict
+  // file diff checks; one is the convention.
+  const text = formatEntry({ password: "pw", notes: ["hi"] });
+  assert.equal(text, "pw\nhi\n");
+  assert.ok(!text.endsWith("\n\n"), "should not double-terminate");
+});
+
 test("formatEntry: extra fields sort alphabetically after login/url synonyms", () => {
   const text = formatEntry({
     password: "p",
