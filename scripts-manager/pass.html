@@ -47,9 +47,14 @@
         <input class="ed-path" id="ed-path" type="text" spellcheck="false"
                placeholder="store/path/to/entry  (no .gpg)" autocomplete="off">
         <span class="ed-mode" id="ed-mode"></span>
+        <button class="rowbtn ed-view-toggle" id="b-view-raw" type="button"
+                title="Toggle raw view of the file contents">⚙ raw</button>
       </div>
 
-      <div class="ed-grid">
+      <textarea class="ed-raw mono" id="ed-raw" hidden spellcheck="false"
+                placeholder="raw file contents (line 1 = password, then key:value, otpauth://, notes…)"></textarea>
+
+      <div class="ed-grid" id="ed-grid">
         <label class="lbl">password</label>
         <div class="row">
           <input class="ed-input mono" id="ed-pw" type="password" spellcheck="false" autocomplete="new-password">

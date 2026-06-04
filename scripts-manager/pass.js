@@ -19,6 +19,8 @@ const state = {
   dirty:      false,           // editor has unsaved changes
   pwShown:    false,
   filter:     "",              // search box query (case-insensitive substring)
+  rawView:    false,           // editor is in raw-textarea mode (bypass formatEntry)
+  lastRaw:    "",              // raw bytes from the last fetch, for the raw view
 };
 
 // ─── Bridge ──────────────────────────────────────────────────────────
@@ -158,6 +160,11 @@ async function pickEntry(path) {
   try {
     const resp  = await passFetch(path);
     const entry = resp.data || {};
+    // Diagnostic — opening devtools on this page shows what the bridge
+    // returned, so a mis-parsed URL / username can be spotted at a glance.
+    console.log("[pass-mgr] fetched", path, entry);
+    state.lastRaw = String(entry.raw || "");
+    $("ed-raw").value = state.lastRaw;
     $("ed-pw").value    = entry.password || "";
     $("ed-login").value = entry.username || "";
     $("ed-url").value   = entry.url      || "";
@@ -165,7 +172,10 @@ async function pickEntry(path) {
     $("ed-notes").value = Array.isArray(entry.notes) ? entry.notes.join("\n") : (entry.notes || "");
     // Strip synonyms covered by the dedicated rows so the editor doesn't show
     // them twice; everything else lands in the kv-list.
-    const HIDDEN = new Set(["login","username","user","email","mail","url","link","website","web","site","uri","launch"]);
+    const HIDDEN = new Set([
+      "login","username","user","email","mail",
+      "url","link","website","web","site","uri","launch","homepage","host","hostname","domain",
+    ]);
     const extras = {};
     for (const [k, v] of Object.entries(entry.fields || {})) {
       if (!HIDDEN.has(k)) extras[k] = v;
@@ -195,6 +205,8 @@ function startNew() {
   state.mode = "new";
   state.dirty = true;
   state.loaded = false;
+  state.lastRaw = "";
+  if (state.rawView) toggleRawView();  // form view for new entries
   renderTree();
   showForm(true);
   $("ed-mode").textContent = "new";
@@ -206,6 +218,7 @@ function startNew() {
   $("ed-url").value = "";
   $("ed-otp").value = "";
   $("ed-notes").value = "";
+  $("ed-raw").value = "";
   renderExtraFields({});
   setEdStatus("");
   $("ed-path").focus();
@@ -259,13 +272,29 @@ function markDirty() {
   }
 }
 
-// ─── Save / Delete / Reload ─────────────────────────────────────────
-async function doSave(ev) {
-  ev?.preventDefault?.();
-  const path = $("ed-path").value.trim();
-  const err = validatePassPath(path);
-  if (err) { setEdStatus(err, "err"); return; }
+// ─── Raw-view toggle ────────────────────────────────────────────────
+function toggleRawView() {
+  state.rawView = !state.rawView;
+  if (state.rawView) {
+    // Switching INTO raw — build raw text from current form fields when
+    // there are edits, otherwise reuse the original bytes the fetch
+    // returned. This way the raw view is always the truth.
+    if (state.dirty || state.mode === "new") {
+      $("ed-raw").value = buildRawFromForm();
+    } else {
+      $("ed-raw").value = state.lastRaw;
+    }
+    $("ed-raw").hidden = false;
+    $("ed-grid").style.display = "none";
+    $("b-view-raw").classList.add("active");
+  } else {
+    $("ed-raw").hidden = true;
+    $("ed-grid").style.display = "";
+    $("b-view-raw").classList.remove("active");
+  }
+}
 
+function buildRawFromForm() {
   const entry = {
     password: $("ed-pw").value,
     username: $("ed-login").value.trim(),
@@ -274,7 +303,22 @@ async function doSave(ev) {
     fields:   collectExtraFields(),
     notes:    $("ed-notes").value ? $("ed-notes").value.split("\n") : [],
   };
-  const text = formatEntry(entry);
+  return formatEntry(entry);
+}
+
+// ─── Save / Delete / Reload ─────────────────────────────────────────
+async function doSave(ev) {
+  ev?.preventDefault?.();
+  const path = $("ed-path").value.trim();
+  const err = validatePassPath(path);
+  if (err) { setEdStatus(err, "err"); return; }
+
+  // When the raw view is active, ship the textarea bytes verbatim —
+  // bypassing formatEntry. This is the escape hatch when the user has a
+  // schema my parser doesn't understand.
+  const text = state.rawView
+    ? $("ed-raw").value
+    : buildRawFromForm();
 
   $("b-save").disabled = true;
   setEdStatus("saving…");
@@ -457,6 +501,9 @@ function wire() {
     $("kv-list").appendChild(makeKvRow("", ""));
     markDirty();
   });
+
+  $("b-view-raw").addEventListener("click", toggleRawView);
+  $("ed-raw").addEventListener("input", markDirty);
 
   ["ed-pw", "ed-login", "ed-url", "ed-otp", "ed-notes", "ed-path"].forEach((id) => {
     $(id).addEventListener("input", markDirty);

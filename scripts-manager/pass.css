@@ -184,6 +184,30 @@ body {
 .ed-mode {
   font-size: 11px; color: var(--text-muted); text-transform: lowercase; letter-spacing: 1px;
 }
+.ed-view-toggle {
+  width: auto !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  height: 28px !important;
+  text-transform: lowercase;
+  letter-spacing: 0.5px;
+}
+.ed-view-toggle.active { color: var(--cyan); border-color: var(--cyan); background: var(--bg-hover); }
+
+.ed-raw {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit; font-size: 12px;
+  padding: 14px 18px; border-radius: 0;
+  margin: 0;
+  resize: none;
+  white-space: pre;
+  overflow: auto;
+}
+.ed-raw:focus { outline: none; border-color: var(--cyan); box-shadow: inset 0 0 4px var(--cyan-glow); }
+.ed-raw[hidden] { display: none; }
 .ed-mode.new { color: var(--green); }
 .ed-mode.dirty { color: var(--yellow); }
 

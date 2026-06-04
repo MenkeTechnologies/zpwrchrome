@@ -24,7 +24,7 @@ import {
   expandMatchPatterns
 } from "./lib/userscript.js";
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
-import { matchIn, parseEntry, fallbackUsernameFromPath } from "./lib/bp-pass.js";
+import { matchIn, parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "./lib/bp-pass.js";
 import { loadSettings as loadDlSettings, DL_DEFAULTS as DL_SETTINGS_DEFAULTS, saveSettings as saveDlSettings } from "./scripts-manager/dl-settings.js";
 import { loadInterface as loadDlInterface, DL_INTERFACE_DEFAULTS } from "./scripts-manager/dl-interface.js";
 import { loadRules as loadDlRules } from "./scripts-manager/dl-rules.js";
@@ -2173,7 +2173,10 @@ async function bpFetchParsed(path) {
     settings: { stores: bpStores() },
   });
   const raw = resp.data?.contents || "";
-  return fallbackUsernameFromPath(parseEntry(raw), path);
+  let parsed = fallbackUsernameFromPath(parseEntry(raw), path);
+  parsed = fallbackUrlFromPath(parsed, path);
+  parsed.raw = raw;
+  return parsed;
 }
 
 // BP `save` — write encrypted contents back to <path>.gpg. Caller passes
