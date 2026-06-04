@@ -1,0 +1,197 @@
+// Unit tests for lib/pass-entry.js — the encoder, path validator, and tree
+// builder used by the password manager full-page UI.
+//
+// Round-trip safety: parse(format(x)) must recover every editor-visible
+// field of x. format(parse(text)) need NOT be byte-identical to text (we
+// canonicalize key order + fold synonyms behind preferred keys when the
+// editor injected a value), but the parsed semantics must round-trip.
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { formatEntry, validatePassPath, buildTree } from "../lib/pass-entry.js";
+import { parseEntry, fallbackUsernameFromPath } from "../lib/bp-pass.js";
+
+const reparse = (text) => parseEntry(text);
+
+test("formatEntry: password-only entry has no key:value lines", () => {
+  const text = formatEntry({ password: "hunter2" });
+  assert.equal(text, "hunter2\n");
+});
+
+test("formatEntry: empty input yields a single newline (no password)", () => {
+  assert.equal(formatEntry({}), "\n");
+  assert.equal(formatEntry({ password: "" }), "\n");
+  assert.equal(formatEntry(null), "\n");
+});
+
+test("formatEntry: top-level username promotes to login: when fields lack a synonym", () => {
+  const text = formatEntry({ password: "p", username: "alice" });
+  assert.equal(text, "p\nlogin: alice\n");
+});
+
+test("formatEntry: top-level url promotes to url: when fields lack a synonym", () => {
+  const text = formatEntry({ password: "p", url: "https://x.test/" });
+  assert.equal(text, "p\nurl: https://x.test/\n");
+});
+
+test("formatEntry: existing username synonym wins over top-level username", () => {
+  const text = formatEntry({
+    password: "p",
+    username: "ignored",
+    fields: { email: "kept@x.test" },
+  });
+  // email must remain (not be replaced by login:); ignored must be dropped
+  assert.match(text, /email: kept@x\.test/);
+  assert.doesNotMatch(text, /login: ignored/);
+});
+
+test("formatEntry: existing url synonym wins over top-level url", () => {
+  const text = formatEntry({
+    password: "p",
+    url: "https://overwritten.test/",
+    fields: { website: "https://kept.test/" },
+  });
+  assert.match(text, /website: https:\/\/kept\.test\//);
+  assert.doesNotMatch(text, /url: https:\/\/overwritten\.test\//);
+});
+
+test("formatEntry: otpauth URI emits on its own line", () => {
+  const text = formatEntry({
+    password: "p",
+    otpUrl: "otpauth://totp/x?secret=ABC",
+  });
+  assert.match(text, /\notpauth:\/\/totp\/x\?secret=ABC\n$/);
+});
+
+test("formatEntry: empty otpUrl is omitted, not emitted as a blank line", () => {
+  const text = formatEntry({ password: "p", otpUrl: "" });
+  assert.equal(text, "p\n");
+});
+
+test("formatEntry: notes as array preserves order, one line each", () => {
+  const text = formatEntry({
+    password: "p",
+    notes: ["recovery codes:", "  1: aaa-bbb", "  2: ccc-ddd"],
+  });
+  assert.equal(text, "p\nrecovery codes:\n  1: aaa-bbb\n  2: ccc-ddd\n");
+});
+
+test("formatEntry: notes as string is split on newlines", () => {
+  const text = formatEntry({ password: "p", notes: "line1\nline2" });
+  assert.equal(text, "p\nline1\nline2\n");
+});
+
+test("formatEntry: extra fields sort alphabetically after login/url synonyms", () => {
+  const text = formatEntry({
+    password: "p",
+    fields: { zebra: "z", alpha: "a", login: "l", url: "u" },
+  });
+  // expected order: login, url, alpha, zebra
+  assert.equal(text, "p\nlogin: l\nurl: u\nalpha: a\nzebra: z\n");
+});
+
+test("round-trip: parse(format(parsed)) recovers password+username+url+otp+notes", () => {
+  const original = "pw1\nlogin: alice\nurl: https://x.test/\notpauth://totp/x?secret=S\nnote line\n";
+  const parsed = parseEntry(original);
+  const reformatted = formatEntry(parsed);
+  const reparsed = parseEntry(reformatted);
+  assert.equal(reparsed.password, "pw1");
+  assert.equal(reparsed.username, "alice");
+  assert.equal(reparsed.url,      "https://x.test/");
+  assert.equal(reparsed.otpUrl,   "otpauth://totp/x?secret=S");
+  assert.deepEqual(reparsed.notes, ["note line"]);
+});
+
+test("round-trip: arbitrary extra fields survive parse→format→parse", () => {
+  const original = "pw\nlogin: a\nrecovery: codes-here\nbackup_email: x@y.z\n";
+  const reparsed = reparse(formatEntry(parseEntry(original)));
+  assert.equal(reparsed.fields.login,         "a");
+  assert.equal(reparsed.fields.recovery,      "codes-here");
+  assert.equal(reparsed.fields.backup_email,  "x@y.z");
+});
+
+test("round-trip: editing the password leaves other fields intact", () => {
+  const original = "old\nlogin: a\nurl: https://x.test/\n";
+  const parsed = parseEntry(original);
+  parsed.password = "new";
+  const text = formatEntry(parsed);
+  assert.equal(text, "new\nlogin: a\nurl: https://x.test/\n");
+});
+
+test("validatePassPath: accepts normal nested paths", () => {
+  assert.equal(validatePassPath("github.com/alice"), null);
+  assert.equal(validatePassPath("work/aws/prod/root"), null);
+  assert.equal(validatePassPath("a"), null);
+});
+
+test("validatePassPath: rejects empty / leading-slash / trailing-slash", () => {
+  assert.match(validatePassPath(""),         /empty/);
+  assert.match(validatePassPath("/x"),       /leading/);
+  assert.match(validatePassPath("a/"),       /directory/);
+});
+
+test("validatePassPath: rejects path traversal segments", () => {
+  assert.match(validatePassPath("../x"),       /invalid path segment/);
+  assert.match(validatePassPath("a/../b"),     /invalid path segment/);
+  assert.match(validatePassPath("a/./b"),      /invalid path segment/);
+  assert.match(validatePassPath("a//b"),       /invalid path segment/);
+});
+
+test("validatePassPath: rejects NUL byte", () => {
+  assert.match(validatePassPath("a\0b"), /NUL/);
+});
+
+test("buildTree: empty input yields empty root", () => {
+  const t = buildTree([]);
+  assert.deepEqual(t.dirs, []);
+  assert.deepEqual(t.entries, []);
+});
+
+test("buildTree: groups by directory, sorts within each level", () => {
+  const t = buildTree([
+    "github.com/zoe",
+    "github.com/alice",
+    "aws/prod/root",
+    "aws/dev/root",
+    "top-level",
+  ]);
+  assert.deepEqual(t.entries.map((e) => e.name), ["top-level"]);
+  assert.deepEqual(t.dirs.map((d) => d.name), ["aws", "github.com"]);
+  const aws = t.dirs.find((d) => d.name === "aws");
+  assert.deepEqual(aws.dirs.map((d) => d.name), ["dev", "prod"]);
+  const gh = t.dirs.find((d) => d.name === "github.com");
+  assert.deepEqual(gh.entries.map((e) => e.name), ["alice", "zoe"]);
+});
+
+test("buildTree: tolerates trailing .gpg and leading slash", () => {
+  const t = buildTree(["/github.com/alice.gpg", "github.com/bob"]);
+  const gh = t.dirs.find((d) => d.name === "github.com");
+  assert.deepEqual(gh.entries.map((e) => e.name), ["alice", "bob"]);
+  // Stored path keeps no .gpg, no leading slash
+  assert.equal(gh.entries[0].path, "github.com/alice");
+});
+
+test("buildTree: paths produced are the entry's relative path (no leading /)", () => {
+  const t = buildTree(["nested/dir/entry"]);
+  const dir1 = t.dirs[0];
+  const dir2 = dir1.dirs[0];
+  assert.equal(dir2.entries[0].path, "nested/dir/entry");
+});
+
+test("fallback: format respects an existing username field set via fallbackUsernameFromPath", () => {
+  // The popup uses fallbackUsernameFromPath to fill .username from the entry's
+  // basename when no login/username field exists. The editor should NOT then
+  // serialize that fallback back into the file as `login: <basename>` — we
+  // detect it by only promoting top-level username when *fields* lacks any
+  // synonym. Real entries that had no login still won't re-grow one here
+  // unless the user types one in.
+  const parsed = fallbackUsernameFromPath(parseEntry("pw\n"), "github.com/alice.gpg");
+  assert.equal(parsed.username, "alice");
+  // If the editor doesn't change anything, the round-trip should still emit
+  // `login: alice` because top-level username is the only signal we have —
+  // that's the cost of using the basename fallback. Caller decides to strip
+  // it before formatEntry if they don't want it written back.
+  const text = formatEntry(parsed);
+  assert.match(text, /login: alice/);
+});

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // pass</title>
+  <link rel="stylesheet" href="pass.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⛀</span>
+    <h1>zpwrchrome <span class="dim">pass</span></h1>
+  </div>
+  <nav class="toolbar">
+    <button class="tbtn" id="t-new"     title="New entry (n)">＋</button>
+    <button class="tbtn" id="t-refresh" title="Refresh tree (r)">↻</button>
+    <span class="tsep"></span>
+    <a class="tbtn" id="t-settings" href="dl-settings.html" title="Settings">⚙</a>
+    <a class="tbtn" id="t-diag"     href="dl-diag.html"     title="Diagnostics">⚠</a>
+  </nav>
+  <div class="searchwrap">
+    <input class="search" id="search" type="search" placeholder="filter entries…" autocomplete="off" autofocus>
+  </div>
+</header>
+
+<div class="main">
+  <aside class="tree-pane">
+    <div class="tree-hd">
+      <span id="tree-count" class="dim">…</span>
+      <span class="grow"></span>
+      <button class="tlink" id="t-expand"   title="Expand all">[+]</button>
+      <button class="tlink" id="t-collapse" title="Collapse all">[−]</button>
+    </div>
+    <div class="tree" id="tree"></div>
+  </aside>
+
+  <section class="editor" id="editor">
+    <div class="ed-empty" id="ed-empty">
+      <div class="empty-glyph">⛀</div>
+      <div class="empty-msg">Select an entry on the left, or click <kbd>＋</kbd> to create one.</div>
+    </div>
+
+    <form class="ed-form" id="ed-form" hidden autocomplete="off">
+      <div class="ed-hd">
+        <input class="ed-path" id="ed-path" type="text" spellcheck="false"
+               placeholder="store/path/to/entry  (no .gpg)" autocomplete="off">
+        <span class="ed-mode" id="ed-mode"></span>
+      </div>
+
+      <div class="ed-grid">
+        <label class="lbl">password</label>
+        <div class="row">
+          <input class="ed-input mono" id="ed-pw" type="password" spellcheck="false" autocomplete="new-password">
+          <button class="rowbtn" id="b-pw-toggle" type="button" title="Show / hide">👁</button>
+          <button class="rowbtn" id="b-pw-copy"   type="button" title="Copy password">📋</button>
+          <button class="rowbtn" id="b-pw-gen"    type="button" title="Generate (24 chars)">⚙</button>
+        </div>
+
+        <label class="lbl">login</label>
+        <div class="row">
+          <input class="ed-input" id="ed-login" type="text" spellcheck="false" autocomplete="off">
+          <button class="rowbtn" id="b-login-copy" type="button" title="Copy login">📋</button>
+        </div>
+
+        <label class="lbl">url</label>
+        <div class="row">
+          <input class="ed-input" id="ed-url" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="https://example.com/">
+          <button class="rowbtn" id="b-url-open" type="button" title="Open URL in new tab">↗</button>
+        </div>
+
+        <label class="lbl">otpauth</label>
+        <div class="row">
+          <input class="ed-input mono" id="ed-otp" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="otpauth://totp/...?secret=...">
+          <button class="rowbtn" id="b-otp-copy" type="button" title="Copy current TOTP code">📋</button>
+        </div>
+
+        <label class="lbl">other fields</label>
+        <div class="row block">
+          <div class="kv-list" id="kv-list"></div>
+          <button class="rowbtn add-kv" id="b-add-kv" type="button" title="Add field">＋ field</button>
+        </div>
+
+        <label class="lbl">notes</label>
+        <div class="row block">
+          <textarea class="ed-input notes mono" id="ed-notes" spellcheck="false"
+                    placeholder="free-form notes (one line each)"></textarea>
+        </div>
+      </div>
+
+      <div class="ed-footer">
+        <button class="btn primary" id="b-save"   type="submit">Save</button>
+        <button class="btn"         id="b-fill"   type="button" title="Fill active tab">Fill active tab</button>
+        <button class="btn ghost"   id="b-reload" type="button" title="Discard edits, reload from store">Reload</button>
+        <span class="grow"></span>
+        <button class="btn danger"  id="b-delete" type="button" title="Delete this entry from the store">Delete</button>
+        <span class="ed-status" id="ed-status"></span>
+      </div>
+    </form>
+  </section>
+</div>
+
+<footer class="botbar">
+  <span id="footer-status" class="dim">connecting…</span>
+  <span class="grow"></span>
+  <span class="dim">store · default</span>
+</footer>
+
+<script src="pass.js" type="module"></script>
+</body>
+</html>

@@ -772,6 +772,12 @@ document.getElementById("open-downloads").addEventListener("click", (e) => {
   window.close();
 });
 
+document.getElementById("open-pass").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/pass.html") });
+  window.close();
+});
+
 // ── bottom downloads strip (always-visible glance) ────────────────────
 //
 // Reuses the SW's cached dl.snapshot for an instant first paint, then

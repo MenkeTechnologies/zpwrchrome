@@ -125,6 +125,22 @@ async function openPassInPopup() {
   await chrome.action.openPopup().catch(() => {});
 }
 
+// Full-page pass manager — focus an existing tab if one is already open,
+// else create a new one. Same pattern as openScriptsManager() and the
+// downloads manager handler.
+async function openPassManager() {
+  const url = chrome.runtime.getURL("scripts-manager/pass.html");
+  const existing = await chrome.tabs.query({ url });
+  if (existing.length) {
+    await chrome.tabs.update(existing[0].id, { active: true });
+    if (existing[0].windowId != null) {
+      await chrome.windows.update(existing[0].windowId, { focused: true });
+    }
+    return;
+  }
+  await chrome.tabs.create({ url });
+}
+
 async function passMatchActive() {
   const t = await getActive();
   const h = hostnameOf(t?.url || "");
@@ -829,6 +845,7 @@ const CTX_PG_IMAGES  = "zpwrchrome-pg-images";
 const CTX_PG_MEDIA   = "zpwrchrome-pg-media";
 const CTX_ACT_MGR    = "zpc-act-manager";
 const CTX_ACT_SCR    = "zpc-act-scripts";
+const CTX_ACT_PASS   = "zpc-act-pass";
 const CTX_ACT_DIAG   = "zpc-act-diag";
 const CTX_ACT_SET    = "zpc-act-settings";
 const CTX_ACT_IFACE  = "zpc-act-interface";
@@ -883,6 +900,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // also one right-click away.
   create({ id: CTX_ACT_MGR,    title: "Open download manager",        contexts: act });
   create({ id: CTX_ACT_SCR,    title: "Open userscript manager",      contexts: act });
+  create({ id: CTX_ACT_PASS,   title: "Open pass manager",            contexts: act });
   create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
   create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
   create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
@@ -908,6 +926,7 @@ if (chrome.contextMenus) {
     const pages = {
       [CTX_ACT_MGR]:    "/scripts-manager/downloads.html",
       [CTX_ACT_SCR]:    "/scripts-manager/manager.html",
+      [CTX_ACT_PASS]:   "/scripts-manager/pass.html",
       [CTX_ACT_DIAG]:   "/scripts-manager/dl-diag.html",
       [CTX_ACT_SET]:    "/scripts-manager/dl-settings.html",
       [CTX_ACT_IFACE]:  "/scripts-manager/dl-interface.html",
@@ -1769,6 +1788,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
+  if (msg?.kind === "pass.save") {
+    bpSaveEntry(String(msg.path || ""), String(msg.contents || ""))
+      .then(()  => sendResponse({ ok: true }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.delete") {
+    bpDeleteEntry(String(msg.path || ""))
+      .then(()  => sendResponse({ ok: true }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.openManager") {
+    openPassManager().then(() => sendResponse({ ok: true }));
+    return true;
+  }
   if (msg?.kind === "pass.settings.get") {
     getPassSettings().then((settings) => sendResponse({ ok: true, settings }));
     return true;
@@ -2139,6 +2174,30 @@ async function bpFetchParsed(path) {
   });
   const raw = resp.data?.contents || "";
   return fallbackUsernameFromPath(parseEntry(raw), path);
+}
+
+// BP `save` — write encrypted contents back to <path>.gpg. Caller passes
+// the already-formatted multi-line text (see lib/pass-entry.js).
+async function bpSaveEntry(path, contents) {
+  const file = path.endsWith(".gpg") ? path : `${path}.gpg`;
+  return bpSend({
+    action: "save",
+    storeId: "default",
+    file,
+    contents,
+    settings: { stores: bpStores() },
+  });
+}
+
+// BP `delete` — remove <path>.gpg and prune empty parent dirs.
+async function bpDeleteEntry(path) {
+  const file = path.endsWith(".gpg") ? path : `${path}.gpg`;
+  return bpSend({
+    action: "delete",
+    storeId: "default",
+    file,
+    settings: { stores: bpStores() },
+  });
 }
 
 // `otp` extension action — host shells `pass otp` and returns the code.
