@@ -179,10 +179,10 @@ test("buildTree: paths produced are the entry's relative path (no leading /)", (
   assert.equal(dir2.entries[0].path, "nested/dir/entry");
 });
 
-test("fallbackUrlFromPath: derives https://<host> from first dotted dir segment", () => {
+test("fallbackUrlFromPath: uses first dir segment verbatim (no https:// prepend)", () => {
   const parsed = parseEntry("hunter2\nlogin: alice\n");
   fallbackUrlFromPath(parsed, "adobe.com/jmenke@wccnet.edu");
-  assert.equal(parsed.url, "https://adobe.com");
+  assert.equal(parsed.url, "adobe.com");
 });
 
 test("fallbackUrlFromPath: leaves url alone when entry already has one", () => {
@@ -191,34 +191,34 @@ test("fallbackUrlFromPath: leaves url alone when entry already has one", () => {
   assert.equal(parsed.url, "https://kept.test/");
 });
 
-test("fallbackUrlFromPath: skips non-dotted segments (amcrest/admin → no url)", () => {
+test("fallbackUrlFromPath: non-dotted first segment used literally (amcrest/admin → amcrest)", () => {
   const parsed = parseEntry("pw\n");
   fallbackUrlFromPath(parsed, "amcrest/admin");
-  assert.equal(parsed.url, "");
+  assert.equal(parsed.url, "amcrest");
 });
 
-test("fallbackUrlFromPath: derives from root-level dotted basename", () => {
+test("fallbackUrlFromPath: root-level dotted entry uses basename verbatim", () => {
   const parsed = parseEntry("pw\n");
   fallbackUrlFromPath(parsed, "example.com");
-  assert.equal(parsed.url, "https://example.com");
+  assert.equal(parsed.url, "example.com");
 });
 
-test("fallbackUrlFromPath: nested host segment beats username basename", () => {
+test("fallbackUrlFromPath: nested entry always uses the first segment", () => {
   const parsed = parseEntry("pw\n");
   fallbackUrlFromPath(parsed, "work/aws/console.aws.amazon.com/root");
-  assert.equal(parsed.url, "https://console.aws.amazon.com");
+  assert.equal(parsed.url, "work");
 });
 
 test("fallbackUrlFromPath: tolerates .gpg suffix and leading slash", () => {
   const parsed = parseEntry("pw\n");
   fallbackUrlFromPath(parsed, "/github.com/alice.gpg");
-  assert.equal(parsed.url, "https://github.com");
+  assert.equal(parsed.url, "github.com");
 });
 
 test("fallbackUrlFromPath: subdomain.example.com root entry", () => {
   const parsed = parseEntry("pw\n");
   fallbackUrlFromPath(parsed, "subdomain.example.com");
-  assert.equal(parsed.url, "https://subdomain.example.com");
+  assert.equal(parsed.url, "subdomain.example.com");
 });
 
 test("fallback: format respects an existing username field set via fallbackUsernameFromPath", () => {
