@@ -87,6 +87,34 @@ test("buildThemeCss: scanlines off → no body::after rule", () => {
   assert.doesNotMatch(css, /body::after/);
 });
 
+test("buildThemeCss: darkMode applies CSS filter inversion on html + re-inverts media", () => {
+  const css = buildThemeCss({ darkMode: true });
+  // <html> gets the inversion filter — this is what makes Amazon-like
+  // pages actually look dark instead of just having recolored links.
+  assert.match(css, /html \{[^}]*filter:\s*invert\(0\.92\)/);
+  assert.match(css, /hue-rotate\(180deg\)/);
+  // Media elements (img/video/picture/canvas/iframe/svg image/bg-image
+  // inline styles) get the inversion re-applied so they keep their
+  // original colors.
+  assert.match(css, /img, video, picture, canvas, iframe/);
+  assert.match(css, /\[style\*="background-image"\]/);
+});
+
+test("buildThemeCss: darkMode off → no html filter", () => {
+  const css = buildThemeCss({ darkMode: false });
+  assert.doesNotMatch(css, /html \{[^}]*filter:/);
+});
+
+test("buildThemeCss: darkMode layers UNDER intensity rules (filter declared first)", () => {
+  const css = buildThemeCss({ darkMode: true, intensity: "medium" });
+  // The inversion block must appear before the body-bg block so any
+  // subsequent body recolor sits on top of the filtered base.
+  const filterIdx = css.indexOf("filter: invert(0.92)");
+  const bodyIdx   = css.indexOf("html, body");
+  assert.ok(filterIdx >= 0 && bodyIdx > filterIdx,
+    "darkMode filter block must precede the intensity-medium body rule");
+});
+
 test("buildThemeCss: every property uses !important so site styles can't override", () => {
   const css = buildThemeCss({ intensity: "full", forceMono: true, scanlines: true });
   // A spot-check: pull every "selector { ... }" block and count declarations
