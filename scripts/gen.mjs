@@ -29,7 +29,7 @@ const testFiles = readdirSync(testDir).filter((f) => f.endsWith(".test.js"));
 // gen.sh with the env set).
 const hostCrateVersion = (() => {
   try {
-    const toml = readFileSync(join(ROOT, "browserpass-host-rs/Cargo.toml"), "utf8");
+    const toml = readFileSync(join(ROOT, "zpwrchrome-host/Cargo.toml"), "utf8");
     const m = toml.match(/^version\s*=\s*"([^"]+)"/m);
     return m ? m[1] : "";
   } catch {
@@ -200,7 +200,7 @@ A Chrome MV3 extension that bundles four daily-driver tools into one toolbar ico
 - **Sub-popup live filter** — type to filter open + closed tabs; \`↑\`/\`↓\`/\`Enter\`/\`Delete\`/\`Esc\` nav
 - **Companion Chrome theme** — \`theme/\` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from \`strykelang/docs/hud-static.css\` (\`--cyan #05d9e8\`, \`--accent #ff2a6d\`, \`--magenta #d300c5\`, CRT scanlines, neon-border-glow card frames)
-- **Pure-helper test surface** — MRU stack semantics, hostname parsing, jump-index resolution in \`lib/util.js\` + pass match/parse + dl filename/collision helpers in \`browserpass-host-rs/src/{ported,extensions}/\` all unit-tested without a Chrome runtime
+- **Pure-helper test surface** — MRU stack semantics, hostname parsing, jump-index resolution in \`lib/util.js\` + pass match/parse + dl filename/collision helpers in \`zpwrchrome-host/src/{ported,extensions}/\` all unit-tested without a Chrome runtime
 - **Single source of truth** — \`README.md\`, \`docs/index.html\`, and command counts are all generated from \`manifest.json\` by \`scripts/gen.sh\`; CI guards against drift
 - **Zero JS runtime dependencies** — no bundler, no transpiler, no npm modules at runtime; pure ES module service worker. The native host adds \`serde\`/\`serde_json\`/\`ureq\` (foundational pure-Rust crates) and ships as a single static binary
 
@@ -225,14 +225,14 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 2. Install the host binary from crates.io and register it for this extension's ID:
 
 \`\`\`sh
-cargo install browserpass-host-rs
+cargo install zpwrchrome-host
 # find your extension ID at chrome://extensions (Developer mode), then:
-browserpass-host-rs --install <ext-id>
+zpwrchrome-host --install <ext-id>
 \`\`\`
 
 The installer writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir (Chrome / Chromium / Brave / Edge / Arc / Vivaldi on macOS + Linux). \`allowed_origins\` is populated with \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension. Reload the extension at \`chrome://extensions\` after running it.
 
-To upgrade later: \`cargo install browserpass-host-rs --force\` — the NM manifest already points at \`$CARGO_HOME/bin/browserpass-host-rs\` so no re-install is needed.
+To upgrade later: \`cargo install zpwrchrome-host --force\` — the NM manifest already points at \`$CARGO_HOME/bin/zpwrchrome-host\` so no re-install is needed.
 
 #### Theme
 
@@ -362,7 +362,7 @@ Color anchors (RGB triplets in \`theme/manifest.json\`):
                                                      └──────────────────┘
 \`\`\`
 
-The service worker holds no globals — MRU lives in \`chrome.storage.session\`. Pure helpers in \`lib/util.js\` (JS) and \`browserpass-host-rs/src/{ported,extensions}/\` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / \`cargo test\`. The native host is the Rust port of \`browserpass-native\` v3.1.2 plus three extension actions (\`otp\`, \`search\`, \`dl.*\`); each request spawns a fresh process (BP protocol) with download workers detaching to keep state under \`$XDG_CACHE_HOME/zpwrchrome/dl/\`.
+The service worker holds no globals — MRU lives in \`chrome.storage.session\`. Pure helpers in \`lib/util.js\` (JS) and \`zpwrchrome-host/src/{ported,extensions}/\` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / \`cargo test\`. The native host is the Rust port of \`browserpass-native\` v3.1.2 plus three extension actions (\`otp\`, \`search\`, \`dl.*\`); each request spawns a fresh process (BP protocol) with download workers detaching to keep state under \`$XDG_CACHE_HOME/zpwrchrome/dl/\`.
 
 ---
 
@@ -372,7 +372,7 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 
 | Capability | Replaces / supersedes | Implementation |
 | --- | --- | --- |
-| UNIX \`pass\` integration (fill / copy / OTP / open URL / basic-auth injection) | [browserpass-extension](https://github.com/browserpass/browserpass-extension) | client-side eTLD+1 + multi-label PSL match, server-side via the [browserpass-host-rs](https://crates.io/crates/browserpass-host-rs) Rust crate (PROTOCOL.md v3.1.2 compatible — drop-in for the Go binary) |
+| UNIX \`pass\` integration (fill / copy / OTP / open URL / basic-auth injection) | [browserpass-extension](https://github.com/browserpass/browserpass-extension) | client-side eTLD+1 + multi-label PSL match, server-side via the [zpwrchrome-host](https://crates.io/crates/zpwrchrome-host) Rust crate (PROTOCOL.md v3.1.2 compatible — drop-in for the Go binary) |
 | Full-page \`pass\` manager (CRUD on \`~/.password-store\`) | upstream browserpass-extension's options page · the standalone \`pass\` TUI · 1Password / Bitwarden vault UIs (for the GPG-backed flow) | \`scripts-manager/pass.{html,css,js}\` — store tree (left) + form editor (right) talking to the BP \`list\` / \`fetch\` / \`save\` / \`delete\` actions over NM. Versioned alongside the extension; no separate install |
 | Profile + credit-card autofill from \`pass\` (\`profile/*\` + \`creditcard/*\` entries) | Chrome's built-in autofill profiles · 1Password / Bitwarden card filler | \`lib/identity-tokens.js\` + page-injected \`fillIdentityForm()\`. Entry keys use WHATWG HTML autocomplete tokens directly — the store IS the schema. Longest-synonym recognition; alias chains backfill missing tokens; React/Vue-safe native value-setter pattern across all frames; in-tab shadow-DOM picker with last-used cache per host |
 | Segmented multi-connection download manager (default-handler takeover) | Chrome's built-in download UI · Chrono / IDM-style extensions · \`aria2c\` | HEAD probe + N parallel \`Range\` GETs, cookies + User-Agent forwarded, retry with backoff, file-state worker model, full sidebar-nav queue page |
@@ -408,9 +408,9 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 | \`modal/content.js\` | JetBrains-style Recent Tabs modal — content script, shadow DOM, 2-column layout |
 | \`scripts-manager/manager.{html,css,js}\` | Userscript engine dashboard (Tampermonkey-equivalent) |
 | \`scripts-manager/downloads.{html,css,js}\` | Live download queue UI — push-event subscription + cached snapshot rehydration |
-| \`browserpass-host-rs/Cargo.toml\` / \`browserpass-host-rs/src/{lib,frame}.rs\` + \`src/ported/**\` + \`src/extensions/**\` + \`src/bin/browserpass_host_rs.rs\` | Rust port of \`browserpass-native\` v3.1.2 + extension actions (\`otp\`, \`search\`, \`dl.*\`) over length-prefixed JSON on stdio. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see \`browserpass-host-rs/docs/port_report.html\` |
-| \`browserpass-host-rs --install <ext-id>\` (CLI flag on the binary, not a separate script) | Writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir on macOS / Linux. \`allowed_origins\` is set to \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension |
-| \`browserpass-host-rs/tests/ported_*.rs\` + \`extensions_*.rs\` | \`cargo test\` suite — per-fn pins for the port + extensions, end-to-end binary spawn tests, segmented download against a local HTTP fixture |
+| \`zpwrchrome-host/Cargo.toml\` / \`zpwrchrome-host/src/{lib,frame}.rs\` + \`src/ported/**\` + \`src/extensions/**\` + \`src/bin/zpwrchrome_host.rs\` | Rust port of \`browserpass-native\` v3.1.2 + extension actions (\`otp\`, \`search\`, \`dl.*\`) over length-prefixed JSON on stdio. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see \`zpwrchrome-host/docs/port_report.html\` |
+| \`zpwrchrome-host --install <ext-id>\` (CLI flag on the binary, not a separate script) | Writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir on macOS / Linux. \`allowed_origins\` is set to \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension |
+| \`zpwrchrome-host/tests/ported_*.rs\` + \`extensions_*.rs\` | \`cargo test\` suite — per-fn pins for the port + extensions, end-to-end binary spawn tests, segmented download against a local HTTP fixture |
 | \`docs/index.html\` | GitHub-Pages landing page (regenerated from manifest) |
 | \`docs/report.html\` | Strykelang-style engineering report (regenerated from repo stats) |
 | \`theme/\` | Companion Chrome theme — separate unpacked extension |
@@ -730,7 +730,7 @@ const html = `<!DOCTYPE html>
         <li><code>git clone https://github.com/MenkeTechnologies/zpwrchrome.git</code></li>
         <li>Open <code>chrome://extensions</code> and enable <strong>Developer mode</strong></li>
         <li>Click <strong>Load unpacked</strong>, pick the cloned directory</li>
-        <li>For <code>pass</code>, downloads, and screenshots, install the native host from crates.io and register it for this extension: <code>cargo install browserpass-host-rs &amp;&amp; browserpass-host-rs --install &lt;ext-id&gt;</code>. Get the ext-id at <code>chrome://extensions</code> (Developer mode). <code>pass</code> support also requires GPG configured locally.</li>
+        <li>For <code>pass</code>, downloads, and screenshots, install the native host from crates.io and register it for this extension: <code>cargo install zpwrchrome-host &amp;&amp; zpwrchrome-host --install &lt;ext-id&gt;</code>. Get the ext-id at <code>chrome://extensions</code> (Developer mode). <code>pass</code> support also requires GPG configured locally.</li>
         <li>Open <code>chrome://extensions/shortcuts</code> to bind any of the ${userBound} user-configurable commands (incl. <code>pass-fill</code>, <code>pass-fill-profile</code>, <code>pass-fill-cc</code>, <code>pass-copy-pw</code>, <code>pass-copy-otp</code>, <code>dl-paste-url</code>, <code>dl-show-queue</code>)</li>
         <li>Optional: <strong>Load unpacked</strong> the <code>theme/</code> subdirectory for the matching browser theme</li>
       </ol>
@@ -893,7 +893,7 @@ const designDecisions = [
   ["Frecency for History", "visitCount + 2*typedCount over hoursAgo+2. Typed visits weigh 2x (deliberate). Linear decay: ~57x weight to 1h-ago vs 1w-ago."],
   ["Default-key ceiling = 4", "Chrome MV3 hard cap. Currently 3 used (Alt+T popup, Cmd+E switch-previous-tab, Cmd+Y history). Everything else binds at chrome://extensions/shortcuts."],
   ["Pure helpers in lib/util.js", "Zero chrome.* refs so they unit-test in plain Node and so they can also be inlined into the content-script modal via UTIL_INLINE_START/END markers + scripts/build-modal.mjs."],
-  ["Pure helpers in browserpass-host-rs/src/extensions/", "Filename sanitization, unique_dest_path collision handling, subseq search scorer, OTP otpauth extractor — all <code>fn</code>s with no I/O. cargo test exercises them directly. Integration tests stand up a std::net HTTP/1.1 fixture with Range support to drive the detached worker process end-to-end, with cookie-gate + retry-recovery + cancel paths.",],
+  ["Pure helpers in zpwrchrome-host/src/extensions/", "Filename sanitization, unique_dest_path collision handling, subseq search scorer, OTP otpauth extractor — all <code>fn</code>s with no I/O. cargo test exercises them directly. Integration tests stand up a std::net HTTP/1.1 fixture with Range support to drive the detached worker process end-to-end, with cookie-gate + retry-recovery + cancel paths.",],
 ];
 
 const report = `<!DOCTYPE html>
@@ -1244,7 +1244,7 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
         <text class="title grpttl host" x="776" y="42">NATIVE HOST (Rust)</text>
 
         <rect class="box host" x="780" y="64" width="262" height="80" />
-        <text class="lbl"  x="792" y="84">browserpass-host-rs</text>
+        <text class="lbl"  x="792" y="84">zpwrchrome-host</text>
         <text class="sub"  x="792" y="100">crates.io · v${hostCrateVersion}</text>
         <text class="sub"  x="792" y="114">one process per NM message</text>
         <text class="sub"  x="792" y="128">stdio: length-prefixed JSON</text>

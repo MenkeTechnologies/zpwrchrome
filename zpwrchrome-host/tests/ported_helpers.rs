@@ -5,7 +5,7 @@
 
 use std::fs;
 use std::path::PathBuf;
-use browserpass_host_rs::ported::helpers::{DetectGpgRecipients, IsDirectoryEmpty};
+use zpwrchrome_host::ported::helpers::{DetectGpgRecipients, IsDirectoryEmpty};
 
 fn tempdir(tag: &str) -> PathBuf {
     let p = std::env::temp_dir().join(format!(

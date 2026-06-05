@@ -40,18 +40,54 @@
 
   <rect width="1920" height="1200" fill="url(#vignette)"/>
 
-  <!-- HUD frame -->
+  <!-- HUD frame.
+       Two concentric rings so SOMETHING is always at the viewport edges:
+
+         * Outer ring   (50, 50 / 1870, 1150) — visible on 4K-native or
+           ultrawide viewports that see most of the PNG.
+         * Inner ring   (495, 315 / 1425, 885) — bracket vertices sit at
+           the safe-area corners for a 1920x1080 viewport centered on
+           the 3840x2400 PNG. Visible on every common Chrome window.
+
+       Brackets at the safe-area corners look decoratively indoor on
+       a true 4K full-image view, but they survive Chrome chrome eating
+       the top/bottom of the image at every common resolution. -->
   <g stroke="#05d9e8" stroke-opacity="0.35" fill="none" stroke-width="1.5">
-    <path d="M 60 60 L 200 60"/>
-    <path d="M 60 60 L 60 200"/>
-    <path d="M 1860 60 L 1720 60"/>
-    <path d="M 1860 60 L 1860 200"/>
-    <path d="M 60 1140 L 200 1140"/>
-    <path d="M 60 1140 L 60 1000"/>
-    <path d="M 1860 1140 L 1720 1140"/>
-    <path d="M 1860 1140 L 1860 1000"/>
+    <!-- Outer ring — only visible to viewports that see most of the PNG -->
+    <path d="M 50 50 L 200 50"/>
+    <path d="M 50 50 L 50 200"/>
+    <path d="M 1870 50 L 1720 50"/>
+    <path d="M 1870 50 L 1870 200"/>
+    <path d="M 50 1150 L 200 1150"/>
+    <path d="M 50 1150 L 50 1000"/>
+    <path d="M 1870 1150 L 1720 1150"/>
+    <path d="M 1870 1150 L 1870 1000"/>
   </g>
 
-  <text x="80" y="100" font-family="Share Tech Mono, monospace" font-size="14" fill="#05d9e8" fill-opacity="0.6" letter-spacing="3">SYS://ZPWRCHROME</text>
-  <text x="80" y="120" font-family="Share Tech Mono, monospace" font-size="11" fill="#7a8ba8" letter-spacing="2">// menketechnologies // hud_v1</text>
+  <!-- Inner ring — sized for 1920x1080-or-bigger Chrome windows.
+       Stroke is brighter than the outer ring so it carries the HUD identity
+       at the size most users will actually see. -->
+  <g stroke="#05d9e8" stroke-opacity="0.55" fill="none" stroke-width="1.8">
+    <path d="M 495 315 L 635 315"/>
+    <path d="M 495 315 L 495 455"/>
+    <path d="M 1425 315 L 1285 315"/>
+    <path d="M 1425 315 L 1425 455"/>
+    <path d="M 495 885 L 635 885"/>
+    <path d="M 495 885 L 495 745"/>
+    <path d="M 1425 885 L 1285 885"/>
+    <path d="M 1425 885 L 1425 745"/>
+  </g>
+
+  <!-- Sub-bracket accent dots at each safe-area corner. -->
+  <g fill="#05d9e8" fill-opacity="0.6">
+    <circle cx="495"  cy="315" r="3"/>
+    <circle cx="1425" cy="315" r="3"/>
+    <circle cx="495"  cy="885" r="3"/>
+    <circle cx="1425" cy="885" r="3"/>
+  </g>
+
+  <!-- Brand caption — positioned inside the safe area so users on common
+       1920x1080 windows can actually read it. -->
+  <text x="510" y="350" font-family="Share Tech Mono, monospace" font-size="14" fill="#05d9e8" fill-opacity="0.7" letter-spacing="3">SYS://ZPWRCHROME</text>
+  <text x="510" y="370" font-family="Share Tech Mono, monospace" font-size="11" fill="#7a8ba8" letter-spacing="2">// menketechnologies // hud_v2</text>
 </svg>

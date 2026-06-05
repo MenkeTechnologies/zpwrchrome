@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::path::PathBuf;
-use browserpass_host_rs::ported::request::common::normalizePasswordStorePath;
+use zpwrchrome_host::ported::request::common::normalizePasswordStorePath;
 
 fn tempdir(tag: &str) -> PathBuf {
     let p = std::env::temp_dir().join(format!(

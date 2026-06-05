@@ -2505,14 +2505,14 @@ if (chrome.webRequest && chrome.webRequest.onAuthRequired) {
 }
 
 // ---------------------------------------------------------------------------
-// Native messaging — BP (browserpass-host-rs) protocol over chrome.runtime
+// Native messaging — BP (zpwrchrome-host) protocol over chrome.runtime
 //                    .sendNativeMessage (one-shot per request).
 //
 // Wire shape (every action shares this envelope):
 //   request:  { action, settings: { stores: { storeId: {id,name,path} } }, ...args }
 //   response: { status: "ok"|"error", version, data?, code?, params? }
 //
-// The host (browserpass-host-rs) speaks PROTOCOL.md v3.1.2 plus three
+// The host (zpwrchrome-host) speaks PROTOCOL.md v3.1.2 plus three
 // extension actions (otp, search, dl.*). Each call spawns a fresh host
 // process — there is no long-lived port. Pause/resume/cancel + live queue
 // updates for downloads are surfaced via the host's file-state at

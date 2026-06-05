@@ -3,7 +3,7 @@
 // `ported_integration.rs` covers the dispatch path. Here we pin the
 // scoring algorithm so refactors can't silently change ranking.
 
-use browserpass_host_rs::extensions::search::search_in;
+use zpwrchrome_host::extensions::search::search_in;
 
 #[test]
 fn empty_query_returns_all_entries_sorted() {

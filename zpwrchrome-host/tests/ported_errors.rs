@@ -3,7 +3,7 @@
 // are wire constants; the field names are JSON object keys in the error
 // response `params` map.
 
-use browserpass_host_rs::ported::errors::{field, Code};
+use zpwrchrome_host::ported::errors::{field, Code};
 
 #[test]
 fn every_error_code_pins_to_protocol_md_value() {

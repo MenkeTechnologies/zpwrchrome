@@ -1,6 +1,6 @@
-# browserpass-host-rs
+# zpwrchrome-host
 
-[![crates.io](https://img.shields.io/crates/v/browserpass-host-rs.svg)](https://crates.io/crates/browserpass-host-rs)
+[![crates.io](https://img.shields.io/crates/v/zpwrchrome-host.svg)](https://crates.io/crates/zpwrchrome-host)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Rust port of [browserpass-native](https://github.com/browserpass/browserpass-native)** — a drop-in replacement for the Go binary that the [browserpass-extension](https://github.com/browserpass/browserpass-extension) browser extension talks to via Chrome / Firefox native messaging — **plus** three additive actions (OTP, whole-store search, segmented download manager) that browserpass-extension does not call.
@@ -9,7 +9,7 @@ Single static binary. Pure-Rust dependency tree (`serde`, `serde_json`, `ureq` w
 
 ## Wire compatibility with upstream
 
-`browserpass-host-rs` implements every action documented in [browserpass-native's PROTOCOL.md](https://github.com/browserpass/browserpass-native/blob/master/PROTOCOL.md) v3.1.2:
+`zpwrchrome-host` implements every action documented in [browserpass-native's PROTOCOL.md](https://github.com/browserpass/browserpass-native/blob/master/PROTOCOL.md) v3.1.2:
 
 | Action      | Implementation               | Test pin                                          |
 | ----------- | ---------------------------- | ------------------------------------------------- |
@@ -19,7 +19,7 @@ Single static binary. Pure-Rust dependency tree (`serde`, `serde_json`, `ureq` w
 | `fetch`     | `ported/request/fetch.rs`    | `tests/ported_integration.rs`                     |
 | `save`      | `ported/request/save.rs`     | `tests/ported_integration.rs`                     |
 | `delete`    | `ported/request/delete.rs`   | `tests/ported_integration.rs` (incl. parent cleanup) |
-| `echo`      | `bin/browserpass_host_rs.rs` | `tests/ported_integration.rs`                     |
+| `echo`      | `bin/zpwrchrome_host.rs` | `tests/ported_integration.rs`                     |
 
 Error codes 10–32 from `errors/errors.go` pin to the same integers; exit code equals the error code (matches upstream `errors.ExitWithCode`); version is reported as `3.1.2` (packed int `3_001_002`).
 
@@ -52,7 +52,7 @@ These are additive — `browserpass-extension` never sends them, so wire compati
 
 | Action                | Behavior                                                                                                                                                                                                              | Wire shape                                                                                                                                                          |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dl.add`              | Spawns a detached worker (`browserpass-host-rs --dl-worker <gid>`) that performs a multi-segment download via ureq + Range requests. State lives at `$XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json`. `name` accepts a [naming-mask template](#naming-mask-tokens). | `{action:"dl.add", url, dir?, name?, mask?, segments?, cookies?, userAgent?}` → ok `{gid, dest}`                                                                    |
+| `dl.add`              | Spawns a detached worker (`zpwrchrome-host --dl-worker <gid>`) that performs a multi-segment download via ureq + Range requests. State lives at `$XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json`. `name` accepts a [naming-mask template](#naming-mask-tokens). | `{action:"dl.add", url, dir?, name?, mask?, segments?, cookies?, userAgent?}` → ok `{gid, dest}`                                                                    |
 | `dl.list`             | Reads every state file under the cache dir and returns the job array. Each row carries a host-computed `dest_exists` bool so the UI can hide reveal actions for deleted files.                                        | `{action:"dl.list"}` → ok `{jobs:[JobView, …]}`                                                                                                                     |
 | `dl.pause`            | Writes `paused=true` into the state file. Worker polls the flag between chunks.                                                                                                                                       | `{action:"dl.pause", gid}` → ok `{gid, status:"paused"}`                                                                                                            |
 | `dl.resume`           | Clears `paused`/`cancelled` flags. Respawns the worker if the prior `worker_pid` is dead (SW-suspension self-heal).                                                                                                   | `{action:"dl.resume", gid}` → ok `{gid, status:"resumed"}`                                                                                                          |
@@ -66,7 +66,7 @@ These are additive — `browserpass-extension` never sends them, so wire compati
 
 ### Worker process model
 
-The download worker (`browserpass-host-rs --dl-worker <gid>`) is the detached child process that performs the actual byte transfer:
+The download worker (`zpwrchrome-host --dl-worker <gid>`) is the detached child process that performs the actual byte transfer:
 
 - **Spawn isolation** — `setsid()` + `close(fd)` for every `fd >= 3` before `exec`. Without this the worker inherits Chrome's NM stdout pipe; Chrome never sees EOF on the parent host and reports `Native host has exited` even on a successful response.
 - **Liveness check on resume** — `worker_pid` is written into the state file by `run_worker` at start. On `dl.resume` for a paused job, `worker_alive(prior_pid)` (via `kill(pid, 0)`) decides whether to flip the paused flag (live worker will notice) or spawn a fresh worker (dead worker means SW was suspended and the previous worker process was reaped).
@@ -96,15 +96,15 @@ Unknown tokens are left literal so the user can spot typos. Empty mask = filenam
 ## Install
 
 ```sh
-cargo install browserpass-host-rs
+cargo install zpwrchrome-host
 ```
 
-That installs `browserpass-host-rs` into `$CARGO_HOME/bin`. Then register the NM manifest for the calling extension's ID:
+That installs `zpwrchrome-host` into `$CARGO_HOME/bin`. Then register the NM manifest for the calling extension's ID:
 
 ```sh
 # 1. Find your extension's ID at chrome://extensions (Developer mode)
 # 2. Register the host for that ID:
-browserpass-host-rs --install <ext-id>
+zpwrchrome-host --install <ext-id>
 ```
 
 The installer writes `com.menketechnologies.zpwrchrome.json` into every detected Chromium-family browser config dir on macOS / Linux (Chrome / Chromium / Brave / Edge / Arc / Vivaldi). `allowed_origins` is set to `chrome-extension://<ext-id>/` so only the calling extension can spawn the host. Reload the extension after running it.
@@ -115,19 +115,19 @@ This binary also implements every action documented in browserpass-native's PROT
 
 ```sh
 # Chrome Web Store + AMO + Edge Add-ons IDs for browserpass-extension:
-browserpass-host-rs --install naepdomgkenhinolocfifgehidddafch klbgkfammgfekonebpdghoofedpomgjj
+zpwrchrome-host --install naepdomgkenhinolocfifgehidddafch klbgkfammgfekonebpdghoofedpomgjj
 ```
 
 If the upstream `browserpass-native` package is already installed (apt / brew / nix etc.), uninstall it first — both binaries register under the same NM name and the last one to write the manifest wins.
 
 ### Upgrade
 
-`cargo install browserpass-host-rs --force` — the NM manifest already points at `$CARGO_HOME/bin/browserpass-host-rs` so no re-install is needed.
+`cargo install zpwrchrome-host --force` — the NM manifest already points at `$CARGO_HOME/bin/zpwrchrome-host` so no re-install is needed.
 
 ## Architecture
 
 ```
-browserpass-host-rs/src/
+zpwrchrome-host/src/
 ├── lib.rs                       # pub mod ported + extensions + frame + diag
 ├── frame.rs                     # NM length-prefixed JSON framing
 │                                # Chrome cap: 64 MiB outbound (ext → host),
@@ -158,7 +158,7 @@ browserpass-host-rs/src/
 │   ├── otp.rs                   # shells pass otp
 │   └── search.rs                # host-side fuzzy + substring scoring
 └── bin/
-    └── browserpass_host_rs.rs   # port of main.go + extension dispatch hook
+    └── zpwrchrome_host.rs   # port of main.go + extension dispatch hook
                                  # + --install <ext-id> NM manifest writer
                                  # + --dl-worker <gid> detached worker entry
 ```

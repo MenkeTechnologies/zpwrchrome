@@ -1,5 +1,5 @@
 // End-to-end test for the file-state download manager. Spawns a local
-// HTTP/1.1 server with Range support, invokes browserpass-host-rs with a
+// HTTP/1.1 server with Range support, invokes zpwrchrome-host with a
 // framed `dl.add` request, then polls the state file until the worker
 // reports `done`. Verifies the downloaded bytes match the served payload.
 
@@ -14,7 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_browserpass-host-rs")
+    env!("CARGO_BIN_EXE_zpwrchrome-host")
 }
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -434,7 +434,7 @@ fn spawn_worker_detaches_worker_from_inherited_fds() {
 fn host_ignores_chrome_extension_origin_in_argv() {
     use std::process::{Command, Stdio};
     use std::io::Write;
-    let bin = env!("CARGO_BIN_EXE_browserpass-host-rs");
+    let bin = env!("CARGO_BIN_EXE_zpwrchrome-host");
     let mut child = Command::new(bin)
         .arg("chrome-extension://ojnilaicjhpoamcfconboophcbfpegbk/")
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
@@ -457,7 +457,7 @@ fn host_ignores_chrome_extension_origin_in_argv() {
 #[test]
 fn host_rejects_truly_unknown_argv() {
     use std::process::{Command, Stdio};
-    let bin = env!("CARGO_BIN_EXE_browserpass-host-rs");
+    let bin = env!("CARGO_BIN_EXE_zpwrchrome-host");
     let out = Command::new(bin)
         .arg("--nonsense")
         .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
@@ -470,7 +470,7 @@ fn host_rejects_truly_unknown_argv() {
 
 #[test]
 fn expand_home_resolves_tilde_against_home_env() {
-    use browserpass_host_rs::extensions::dl::expand_home;
+    use zpwrchrome_host::extensions::dl::expand_home;
     // Set a stable HOME for this test; restore at end.
     let prior = std::env::var("HOME").ok();
     std::env::set_var("HOME", "/tmp/zp-expand-home");
@@ -634,7 +634,7 @@ fn dl_resume_leaves_old_worker_alone_when_pid_is_alive() {
 
 #[test]
 fn looks_like_query_garbage_recognizes_cdn_path_components() {
-    use browserpass_host_rs::extensions::dl::looks_like_query_garbage;
+    use zpwrchrome_host::extensions::dl::looks_like_query_garbage;
     // Real basenames pass.
     assert!(!looks_like_query_garbage("True_Samples.zip"));
     assert!(!looks_like_query_garbage("setup.exe"));
@@ -654,7 +654,7 @@ fn looks_like_query_garbage_recognizes_cdn_path_components() {
 
 #[test]
 fn parse_content_disposition_filename_handles_all_three_forms() {
-    use browserpass_host_rs::extensions::dl::parse_content_disposition_filename as p;
+    use zpwrchrome_host::extensions::dl::parse_content_disposition_filename as p;
     assert_eq!(p("attachment; filename=\"True Samples.zip\""), Some("True Samples.zip".into()));
     assert_eq!(p("attachment; filename=plain.zip"),            Some("plain.zip".into()));
     assert_eq!(p("attachment; filename*=UTF-8''True%20Samples.zip"),
@@ -675,7 +675,7 @@ fn parse_content_disposition_filename_handles_all_three_forms() {
 
 #[test]
 fn guess_filename_rejects_query_garbage_so_worker_can_rename_later() {
-    use browserpass_host_rs::extensions::dl::guess_filename;
+    use zpwrchrome_host::extensions::dl::guess_filename;
     // Real filename in path → kept.
     assert_eq!(
         guess_filename("https://example.com/files/setup.exe"),
@@ -694,7 +694,7 @@ fn guess_filename_rejects_query_garbage_so_worker_can_rename_later() {
 
 #[test]
 fn percent_decode_handles_utf8_and_invalid_escapes() {
-    use browserpass_host_rs::extensions::dl::percent_decode;
+    use zpwrchrome_host::extensions::dl::percent_decode;
     assert_eq!(percent_decode("hello%20world"),    "hello world");
     assert_eq!(percent_decode("a%2Fb"),            "a/b");
     // Invalid % escapes left literal.
@@ -706,7 +706,7 @@ fn percent_decode_handles_utf8_and_invalid_escapes() {
 
 #[test]
 fn apply_naming_mask_substitutes_all_tokens() {
-    use browserpass_host_rs::extensions::dl::apply_naming_mask;
+    use zpwrchrome_host::extensions::dl::apply_naming_mask;
     // *name* + *ext* are the workhorse pair.
     assert_eq!(
         apply_naming_mask("*name*.*ext*", "report.pdf", "https://x/r"),
@@ -739,7 +739,7 @@ fn apply_naming_mask_substitutes_all_tokens() {
 
 #[test]
 fn apply_naming_mask_date_format_is_yyyy_mm_dd() {
-    use browserpass_host_rs::extensions::dl::apply_naming_mask;
+    use zpwrchrome_host::extensions::dl::apply_naming_mask;
     let r = apply_naming_mask("*date*", "a.b", "https://x");
     assert!(r.len() == 10 && &r[4..5] == "-" && &r[7..8] == "-", "got {r}");
     // YYYY = 4 digits.

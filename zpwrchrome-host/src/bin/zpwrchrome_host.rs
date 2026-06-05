@@ -12,13 +12,13 @@
 //! exit code = error code on failure, 0 on success.
 #![allow(non_snake_case)]
 
-use browserpass_host_rs::diag;
-use browserpass_host_rs::extensions::{dl, otp, search};
-use browserpass_host_rs::frame;
-use browserpass_host_rs::ported::errors::{self, field};
-use browserpass_host_rs::ported::request::process::request;
-use browserpass_host_rs::ported::response;
-use browserpass_host_rs::ported::version;
+use zpwrchrome_host::diag;
+use zpwrchrome_host::extensions::{dl, otp, search};
+use zpwrchrome_host::frame;
+use zpwrchrome_host::ported::errors::{self, field};
+use zpwrchrome_host::ported::request::process::request;
+use zpwrchrome_host::ported::response;
+use zpwrchrome_host::ported::version;
 use serde_json::Value;
 use std::io;
 
@@ -51,7 +51,7 @@ fn main() {
                 // Register this binary as a native messaging host for every
                 // detected Chromium-family browser on macOS/Linux. Takes the
                 // extension ID(s) as the remaining args.
-                //   browserpass-host-rs --install <ext-id> [<ext-id> ...]
+                //   zpwrchrome-host --install <ext-id> [<ext-id> ...]
                 let ext_ids: Vec<&str> = args.iter().skip(i + 1)
                     .map(|s| s.as_str())
                     .collect();
@@ -89,7 +89,7 @@ fn main() {
             }
             other => {
                 diag::log(&format!("ARG_UNKNOWN arg={other}"));
-                eprintln!("browserpass-host-rs: unknown argument: {other}");
+                eprintln!("zpwrchrome-host: unknown argument: {other}");
                 std::process::exit(2);
             }
         }
@@ -189,7 +189,7 @@ fn main() {
 // it would belong in `ported/` only if upstream Go had an equivalent
 // extension hook, which it doesn't.
 fn process_dispatch(req: &request) {
-    use browserpass_host_rs::ported::request::{configure, delete, fetch, list, save, tree};
+    use zpwrchrome_host::ported::request::{configure, delete, fetch, list, save, tree};
     match req.Action.as_str() {
         "configure" => configure::configure(req),
         "list"      => list::listFiles(req),
@@ -219,14 +219,14 @@ fn process_dispatch(req: &request) {
 
 fn print_help() {
     println!(
-        "browserpass-host-rs — Rust port of browserpass-native v{}\n\n\
+        "zpwrchrome-host — Rust port of browserpass-native v{}\n\n\
          USAGE:\n  \
-         browserpass-host-rs                       read framed JSON requests on stdin\n  \
-         browserpass-host-rs --install <ext-id>    register as Chrome NM host for the given\n  \
+         zpwrchrome-host                       read framed JSON requests on stdin\n  \
+         zpwrchrome-host --install <ext-id>    register as Chrome NM host for the given\n  \
                                                     extension ID(s); writes the manifest into\n  \
                                                     every detected Chromium-family browser dir\n  \
-         browserpass-host-rs -version              print version and exit\n  \
-         browserpass-host-rs -v                    verbose log to stderr\n\n\
+         zpwrchrome-host -version              print version and exit\n  \
+         zpwrchrome-host -v                    verbose log to stderr\n\n\
          Upstream BP actions:   configure, list, tree, fetch, save, delete, echo\n\
          Extension actions:     otp, search\n\
          Download manager:      dl.add/list/pause/resume/cancel/remove/clear,\n\

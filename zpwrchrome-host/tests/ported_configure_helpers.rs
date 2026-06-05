@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use browserpass_host_rs::ported::request::configure::{
+use zpwrchrome_host::ported::request::configure::{
     getDefaultPasswordStorePath, readDefaultSettings,
 };
 

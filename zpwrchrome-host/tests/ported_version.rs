@@ -2,7 +2,7 @@
 // `browserpass-native/version/version.go` exactly. Drift here breaks wire
 // compatibility with browserpass-extension's version-detection logic.
 
-use browserpass_host_rs::ported::version;
+use zpwrchrome_host::ported::version;
 
 #[test]
 fn version_constants_pin_to_upstream_3_1_2() {

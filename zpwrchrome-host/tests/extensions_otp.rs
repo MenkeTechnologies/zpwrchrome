@@ -2,7 +2,7 @@
 // to `pass otp` which requires a real GPG keyring + agent, so it's not
 // covered here — exercised end-to-end via manual install testing.
 
-use browserpass_host_rs::extensions::otp::extract_otpauth;
+use zpwrchrome_host::extensions::otp::extract_otpauth;
 
 #[test]
 fn extracts_otpauth_url_from_entry_body() {

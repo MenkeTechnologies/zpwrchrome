@@ -213,7 +213,7 @@
       <div class="stat-card"><div class="v">15</div><div class="l">Pure Helpers</div></div>
       <div class="stat-card"><div class="v">307</div><div class="l">Repo Files</div></div>
       <div class="stat-card"><div class="v y">4</div><div class="l">Default-Keyed</div></div>
-      <div class="stat-card"><div class="v">v0.11.15</div><div class="l">Version</div></div>
+      <div class="stat-card"><div class="v">v0.12.0</div><div class="l">Version</div></div>
     </div>
 
     <div>
@@ -266,9 +266,9 @@
     <table class="file-table">
       <thead><tr><th>Path</th><th class="num">Lines</th><th class="num">Bytes</th></tr></thead>
       <tbody>
-        <tr><td><code>background.js</code></td><td class="num">2,825</td><td class="num">113,014</td></tr>
-        <tr><td><code>popup.js</code></td><td class="num">1,075</td><td class="num">44,487</td></tr>
-        <tr><td><code>tests/dl-integration.test.js</code></td><td class="num">966</td><td class="num">49,433</td></tr>
+        <tr><td><code>background.js</code></td><td class="num">2,825</td><td class="num">113,006</td></tr>
+        <tr><td><code>popup.js</code></td><td class="num">1,075</td><td class="num">44,479</td></tr>
+        <tr><td><code>tests/dl-integration.test.js</code></td><td class="num">966</td><td class="num">49,429</td></tr>
         <tr><td><code>modal/content.template.js</code></td><td class="num">930</td><td class="num">37,419</td></tr>
         <tr><td><code>popup.css</code></td><td class="num">588</td><td class="num">18,212</td></tr>
         <tr><td><code>tests/static.test.js</code></td><td class="num">560</td><td class="num">26,163</td></tr>
@@ -385,8 +385,8 @@
         <text class="title grpttl host" x="776" y="42">NATIVE HOST (Rust)</text>
 
         <rect class="box host" x="780" y="64" width="262" height="80" />
-        <text class="lbl"  x="792" y="84">browserpass-host-rs</text>
-        <text class="sub"  x="792" y="100">crates.io · v0.7.5</text>
+        <text class="lbl"  x="792" y="84">zpwrchrome-host</text>
+        <text class="sub"  x="792" y="100">crates.io · v0.8.0</text>
         <text class="sub"  x="792" y="114">one process per NM message</text>
         <text class="sub"  x="792" y="128">stdio: length-prefixed JSON</text>
 
@@ -784,13 +784,13 @@
       <div class="card"><h3>Frecency for History</h3><p>visitCount + 2*typedCount over hoursAgo+2. Typed visits weigh 2x (deliberate). Linear decay: ~57x weight to 1h-ago vs 1w-ago.</p></div>
       <div class="card"><h3>Default-key ceiling = 4</h3><p>Chrome MV3 hard cap. Currently 3 used (Alt+T popup, Cmd+E switch-previous-tab, Cmd+Y history). Everything else binds at chrome://extensions/shortcuts.</p></div>
       <div class="card"><h3>Pure helpers in lib/util.js</h3><p>Zero chrome.* refs so they unit-test in plain Node and so they can also be inlined into the content-script modal via UTIL_INLINE_START/END markers + scripts/build-modal.mjs.</p></div>
-      <div class="card"><h3>Pure helpers in browserpass-host-rs/src/extensions/</h3><p>Filename sanitization, unique_dest_path collision handling, subseq search scorer, OTP otpauth extractor — all <code>fn</code>s with no I/O. cargo test exercises them directly. Integration tests stand up a std::net HTTP/1.1 fixture with Range support to drive the detached worker process end-to-end, with cookie-gate + retry-recovery + cancel paths.</p></div>
+      <div class="card"><h3>Pure helpers in zpwrchrome-host/src/extensions/</h3><p>Filename sanitization, unique_dest_path collision handling, subseq search scorer, OTP otpauth extractor — all <code>fn</code>s with no I/O. cargo test exercises them directly. Integration tests stand up a std::net HTTP/1.1 fixture with Range support to drive the detached worker process end-to-end, with cookie-gate + retry-recovery + cancel paths.</p></div>
     </div>
 
   </main>
 
   <footer>
-    zpwrchrome v0.11.15 &middot; MIT &middot; MenkeTechnologies &middot;
+    zpwrchrome v0.12.0 &middot; MIT &middot; MenkeTechnologies &middot;
     <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a> &middot;
     regenerate via <code>scripts/gen.sh</code>
   </footer>

@@ -13,7 +13,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use browserpass_host_rs::extensions::dl::{
+use zpwrchrome_host::extensions::dl::{
     cache_dir, default_download_dir, guess_filename, list_all_jobs, next_gid, read_state,
     sanitize_filename, state_path, unique_dest_path, write_state_atomic, JobState,
 };
