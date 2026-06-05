@@ -920,6 +920,12 @@ document.getElementById("open-find").addEventListener("click", (e) => {
   window.close();
 });
 
+document.getElementById("open-lights").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/lights-off.html") });
+  window.close();
+});
+
 // ── bottom downloads strip (always-visible glance) ────────────────────
 //
 // Reuses the SW's cached dl.snapshot for an instant first paint, then
