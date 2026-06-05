@@ -248,27 +248,25 @@ const CARD_TEMPLATE_KEYS = [
 
 // startNewFromTemplate(opts) — runs the standard new-entry reset and
 // then pre-seeds the form for one of the canonical schemas:
-//   - path  = "<prefix>/<suffix>"  (suffix auto-selected for one-key replace)
-//   - login = opts.login           (seeded with a sensible default)
-//   - url   = opts.url             (seeded with a sensible default)
-//   - kv    = one empty row per opts.keys
-// Marks path as user-edited so maybeAutoDerivePath doesn't overwrite
-// the templated path when the user starts typing login / URL.
+//   - url   = opts.url     (first path segment — e.g. "profile")
+//   - login = opts.login   (second path segment — e.g. "personal")
+//   - path  = derived from url + login → "profile/personal"
+//   - kv    = one empty row per opts.keys (friendly schema names)
+// Path stays in sync with url + login via the existing auto-derive
+// — retyping the login from "personal" to "work" rewrites the path
+// to "profile/work" automatically.
 function startNewFromTemplate(opts) {
   startNew();
-  $("ed-path").value  = `${opts.prefix}/${opts.suffix}`;
-  $("ed-login").value = opts.login || "";
   $("ed-url").value   = opts.url   || "";
-  state.pathTouched = true;            // keep the templated path from being overwritten
-  // Focus the path row with the SUFFIX pre-selected, so one keystroke
-  // replaces it if the user wants a different name (e.g. "work" /
-  // "amex" / "personal-2"), or they can just hit Tab to keep it.
-  $("ed-path").focus();
-  try {
-    const start = opts.prefix.length + 1;
-    const end   = start + opts.suffix.length;
-    $("ed-path").setSelectionRange(start, end);
-  } catch {}
+  $("ed-login").value = opts.login || "";
+  // Let derivePassPath compute path from url + login. Same code path as
+  // the regular auto-derive, so retyping the login (e.g. personal →
+  // work) keeps path in lockstep.
+  maybeAutoDerivePath();
+  // Focus the login row with its default value text-selected, so one
+  // keystroke replaces it.
+  $("ed-login").focus();
+  try { $("ed-login").setSelectionRange(0, ($("ed-login").value || "").length); } catch {}
   // Profile / card entries don't really have a single "password" on
   // line 1 — clear the auto-generated one so the file starts with a
   // free-form label the user can type, or leaves blank.
@@ -282,21 +280,21 @@ function startNewFromTemplate(opts) {
 }
 
 function startNewProfileTemplate() {
+  // URL row = first path segment, login row = second.
+  // Path stays auto-derived so editing URL or login keeps the path
+  // in sync (e.g. login "personal" → "work" rewrites path to
+  // profile/work).
   startNewFromTemplate({
-    prefix: "profile",
-    suffix: "personal",
-    login:  "you@example.com",
-    url:    "https://example.com",
-    keys:   PROFILE_TEMPLATE_KEYS,
+    url:   "profile",
+    login: "personal",
+    keys:  PROFILE_TEMPLATE_KEYS,
   });
 }
 function startNewCardTemplate() {
   startNewFromTemplate({
-    prefix: "creditcard",
-    suffix: "visa",
-    login:  "Cardholder Name",
-    url:    "https://www.visa.com",
-    keys:   CARD_TEMPLATE_KEYS,
+    url:   "creditcard",
+    login: "visa",
+    keys:  CARD_TEMPLATE_KEYS,
   });
 }
 
