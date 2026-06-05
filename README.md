@@ -9,7 +9,7 @@
 
 [![CI](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml)
 [![Manifest](https://img.shields.io/badge/manifest-v3-05d9e8.svg)](manifest.json)
-[![Commands](https://img.shields.io/badge/commands-51-ff2a6d.svg)](#0x02-keyboard-commands)
+[![Commands](https://img.shields.io/badge/commands-52-ff2a6d.svg)](#0x02-keyboard-commands)
 [![Theme](https://img.shields.io/badge/companion-theme-d300c5.svg)](theme/)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zpwrchrome/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -18,11 +18,11 @@
 
 > *"UNIX `pass` in the browser. Segmented download manager that owns the default. JetBrains-style tab switcher. fzf history. Tampermonkey-equivalent userscripts."*
 >
-> *"One extension, 51 commands, zero compromises."*
+> *"One extension, 52 commands, zero compromises."*
 
 ## `[CYBERPUNK HUD]`
 
-A Chrome MV3 extension that bundles four daily-driver tools into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, and a Tampermonkey-equivalent userscript engine. 47 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
+A Chrome MV3 extension that bundles four daily-driver tools into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, and a Tampermonkey-equivalent userscript engine. 48 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
 
 ### [`Live Site`](https://menketechnologies.github.io/zpwrchrome/) &middot; [`Source`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [`Theme`](theme/)
 
@@ -48,7 +48,7 @@ A Chrome MV3 extension that bundles four daily-driver tools into one toolbar ico
 
 ## [0x00] OVERVIEW
 
-`zpwrchrome` is a Chrome MV3 extension that bundles four daily-driver capabilities into one toolbar icon: UNIX `pass` integration, a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher, and fzf history search. 51 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
+`zpwrchrome` is a Chrome MV3 extension that bundles four daily-driver capabilities into one toolbar icon: UNIX `pass` integration, a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher, and fzf history search. 52 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via `chrome.storage.session`, survives service-worker restarts
 - **Alt+T popup** — the cyberpunk HUD with 11 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History / **Pass**), Cmd+1–0 jumps, fzf scoring on every row
@@ -83,7 +83,7 @@ cvv: 123
 ```
 
 - **Segmented download manager** — same Rust host vendors a multi-connection downloader (HEAD probe → N parallel `Range` segments, default 4, pre-allocated dest file). Cookie + User-Agent forwarded from `chrome.cookies.getAll` so logged-in downloads work; transient errors retry with 200 ms × 3ⁿ backoff and resume via `Range` from the segment-local offset; queue mirrored to `chrome.storage.local` so the UI paints instantly across service-worker restarts. Right-click `Download with zpwrchrome` on links / images / video / audio; `dl-paste-url` reads the clipboard via injected `navigator.clipboard.readText`. Live queue UI at `scripts-manager/downloads.html` subscribes to host push events. Filename collisions auto-rename `foo.zip` → `foo (1).zip`. Pure-Rust, vendorable TLS (`ureq`+rustls), no `aria2` or other runtime binary
-- **47 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
+- **48 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
 - **Sub-popup live filter** — type to filter open + closed tabs; `↑`/`↓`/`Enter`/`Delete`/`Esc` nav
 - **Companion Chrome theme** — `theme/` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from `strykelang/docs/hud-static.css` (`--cyan #05d9e8`, `--accent #ff2a6d`, `--magenta #d300c5`, CRT scanlines, neon-border-glow card frames)
@@ -104,7 +104,7 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 1. Open `chrome://extensions`
 2. Enable **Developer mode** (top-right)
 3. Click **Load unpacked**, pick the cloned directory
-4. Open `chrome://extensions/shortcuts` to bind any of the 47 user-configurable commands
+4. Open `chrome://extensions/shortcuts` to bind any of the 48 user-configurable commands
 
 #### Native messaging host (required for `pass`, downloads, screenshots)
 
@@ -130,7 +130,7 @@ To upgrade later: `cargo install zpwrchrome-host --force` — the NM manifest al
 
 ## [0x02] KEYBOARD COMMANDS
 
-Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **47** user-bindable, for **51 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
+Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **48** user-bindable, for **52 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
 
 | Command | Default | Description |
 | --- | --- | --- |
@@ -178,8 +178,9 @@ Chrome’s MV3 manifest allows at most **4** commands with default-suggested key
 | `pass-copy-user` | *(user-set in `chrome://extensions/shortcuts`)* | Copy the best-matching `pass` username for the active tab to the clipboard |
 | `pass-copy-otp` | *(user-set in `chrome://extensions/shortcuts`)* | Copy the TOTP code for the best-matching `pass` entry to the clipboard |
 | `pass-open-url` | *(user-set in `chrome://extensions/shortcuts`)* | Navigate the active tab to the URL stored in the best-matching `pass` entry (parses url/link/website/web/site keys) |
-| `pass-fill-profile` | *(user-set in `chrome://extensions/shortcuts`)* | Fill profile fields (name, address, email, phone, …) on the active tab from a `profile/*` entry in `pass`. Quick-pick overlay when multiple profiles exist. |
-| `pass-fill-cc` | *(user-set in `chrome://extensions/shortcuts`)* | Fill credit-card fields (cc-number, cc-exp, cc-csc, cardholder, …) on the active tab from a `creditcard/*` entry in `pass`. Quick-pick overlay when multiple cards exist. |
+| `pass-fill-identity` | *(user-set in `chrome://extensions/shortcuts`)* | Fill whatever identity fields the active tab has — profile (name/address/email/phone/…) AND credit-card (cc-number/cc-exp/cc-csc/cardholder/…) in one keystroke. Picks the best-matching profile/* and creditcard/* entries (picker if multiple, last-used cached per host). |
+| `pass-fill-profile` | *(user-set in `chrome://extensions/shortcuts`)* | Fill profile fields only (name, address, email, phone, …) on the active tab from a `profile/*` entry in `pass`. Quick-pick overlay when multiple profiles exist. |
+| `pass-fill-cc` | *(user-set in `chrome://extensions/shortcuts`)* | Fill credit-card fields only (cc-number, cc-exp, cc-csc, cardholder, …) on the active tab from a `creditcard/*` entry in `pass`. Quick-pick overlay when multiple cards exist. |
 | `screenshot-full-page` | *(user-set in `chrome://extensions/shortcuts`)* | Full-page screenshot — scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts) |
 | `dl-paste-url` | *(user-set in `chrome://extensions/shortcuts`)* | Download the URL currently on the clipboard via the zpwrchrome segmented downloader |
 | `dl-show-queue` | *(user-set in `chrome://extensions/shortcuts`)* | Open the zpwrchrome download manager queue view |
@@ -321,7 +322,7 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 
 | | |
 | --- | --- |
-| Total chrome.commands | **51** (manifest cap on default keys is 4 — this ext ships 4; the other 47 are user-bindable at `chrome://extensions/shortcuts`) |
+| Total chrome.commands | **52** (manifest cap on default keys is 4 — this ext ships 4; the other 48 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
 | Test suite | **2827** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
