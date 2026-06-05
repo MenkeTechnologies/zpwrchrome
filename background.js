@@ -1762,6 +1762,13 @@ const ISSUE_URL = "https://github.com/MenkeTechnologies/zpwrchrome/issues/new";
 
 chrome.runtime.onInstalled.addListener(() => {
   if (!chrome.contextMenus) return;
+  // Wipe every menu we created in any previous install before adding
+  // the current ones. Without this, entries added in a new version
+  // (e.g. CTX_ACT_READER added after lights-off shipped) can fail
+  // silently if onInstalled re-runs while a menu with a duplicate ID
+  // already exists in the browser's menu state. removeAll guarantees
+  // we start from a clean slate on every update.
+  chrome.contextMenus.removeAll(() => void chrome.runtime.lastError);
   // Link/media menus.
   chrome.contextMenus.create({
     id: CTX_DL_LINK,
