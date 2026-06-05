@@ -187,7 +187,7 @@ Chrome’s MV3 manifest allows at most **4** commands with default-suggested key
 | `pass-fill-profile` | *(user-set in `chrome://extensions/shortcuts`)* | Fill profile fields only (name, address, email, phone, …) on the active tab from a `profile/*` entry in `pass`. Quick-pick overlay when multiple profiles exist. |
 | `pass-fill-cc` | *(user-set in `chrome://extensions/shortcuts`)* | Fill credit-card fields only (cc-number, cc-exp, cc-csc, cardholder, …) on the active tab from a `creditcard/*` entry in `pass`. Quick-pick overlay when multiple cards exist. |
 | `find-in-all-tabs` | *(user-set in `chrome://extensions/shortcuts`)* | Full-text search across every open tab — opens a search UI, scrapes innerText from every http(s) tab in parallel, fuzzy-filters as you type, Enter activates the chosen tab and scrolls to the match (no DevTools required) |
-| `lights-off` | *(user-set in `chrome://extensions/shortcuts`)* | Turn off the lights — dim the entire active page with a near-black overlay while lifting any <video> elements above it (cinema-mode for YouTube and beyond). Click the overlay or press Esc to undim |
+| `lights-off` | *(user-set in `chrome://extensions/shortcuts`)* | Turn off the lights — dim the entire active page with a near-black overlay while lifting any video elements above it (cinema-mode for YouTube and beyond). Click the overlay or press Esc to undim |
 | `reader-mode` | *(user-set in `chrome://extensions/shortcuts`)* | Reader mode — strip the active page to its main article and render it in a strykelang HUD overlay with adjustable typography. Click × in the top bar or press Esc to close |
 | `screenshot-full-page` | *(user-set in `chrome://extensions/shortcuts`)* | Full-page screenshot — scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts) |
 | `dl-paste-url` | *(user-set in `chrome://extensions/shortcuts`)* | Download the URL currently on the clipboard via the zpwrchrome segmented downloader |
@@ -335,7 +335,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 | Total chrome.commands | **54** (manifest cap on default keys is 4 — this ext ships 4; the other 50 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **2921** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
+| Test suite | **2922** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -384,7 +384,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2921 tests across 180 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2922 tests across 180 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
