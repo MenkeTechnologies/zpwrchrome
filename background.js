@@ -125,6 +125,7 @@ async function dispatch(command) {
   if (command === "pass-fill-identity")   return passFillIdentityCombinedActive();
   if (command === "pass-fill-profile")    return passFillIdentityActive("profile");
   if (command === "pass-fill-cc")         return passFillIdentityActive("creditcard");
+  if (command === "find-in-all-tabs")     return openFindAllTabs();
   if (command === "screenshot-full-page") return doScreenshotFullPage();
   if (command === "dl-paste-url")         return dlPasteUrl();
   if (command === "dl-show-queue")        return dlShowQueue();
@@ -142,6 +143,21 @@ async function openPassInPopup() {
 // downloads manager handler.
 async function openPassManager() {
   const url = chrome.runtime.getURL("scripts-manager/pass.html");
+  const existing = await chrome.tabs.query({ url });
+  if (existing.length) {
+    await chrome.tabs.update(existing[0].id, { active: true });
+    if (existing[0].windowId != null) {
+      await chrome.windows.update(existing[0].windowId, { focused: true });
+    }
+    return;
+  }
+  await chrome.tabs.create({ url });
+}
+
+// Find-in-all-tabs — opens the search UI in a new tab (or focuses the
+// existing one). Same pattern as openPassManager / openScriptsManager.
+async function openFindAllTabs() {
+  const url = chrome.runtime.getURL("scripts-manager/find-all.html");
   const existing = await chrome.tabs.query({ url });
   if (existing.length) {
     await chrome.tabs.update(existing[0].id, { active: true });
@@ -1908,6 +1924,96 @@ async function bookmarkActive() {
 }
 
 // ---------------------------------------------------------------------------
+// Find-in-all-tabs — harvest innerText from every open http(s) tab, ship
+// the texts to the UI, on user-select activate the chosen tab + scroll
+// to the first match via the page's own window.find().
+//
+// Cap per tab at HARVEST_MAX_CHARS to keep the bridge response under
+// the SW message-size budget (a few hundred tabs × 1 MB each would
+// blow the runtime.sendMessage envelope).
+
+const FIND_HARVEST_MAX_CHARS = 200_000;
+
+async function scanAllTabs() {
+  const tabs = await chrome.tabs.query({});
+  const httpTabs = tabs.filter((t) => /^https?:/i.test(t.url || ""));
+  // Inject in parallel — each scrape is independent, no shared state.
+  const out = await Promise.all(httpTabs.map(async (t) => {
+    try {
+      const res = await chrome.scripting.executeScript({
+        target: { tabId: t.id, allFrames: false },
+        func:   harvestInnerText,
+        args:   [FIND_HARVEST_MAX_CHARS],
+      });
+      const text = res?.[0]?.result || "";
+      return {
+        tabId:     t.id,
+        windowId:  t.windowId,
+        active:    !!t.active,
+        title:     t.title || "",
+        url:       t.url   || "",
+        favIconUrl: t.favIconUrl || "",
+        text,
+        bytes:     text.length,
+      };
+    } catch (e) {
+      diagPush("find.scrape.err", { tabId: t.id, err: String(e?.message || e) });
+      return null;
+    }
+  }));
+  return out.filter(Boolean);
+}
+
+// Page-injected — must be self-contained.
+function harvestInnerText(cap) {
+  const t = document.body?.innerText || "";
+  return t.length > cap ? t.slice(0, cap) : t;
+}
+
+async function scrollToMatchInTab(tabId, query) {
+  if (!Number.isFinite(tabId) || tabId < 0) return false;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    await chrome.tabs.update(tabId, { active: true });
+    if (tab.windowId != null) {
+      try { await chrome.windows.update(tab.windowId, { focused: true }); } catch {}
+    }
+    if (query) {
+      // window.find() is the cleanest path: it scrolls the page AND
+      // highlights the match. Not in the WHATWG spec but supported in
+      // every Chromium-family browser the extension runs on.
+      await chrome.scripting.executeScript({
+        target: { tabId, allFrames: false },
+        func:   pageFindAndScroll,
+        args:   [query],
+      });
+    }
+    return true;
+  } catch (e) {
+    diagPush("find.scroll.err", { tabId, err: String(e?.message || e) });
+    return false;
+  }
+}
+
+function pageFindAndScroll(query) {
+  try {
+    // Reset any prior find selection so window.find() starts at top.
+    window.getSelection?.()?.removeAllRanges?.();
+    const found = window.find(query, /*caseSensitive*/ false, /*backwards*/ false,
+                              /*wrapAround*/ true, /*wholeWord*/ false,
+                              /*searchInFrames*/ true, /*showDialog*/ false);
+    // If window.find succeeded, the selection is already in view; if
+    // not, fall back to a simple substring scroll on body text.
+    if (!found) {
+      const body = document.body;
+      if (body && body.textContent && body.textContent.toLowerCase().includes(query.toLowerCase())) {
+        body.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    }
+  } catch {}
+}
+
+// ---------------------------------------------------------------------------
 // Wappalyzer-compatible technology detection.
 //
 // On every main_frame navigation we:
@@ -2567,6 +2673,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "history-delete") {
     if (!chrome.history) { sendResponse({ ok: false }); return true; }
     chrome.history.deleteUrl({ url: String(msg.url || "") }, () => sendResponse({ ok: true }));
+    return true;
+  }
+
+  // --- Find-in-all-tabs ---
+  if (msg?.kind === "find.scanAllTabs") {
+    scanAllTabs()
+      .then((tabs) => sendResponse({ ok: true, tabs }))
+      .catch((e)   => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "find.scrollToMatch") {
+    scrollToMatchInTab(Number(msg.tabId), String(msg.query || ""))
+      .then((ok) => sendResponse({ ok: !!ok }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
 
