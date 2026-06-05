@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // user-agent switcher</title>
+  <link rel="stylesheet" href="ua-switcher.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🪪</span>
+    <h1>zpwrchrome <span class="dim">user-agent switcher</span></h1>
+  </div>
+  <label class="toggle">
+    <input type="checkbox" id="enabled">
+    <span class="toggle-slider"></span>
+    <span class="toggle-label" id="toggle-label">off</span>
+  </label>
+</header>
+
+<section class="main">
+  <aside class="left">
+    <div class="card">
+      <h2>Current</h2>
+      <div class="current">
+        <div class="row"><span class="lbl">status</span><span id="cur-status" class="val">—</span></div>
+        <div class="row"><span class="lbl">mode</span>  <span id="cur-mode"   class="val">—</span></div>
+        <div class="row"><span class="lbl">resolved</span><span id="cur-ua" class="val ua">—</span></div>
+      </div>
+      <div class="hint">
+        Override applies to every <strong>outgoing request</strong> via
+        <code>declarativeNetRequest</code>. The page's own
+        <code>navigator.userAgent</code> is <strong>not</strong> changed —
+        servers see the new value, JS introspection in the page does not.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Custom UA</h2>
+      <label class="row block">
+        <span class="lbl">Custom string</span>
+        <textarea id="custom" rows="3" spellcheck="false"
+                  placeholder="paste a User-Agent string here…"></textarea>
+      </label>
+      <div class="row">
+        <button class="btn"        id="b-custom">Use custom</button>
+        <button class="btn ghost"  id="b-clear">Clear override</button>
+      </div>
+    </div>
+  </aside>
+
+  <section class="presets" id="presets"></section>
+</section>
+
+<footer class="botbar">
+  <span id="status" class="dim">—</span>
+  <span class="grow"></span>
+  <span class="dim">spoof affects requests only · reload pages after change</span>
+</footer>
+
+<script src="ua-switcher.js" type="module"></script>
+</body>
+</html>
