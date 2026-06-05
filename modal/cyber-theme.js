@@ -49,8 +49,23 @@
     const intensity = o.intensity || "medium";
     const forceMono = !!o.forceMono;
     const scanlines = !!o.scanlines;
+    const darkMode  = !!o.darkMode;
     const t = PALETTE;
     const parts = [];
+
+    if (darkMode) {
+      parts.push(`
+        html {
+          background-color: #181a1b !important;
+          filter: invert(0.92) hue-rotate(180deg) contrast(0.95) !important;
+        }
+        img, video, picture, canvas, iframe, embed, object,
+        svg image, [style*="background-image"], [style*="background:url"],
+        [style*="background: url"], video::-webkit-media-controls {
+          filter: invert(1) hue-rotate(180deg) !important;
+        }
+      `);
+    }
 
     parts.push(`
       html { color-scheme: dark !important; }
