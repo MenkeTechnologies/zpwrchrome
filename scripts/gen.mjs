@@ -835,6 +835,36 @@ const subsystems = [
     role: "Shadow-DOM overlay matching the popup category set. Dormant by default after v0.4.16 — Cmd+E now opens the toolbar popup directly.",
   },
   {
+    name: "Page-theme injector (content script)",
+    files: ["modal/cyber-theme.js", "lib/cyber-theme-css.js", "scripts-manager/theme-injector.html"],
+    role: "document_start content script. Reads chrome.storage.local[\"theme.injector\"]; paints arbitrary pages with the strykelang HUD palette. Knobs: intensity (subtle/medium/full), dark mode (color-scheme + AUI / generic white-card overrides, no filter:invert), forceMono (icon-font carriers exempted), scanlines. Per-host block/allowlist.",
+  },
+  {
+    name: "Reader mode (on-demand content script)",
+    files: ["modal/reader-mode.js", "lib/reader-mode-css.js", "scripts-manager/reader-mode.html"],
+    role: "document_idle content script. Heuristic article extraction (largest <article> → <main> → densest paragraph cluster outside noise containers); clone sanitized (script/style/iframe/form/inline-handlers stripped); rendered in a fixed overlay with the strykelang palette. Four themes × three font families; A−/A+ live bumpers; Esc closes.",
+  },
+  {
+    name: "Turn off the lights (on-demand content script)",
+    files: ["modal/lights-off.js", "lib/lights-off-css.js", "scripts-manager/lights-off.html"],
+    role: "document_idle content script. Toggle messages from the SW. Full-viewport overlay at z-index 2147483646; every visible <video> + its ancestor chain lifted to z-index 2147483647 + position:relative. Click overlay or Esc undims and restores the original z-index / position values tagged on each touched element.",
+  },
+  {
+    name: "JSON viewer (content script)",
+    files: ["modal/json-viewer.js", "lib/json-format.js"],
+    role: "document_end content script. Auto-detects JSON-served pages, replaces <pre> with a collapsible tree. RFC 6901 pointer copy, prettyPrint / minify toggles, clipboard with execCommand fallback for non-secure contexts.",
+  },
+  {
+    name: "User-Agent switcher",
+    files: ["modal/cyber-theme.js (n/a)", "scripts-manager/ua-switcher.html", "lib/ua-presets.js"],
+    role: "16 vendor-shipped UA presets across 6 families plus a custom field. Backed by a single chrome.declarativeNetRequest dynamic rule (id 1001) that rewrites the User-Agent request header.",
+  },
+  {
+    name: "Find-in-all-tabs",
+    files: ["scripts-manager/find-all.html", "lib/find-snippet.js"],
+    role: "Parallel innerText scrape across every open http(s) tab capped at 200 KB / tab. fzf-fuzzy filter; Enter activates the chosen tab and scrolls to the match via window.find().",
+  },
+  {
     name: "Pure helpers",
     files: ["lib/util.js", "lib/fzf.js"],
     role: "Zero chrome.* refs. MRU stack semantics, hostname parse, jump-index resolution, scenes, opener-tree, domain-hue, frecency, fzf scorer. Unit-tested headless.",
