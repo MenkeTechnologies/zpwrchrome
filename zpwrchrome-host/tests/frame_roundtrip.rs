@@ -1,5 +1,5 @@
 use std::io::Cursor;
-use browserpass_host_rs::frame;
+use zpwrchrome_host::frame;
 
 #[test]
 fn roundtrip_short() {

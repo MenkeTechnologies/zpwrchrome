@@ -1,15 +1,15 @@
 [package]
-name = "browserpass-host-rs"
-version = "0.7.5"
+name = "zpwrchrome-host"
+version = "0.8.0"
 edition = "2021"
 authors = ["MenkeTechnologies <linux.dev25@gmail.com>"]
-description = "Rust port of browserpass-native (PROTOCOL.md v3.1.2) + extension actions for OTP, whole-store search, and a file-state segmented download manager."
+description = "Native messaging host for the zpwrchrome Chrome extension. Rust port of browserpass-native (PROTOCOL.md v3.1.2) + extension actions for OTP, whole-store search, identity/CC autofill, and a file-state segmented download manager."
 license = "MIT"
 repository = "https://github.com/MenkeTechnologies/zpwrchrome"
 homepage = "https://github.com/MenkeTechnologies/zpwrchrome"
-documentation = "https://docs.rs/browserpass-host-rs"
+documentation = "https://docs.rs/zpwrchrome-host"
 readme = "README.md"
-keywords = ["browserpass", "pass", "password-manager", "chrome", "native-messaging"]
+keywords = ["zpwrchrome", "browserpass", "pass", "chrome", "native-messaging"]
 categories = ["command-line-utilities", "web-programming"]
 rust-version = "1.70"
 exclude = [
@@ -20,14 +20,16 @@ exclude = [
 ]
 
 [lib]
-name = "browserpass_host_rs"
+name = "zpwrchrome_host"
 path = "src/lib.rs"
 
-# Single binary — Rust port of browserpass-native (PROTOCOL.md compatible),
-# wire-registers as `com.github.browserpass.native`. See install-browserpass.sh.
+# Single binary — native messaging host for the zpwrchrome Chrome extension.
+# Implements browserpass-native PROTOCOL.md v3.1.2 + extension actions
+# (otp, search, dl.*). Registers under NM host name
+# `com.menketechnologies.zpwrchrome` via `zpwrchrome-host --install <ext-id>`.
 [[bin]]
-name = "browserpass-host-rs"
-path = "src/bin/browserpass_host_rs.rs"
+name = "zpwrchrome-host"
+path = "src/bin/zpwrchrome_host.rs"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

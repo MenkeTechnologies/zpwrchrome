@@ -40,8 +40,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            browserpass-host-rs/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('browserpass-host-rs/Cargo.lock') }}
+            zpwrchrome-host/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('zpwrchrome-host/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 

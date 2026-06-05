@@ -1,4 +1,4 @@
-// End-to-end protocol tests for `browserpass-host-rs`. Spawns the compiled
+// End-to-end protocol tests for `zpwrchrome-host`. Spawns the compiled
 // binary, frames one JSON request on stdin, reads the framed response off
 // stdout, and pins both the response shape AND the exit code (which must
 // match the error code per Go reference errors.ExitWithCode).
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_browserpass-host-rs")
+    env!("CARGO_BIN_EXE_zpwrchrome-host")
 }
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -284,6 +284,6 @@ fn help_flag_prints_usage_and_exits_zero() {
     let out = Command::new(bin()).arg("--help").output().unwrap();
     assert!(out.status.success());
     let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains("browserpass-host-rs"));
+    assert!(s.contains("zpwrchrome-host"));
     assert!(s.contains("version"));
 }

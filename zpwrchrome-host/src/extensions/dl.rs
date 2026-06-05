@@ -1,5 +1,5 @@
 //! File-backed segmented download manager. Each `dl.add` invocation detaches
-//! a worker process (`browserpass-host-rs --dl-worker <gid>`) that owns the
+//! a worker process (`zpwrchrome-host --dl-worker <gid>`) that owns the
 //! actual transfer. State for every job lives at
 //! `${XDG_CACHE_HOME:-$HOME/.cache}/zpwrchrome/dl/gid_NNNNNN.json` so any
 //! short-lived BP host invocation (`dl.list`, `dl.pause`, etc.) can query or

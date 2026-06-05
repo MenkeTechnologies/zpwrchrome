@@ -1,7 +1,7 @@
 // zpwrchrome — pass manager controller
 //
 // CRUD on the UNIX pass store. Talks to the SW (which talks to the
-// browserpass-host-rs NM host). Left pane: store tree. Right pane:
+// zpwrchrome-host NM host). Left pane: store tree. Right pane:
 // entry editor. No third-party deps; no SW state retained client-side.
 
 import "../lib/page-nav.js";
@@ -72,7 +72,7 @@ async function loadTree() {
     state.tree  = buildTree([]);
     renderTree();
     setFooter(`host error: ${e.message}`, "ed-status err");
-    $("tree").innerHTML = `<div class="tree-err">${escapeHtml(e.message)}\n\nrun: cargo install browserpass-host-rs\n     browserpass-host-rs --install &lt;ext-id&gt;</div>`;
+    $("tree").innerHTML = `<div class="tree-err">${escapeHtml(e.message)}\n\nrun: cargo install zpwrchrome-host\n     zpwrchrome-host --install &lt;ext-id&gt;</div>`;
   }
 }
 

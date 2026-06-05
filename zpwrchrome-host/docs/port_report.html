@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--PORT-REPORT-SCHEMA
-This file is the definitive Go→Rust port mapping for browserpass-host-rs.
+This file is the definitive Go→Rust port mapping for zpwrchrome-host.
 
 Machine-readable surface: JSON dataset in <script id="port-report-data"
 type="application/json">. Schema:
@@ -26,8 +26,8 @@ Excluded from this report by design:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>browserpass-host-rs — Port Report</title>
-<meta name="description" content="Go→Rust port mapping for browserpass-host-rs. 30 Go functions, 13 files, 100% coverage, all 23 PROTOCOL.md error codes pinned.">
+<title>zpwrchrome-host — Port Report</title>
+<meta name="description" content="Go→Rust port mapping for zpwrchrome-host. 30 Go functions, 13 files, 100% coverage, all 23 PROTOCOL.md error codes pinned.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -111,7 +111,7 @@ Excluded from this report by design:
 <main>
 
 <header>
-  <h1>browserpass-host-rs &mdash; Port Report
+  <h1>zpwrchrome-host &mdash; Port Report
     <small>Strict 1:1 Go→Rust port of <code>browserpass/browserpass-native</code> v3.1.2 &middot; per-function mapping</small>
   </h1>
 </header>
@@ -146,7 +146,7 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
   <tbody>
     <tr><td><code>errors/errors.go</code></td><td class="right">58</td><td class="right">1</td><td><code>src/ported/errors/errors.rs</code></td><td class="right">73</td><td class="center"><span class="pill green">complete</span></td></tr>
     <tr><td><code>helpers/helpers.go</code></td><td class="right">114</td><td class="right">6</td><td><code>src/ported/helpers/helpers.rs</code></td><td class="right">170</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>main.go</code></td><td class="right">38</td><td class="right">1</td><td><code>src/bin/browserpass_host_rs.rs</code></td><td class="right">174</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>main.go</code></td><td class="right">38</td><td class="right">1</td><td><code>src/bin/zpwrchrome_host.rs</code></td><td class="right">174</td><td class="center"><span class="pill green">complete</span></td></tr>
     <tr><td><code>request/common.go</code></td><td class="right">34</td><td class="right">1</td><td><code>src/ported/request/common.rs</code></td><td class="right">70</td><td class="center"><span class="pill green">complete</span></td></tr>
     <tr><td><code>request/configure.go</code></td><td class="right">169</td><td class="right">3</td><td><code>src/ported/request/configure.rs</code></td><td class="right">227</td><td class="center"><span class="pill green">complete</span></td></tr>
     <tr><td><code>request/delete.go</code></td><td class="right">132</td><td class="right">1</td><td><code>src/ported/request/delete.rs</code></td><td class="right">145</td><td class="center"><span class="pill green">complete</span></td></tr>
@@ -178,7 +178,7 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
     <tr><td><code>GpgEncryptFile</code></td><td>fn</td><td><code>helpers/helpers.go:58</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
     <tr><td><code>DetectGpgRecipients</code></td><td>fn</td><td><code>helpers/helpers.go:82</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
     <tr><td><code>IsDirectoryEmpty</code></td><td>fn</td><td><code>helpers/helpers.go:104</code></td><td><code>ported/helpers/helpers.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
-    <tr><td><code>main</code></td><td>fn</td><td><code>main.go:11</code></td><td><code>bin/browserpass_host_rs.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
+    <tr><td><code>main</code></td><td>fn</td><td><code>main.go:11</code></td><td><code>bin/zpwrchrome_host.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
     <tr><td><code>normalizePasswordStorePath</code></td><td>fn</td><td><code>request/common.go:11</code></td><td><code>ported/request/common.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
     <tr><td><code>configure</code></td><td>fn</td><td><code>request/configure.go:14</code></td><td><code>ported/request/configure.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
     <tr><td><code>getDefaultPasswordStorePath</code></td><td>fn</td><td><code>request/configure.go:150</code></td><td><code>ported/request/configure.rs</code></td><td class="center"><span class="pill green">ok</span></td></tr>
@@ -236,7 +236,7 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
 </table>
 
 <h2><span class="hash">+</span>EXTENSIONS (NOT IN UPSTREAM)</h2>
-<p class="lead">Three additive modules live under <code>src/extensions/</code> — features <code>browserpass-native</code> does not have. <code>browserpass-extension</code> never sends these action names, so wire compat with upstream is preserved. Each is dispatched by <code>bin/browserpass_host_rs.rs</code> before falling through to the ported BP dispatcher.</p>
+<p class="lead">Three additive modules live under <code>src/extensions/</code> — features <code>browserpass-native</code> does not have. <code>browserpass-extension</code> never sends these action names, so wire compat with upstream is preserved. Each is dispatched by <code>bin/zpwrchrome_host.rs</code> before falling through to the ported BP dispatcher.</p>
 <table>
   <thead><tr>
     <th>Module</th><th>Rust LOC</th><th>Action(s)</th><th>Purpose</th>
@@ -244,7 +244,7 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
   <tbody>
     <tr><td><code>src/extensions/otp.rs</code></td><td class="right">120</td><td><code>otp</code></td><td>Shells <code>pass otp &lt;entry&gt;</code> with the matching store's <code>PASSWORD_STORE_DIR</code>. Upstream v3 dropped OTP; we add it back because zpwrchrome's PASS popup needs it.</td></tr>
     <tr><td><code>src/extensions/search.rs</code></td><td class="right">175</td><td><code>search</code></td><td>Host-side fuzzy + substring scoring across every configured store. Faster than client-side scoring for large stores. Pure scorer pinned by <code>tests/extensions_search.rs</code>.</td></tr>
-    <tr><td><code>src/extensions/dl.rs</code></td><td class="right">793</td><td><code>dl.add</code> / <code>dl.list</code> / <code>dl.pause</code> / <code>dl.resume</code> / <code>dl.cancel</code></td><td>File-backed segmented HTTP/HTTPS downloader. <code>dl.add</code> detaches a worker (<code>browserpass-host-rs --dl-worker &lt;gid&gt;</code>); state persists at <code>$XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json</code>. HEAD probe → N parallel Range GETs → atomic state-file rewrites; pause/cancel via state-file flags polled by the worker between chunks. Retry 200ms × 3ⁿ on transient errors. End-to-end verified by <code>tests/extensions_dl_integration.rs</code> against a Range-aware HTTP fixture.</td></tr>
+    <tr><td><code>src/extensions/dl.rs</code></td><td class="right">793</td><td><code>dl.add</code> / <code>dl.list</code> / <code>dl.pause</code> / <code>dl.resume</code> / <code>dl.cancel</code></td><td>File-backed segmented HTTP/HTTPS downloader. <code>dl.add</code> detaches a worker (<code>zpwrchrome-host --dl-worker &lt;gid&gt;</code>); state persists at <code>$XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json</code>. HEAD probe → N parallel Range GETs → atomic state-file rewrites; pause/cancel via state-file flags polled by the worker between chunks. Retry 200ms × 3ⁿ on transient errors. End-to-end verified by <code>tests/extensions_dl_integration.rs</code> against a Range-aware HTTP fixture.</td></tr>
   </tbody>
 </table>
 
@@ -265,7 +265,7 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
 </table>
 
 <footer>
-  Generated for <code>browserpass-host-rs</code> v0.3.0 · Upstream pinned to <code>browserpass/browserpass-native</code> v3.1.2 (packed int <code>3_001_002</code>).
+  Generated for <code>zpwrchrome-host</code> v0.3.0 · Upstream pinned to <code>browserpass/browserpass-native</code> v3.1.2 (packed int <code>3_001_002</code>).
   Repository: <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a>
 </footer>
 
@@ -294,7 +294,7 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
   "files": [
     { "go": "errors/errors.go",       "go_lines": 58,  "go_fns": 1, "rust": "src/ported/errors/errors.rs",      "rust_lines": 73,  "status": "complete" },
     { "go": "helpers/helpers.go",     "go_lines": 114, "go_fns": 6, "rust": "src/ported/helpers/helpers.rs",    "rust_lines": 170, "status": "complete" },
-    { "go": "main.go",                "go_lines": 38,  "go_fns": 1, "rust": "src/bin/browserpass_host_rs.rs",   "rust_lines": 174, "status": "complete" },
+    { "go": "main.go",                "go_lines": 38,  "go_fns": 1, "rust": "src/bin/zpwrchrome_host.rs",   "rust_lines": 174, "status": "complete" },
     { "go": "request/common.go",      "go_lines": 34,  "go_fns": 1, "rust": "src/ported/request/common.rs",     "rust_lines": 70,  "status": "complete" },
     { "go": "request/configure.go",   "go_lines": 169, "go_fns": 3, "rust": "src/ported/request/configure.rs",  "rust_lines": 227, "status": "complete" },
     { "go": "request/delete.go",      "go_lines": 132, "go_fns": 1, "rust": "src/ported/request/delete.rs",     "rust_lines": 145, "status": "complete" },
@@ -314,7 +314,7 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
     { "name": "GpgEncryptFile",              "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 58,  "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
     { "name": "DetectGpgRecipients",         "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 82,  "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
     { "name": "IsDirectoryEmpty",            "kind": "fn", "go_file": "helpers/helpers.go",   "go_line": 104, "rust_file": "src/ported/helpers/helpers.rs",  "status": "ported" },
-    { "name": "main",                        "kind": "fn", "go_file": "main.go",              "go_line": 11,  "rust_file": "src/bin/browserpass_host_rs.rs", "status": "ported" },
+    { "name": "main",                        "kind": "fn", "go_file": "main.go",              "go_line": 11,  "rust_file": "src/bin/zpwrchrome_host.rs", "status": "ported" },
     { "name": "normalizePasswordStorePath",  "kind": "fn", "go_file": "request/common.go",    "go_line": 11,  "rust_file": "src/ported/request/common.rs",   "status": "ported" },
     { "name": "configure",                   "kind": "fn", "go_file": "request/configure.go", "go_line": 14,  "rust_file": "src/ported/request/configure.rs","status": "ported" },
     { "name": "getDefaultPasswordStorePath", "kind": "fn", "go_file": "request/configure.go", "go_line": 150, "rust_file": "src/ported/request/configure.rs","status": "ported" },

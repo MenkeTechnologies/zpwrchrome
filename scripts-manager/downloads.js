@@ -505,7 +505,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 function poll() {
   chrome.runtime.sendMessage({ kind: "dl.list" }, (r) => {
     if (chrome.runtime.lastError) {
-      $status.textContent = `native host: ${chrome.runtime.lastError.message} — run cargo install browserpass-host-rs && browserpass-host-rs --install <ext-id>`;
+      $status.textContent = `native host: ${chrome.runtime.lastError.message} — run cargo install zpwrchrome-host && zpwrchrome-host --install <ext-id>`;
       schedule(2000);
       return;
     }

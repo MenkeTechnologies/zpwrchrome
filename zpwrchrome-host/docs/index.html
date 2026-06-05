@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>browserpass-host-rs — Rust port of browserpass-native + extension actions</title>
+  <title>zpwrchrome-host — Rust port of browserpass-native + extension actions</title>
   <meta name="description" content="Rust port of browserpass-native (PROTOCOL.md v3.1.2) for the browserpass browser extension, plus additive OTP / whole-store search / segmented download manager actions. Single static binary, pure-Rust dependency tree, wire-compatible with upstream Go.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -183,7 +183,7 @@
   <div class="scanline"></div>
 
   <header class="hero">
-    <h1>browserpass-host-rs</h1>
+    <h1>zpwrchrome-host</h1>
     <p class="tagline">Rust port of <a href="https://github.com/browserpass/browserpass-native" style="color: var(--cyan);">browserpass-native</a> &middot; PROTOCOL.md v3.1.2 wire-compatible &middot; single static binary &middot; pure-Rust dep tree &middot; <span style="color: var(--accent);">+3 additive extension actions</span> for OTP, whole-store search, and segmented downloads.<br>Cyberpunk HUD palette by MenkeTechnologies.</p>
     <div class="stat-row">
       <div class="stat"><div class="n">v0.7.5</div><div class="l">version</div></div>
@@ -195,7 +195,7 @@
     </div>
     <div class="ctas">
       <a class="btn btn-primary"   href="https://github.com/MenkeTechnologies/zpwrchrome">▸ source on github</a>
-      <a class="btn btn-secondary" href="https://crates.io/crates/browserpass-host-rs">▸ crates.io</a>
+      <a class="btn btn-secondary" href="https://crates.io/crates/zpwrchrome-host">▸ crates.io</a>
       <a class="btn btn-secondary" href="port_report.html">▸ port report</a>
       <a class="btn btn-secondary" href="#install">▸ install</a>
       <a class="btn btn-secondary" href="#actions">▸ actions</a>
@@ -237,7 +237,7 @@
             <tr><td><code>fetch</code></td><td><code>ported/request/fetch.rs</code></td><td><code>tests/ported_integration.rs</code></td></tr>
             <tr><td><code>save</code></td><td><code>ported/request/save.rs</code></td><td><code>tests/ported_integration.rs</code></td></tr>
             <tr><td><code>delete</code></td><td><code>ported/request/delete.rs</code></td><td><code>tests/ported_integration.rs</code> (incl. parent cleanup)</td></tr>
-            <tr><td><code>echo</code></td><td><code>bin/browserpass_host_rs.rs</code></td><td><code>tests/ported_integration.rs</code></td></tr>
+            <tr><td><code>echo</code></td><td><code>bin/zpwrchrome_host.rs</code></td><td><code>tests/ported_integration.rs</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -276,8 +276,8 @@
     <section class="card install" id="install">
       <h2>install</h2>
       <ol>
-        <li><code>cargo install browserpass-host-rs</code></li>
-        <li>Register the binary for an extension ID: <code>browserpass-host-rs --install &lt;ext-id&gt;</code> &mdash; get the ext-id at <code>chrome://extensions</code> with <strong>Developer mode</strong> enabled.</li>
+        <li><code>cargo install zpwrchrome-host</code></li>
+        <li>Register the binary for an extension ID: <code>zpwrchrome-host --install &lt;ext-id&gt;</code> &mdash; get the ext-id at <code>chrome://extensions</code> with <strong>Developer mode</strong> enabled.</li>
         <li><code>pass</code> support requires GPG configured locally. <code>otp</code> requires <code>pass-otp</code> in <code>$PATH</code>.</li>
         <li>Used by <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">zpwrchrome</a> (a Chrome extension); also a drop-in for the upstream <a href="https://github.com/browserpass/browserpass-extension" style="color: var(--cyan);">browserpass-extension</a> with the OTP / search / download actions silently ignored.</li>
       </ol>
@@ -362,7 +362,7 @@
       <h2>links</h2>
       <ul style="list-style: none; padding: 0; font-size: 13px; line-height: 1.9;">
         <li>▸ <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">github.com/MenkeTechnologies/zpwrchrome</a> &middot; parent extension</li>
-        <li>▸ <a href="https://crates.io/crates/browserpass-host-rs" style="color: var(--cyan);">crates.io/crates/browserpass-host-rs</a></li>
+        <li>▸ <a href="https://crates.io/crates/zpwrchrome-host" style="color: var(--cyan);">crates.io/crates/zpwrchrome-host</a></li>
         <li>▸ <a href="port_report.html" style="color: var(--cyan);">port_report.html</a> &middot; Go→Rust port mapping (machine-readable)</li>
         <li>▸ <a href="https://github.com/browserpass/browserpass-native" style="color: var(--cyan);">browserpass/browserpass-native</a> &middot; upstream Go reference (PROTOCOL.md v3.1.2)</li>
         <li>▸ <a href="https://github.com/browserpass/browserpass-extension" style="color: var(--cyan);">browserpass/browserpass-extension</a> &middot; the browser extension talking to this binary</li>

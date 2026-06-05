@@ -1,13 +1,13 @@
 {
   "name": "zpwrchrome",
-  "version": "0.11.15",
+  "version": "0.12.0",
   "private": true,
   "type": "module",
   "description": "Chrome extension — UNIX `pass` integration (browserpass-compatible), segmented download manager (default Chrome takeover), JetBrains-style tab switcher with scenes + opener-tree + minimap, fzf history search, Tampermonkey-equivalent userscripts. 51 keyboard commands.",
   "author": "MenkeTechnologies",
   "license": "MIT",
   "scripts": {
-    "test": "node --test --test-reporter=spec tests/*.test.js && cargo test --manifest-path browserpass-host-rs/Cargo.toml"
+    "test": "node --test --test-reporter=spec tests/*.test.js && cargo test --manifest-path zpwrchrome-host/Cargo.toml"
   },
   "engines": {
     "node": ">=20"

@@ -582,7 +582,7 @@ test("Help page covers Batch Descriptors + Naming Masks + Rule System + Panic bu
 test("About page surfaces version from runtime manifest + MenkeTechnologies branding + crate link", () => {
   assert.match(aboutHtml, /id="ver"/);
   assert.match(aboutHtml, /MenkeTechnologies/);
-  assert.match(aboutHtml, /crates\.io\/crates\/browserpass-host-rs/);
+  assert.match(aboutHtml, /crates\.io\/crates\/zpwrchrome-host/);
   const aboutJs = read("scripts-manager/dl-about.js");
   assert.match(aboutJs, /chrome\.runtime\.getManifest/);
 });

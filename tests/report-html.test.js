@@ -169,7 +169,7 @@ test("report.html includes an SVG architecture diagram with the three process gr
   // Key components must be labeled (catches accidental relabel drift).
   for (const label of [
     "Service Worker", "Popup", "Extension pages", "Content scripts",
-    "chrome.* APIs", "chrome.storage", "browserpass-host-rs",
+    "chrome.* APIs", "chrome.storage", "zpwrchrome-host",
     "Extension actions", "Detached workers",
     "~/.cache/zpwrchrome/dl/", "~/Downloads/", "~/.password-store/",
   ]) {

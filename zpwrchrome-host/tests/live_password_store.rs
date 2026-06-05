@@ -36,7 +36,7 @@ fn skip_if_no_real_store() -> bool {
 }
 
 fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_browserpass-host-rs")
+    env!("CARGO_BIN_EXE_zpwrchrome-host")
 }
 
 fn frame_bytes(payload: &[u8]) -> Vec<u8> {
