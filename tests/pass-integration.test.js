@@ -29,6 +29,70 @@ test("manifest declares nativeMessaging permission", () => {
     "permissions must include nativeMessaging");
 });
 
+// ─── URL normalization (schemeless entries) ────────────────────────
+// Caught in the wild: pass entry at 10.59.0.17/admin had url="10.59.0.17"
+// (from fallbackUrlFromPath); chrome.tabs.update({url}) interpreted the
+// schemeless string as RELATIVE to the popup's chrome-extension:// origin
+// and opened chrome-extension://<id>/10.59.0.17 instead of http://10.59.0.17.
+
+test("background.js has normalizeOpenUrl helper that defends against schemeless entries", () => {
+  assert.match(bg, /function normalizeOpenUrl\b/, "normalizeOpenUrl must exist");
+  // Both go-button paths (popup + active-tab command) must route through it
+  // before chrome.tabs.update / chrome.tabs.create — never pass entry.url raw.
+  assert.match(bg, /normalizeOpenUrl\(entry\.url\)/,
+    "passOpenUrlForActive + passOpenUrlFromPath must call normalizeOpenUrl");
+  // IPv4 / host:port / localhost defaults: http://. Anything else: https://.
+  assert.match(bg, /isIPv4\s*=\s*\/\^\\d/, "IPv4 detection present");
+  assert.match(bg, /isLocal\s*=\s*\/\^\(localhost/, "localhost detection present");
+  assert.match(bg, /isHostPort\s*=/,                "host:port detection present");
+  assert.match(bg, /`http:\/\/\$\{s\}`/,            "local-ish hosts default to http://");
+  assert.match(bg, /`https:\/\/\$\{s\}`/,           "everything else defaults to https://");
+});
+
+test("fillLoginForm autoSubmit CLICKS a button — never form.submit() (SPA-safe)", () => {
+  // Caught at 10.59.0.17:5000/#/signin: step 1 (username only) got filled,
+  // then form.submit() did a GET navigation that serialized every input
+  // to the URL query string and reloaded the page instead of letting the
+  // SPA router advance to step 2. The autoSubmit branch must look for a
+  // button to click (in-form, ancestor-walk, text-match) and just give up
+  // silently if none exists. Pressing Enter remains the user's escape
+  // hatch.
+  assert.doesNotMatch(bg, /try\s*{\s*form\.submit\(\)/,
+    "form.submit() fallback must not be present anymore");
+  assert.match(bg, /No form\.submit\(\) fallback by design/,
+    "the no-form-submit-by-design comment must be present to flag any re-add");
+  assert.match(bg, /findInForm/,  "submit button finder #1 (in-form)");
+  assert.match(bg, /findNearby/,  "submit button finder #2 (ancestor walk)");
+  assert.match(bg, /findByText/,  "submit button finder #3 (text-match fallback)");
+  // The text matcher must accept the multi-step-login button vocabulary.
+  assert.match(bg, /sign\[-\s\]\?in\|log\[-\s\]\?in\|continue\|next\|submit\|enter/,
+    "submit-button text-match regex must cover sign-in/login/continue/next/submit/enter");
+});
+
+test("popup user/pw/otp buttons route through SW (gesture-window fix)", () => {
+  // Doing navigator.clipboard.writeText() in the popup after a SW + NM +
+  // GPG round-trip drops the user gesture and Chrome silently no-ops.
+  // The buttons must now ask the SW to do both fetch + copy in one
+  // message, and the SW must inject the clipboard write into the active
+  // tab via writeClipboard().
+  assert.match(popup, /kind:\s*"pass\.copyField"/,
+    "popup copy buttons must send pass.copyField to the SW");
+  assert.doesNotMatch(popup,
+    /pass-copy-pw[\s\S]{0,400}copyToClipboard\(data\?\.password/,
+    "popup must NOT call copyToClipboard(data.password) directly anymore");
+  assert.doesNotMatch(popup,
+    /pass-copy-user[\s\S]{0,400}copyToClipboard\(data\?\.username/,
+    "popup must NOT call copyToClipboard(data.username) directly anymore");
+  assert.match(bg, /msg\?\.kind === "pass\.copyField"/,
+    "SW must wire the pass.copyField bridge handler");
+  assert.match(bg, /async function passCopyFieldForPath\b/,
+    "passCopyFieldForPath helper must exist");
+  // Must reuse passClipboardCopy → writeClipboard pipeline that injects
+  // the writeText() into the active tab (kept the gesture context).
+  assert.match(bg, /passCopyFieldForPath[\s\S]+?await passClipboardCopy\(text\)/,
+    "passCopyFieldForPath must route through passClipboardCopy");
+});
+
 test("manifest declares all five pass-* commands", () => {
   for (const name of ["pass-open-popup", "pass-fill", "pass-copy-pw", "pass-copy-user", "pass-copy-otp"]) {
     assert.ok(manifest.commands[name], `manifest missing command "${name}"`);

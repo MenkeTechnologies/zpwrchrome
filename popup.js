@@ -381,33 +381,32 @@ function renderList() {
       });
     });
   });
-  $list.querySelectorAll(".pass-copy-pw").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      passFetch(btn.dataset.path, btn.dataset.store, (err, data) => {
-        if (err) { console.warn("[zpwrchrome] pass.fetch:", err); flashButton(btn, false, "pw"); return; }
-        copyToClipboard(data?.password || "").then((ok) => flashButton(btn, ok, "pw"));
+  // Copy buttons route through the SW's `pass.copyField` bridge, which
+  // fetches the entry and writes via the active tab's clipboard. Doing
+  // the writeText() in the popup itself drops the user-gesture window
+  // across the SW + NM + GPG round-trip — Chrome silently no-ops.
+  const wireCopyBtn = (selector, field, label) => {
+    $list.querySelectorAll(selector).forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        chrome.runtime.sendMessage(
+          { kind: "pass.copyField", path: btn.dataset.path, store: btn.dataset.store || undefined, field },
+          (r) => {
+            if (chrome.runtime.lastError || !r?.ok) {
+              console.warn("[zpwrchrome] pass.copyField", field, ":",
+                chrome.runtime.lastError?.message || r?.err || "(no response)");
+              flashButton(btn, false, label);
+              return;
+            }
+            flashButton(btn, true, label);
+          },
+        );
       });
     });
-  });
-  $list.querySelectorAll(".pass-copy-user").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      passFetch(btn.dataset.path, btn.dataset.store, (err, data) => {
-        if (err) { console.warn("[zpwrchrome] pass.fetch:", err); flashButton(btn, false, "user"); return; }
-        copyToClipboard(data?.username || "").then((ok) => flashButton(btn, ok, "user"));
-      });
-    });
-  });
-  $list.querySelectorAll(".pass-copy-otp").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      passOtpFetch(btn.dataset.path, btn.dataset.store, (err, code) => {
-        if (err) { console.warn("[zpwrchrome] pass.otp:", err); flashButton(btn, false, "otp"); return; }
-        copyToClipboard(code || "").then((ok) => flashButton(btn, ok, "otp"));
-      });
-    });
-  });
+  };
+  wireCopyBtn(".pass-copy-pw",   "password", "pw");
+  wireCopyBtn(".pass-copy-user", "username", "user");
+  wireCopyBtn(".pass-copy-otp",  "otp",      "otp");
   $list.querySelectorAll(".scene-restore-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
