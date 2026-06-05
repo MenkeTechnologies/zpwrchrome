@@ -299,7 +299,7 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 | Total chrome.commands | **51** (manifest cap on default keys is 4 — this ext ships 4; the other 47 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **2810** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
+| Test suite | **2819** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -340,7 +340,7 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2810 tests across 172 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2819 tests across 172 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
