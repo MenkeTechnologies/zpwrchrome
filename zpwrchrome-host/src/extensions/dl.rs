@@ -60,6 +60,13 @@ pub struct JobState {
     pub started_at: u64,            // unix seconds
     #[serde(default)]
     pub elapsed_ms: u64,
+    /// Accumulated milliseconds spent in the paused state across the lifetime
+    /// of this run. Subtracted from raw wall-clock to compute `elapsed_ms`,
+    /// so a download paused for 30s for an hour and then resumed reports the
+    /// active streaming time, not "1h30s". `#[serde(default)]` keeps older
+    /// on-disk state files round-tripping unchanged.
+    #[serde(default)]
+    pub paused_offset_ms: u64,
     #[serde(default)]
     pub paused:     bool,
     #[serde(default)]
@@ -522,6 +529,7 @@ pub fn dl_add(req: &DlRequest) {
         segments,
         started_at: now_secs(),
         elapsed_ms: 0,
+        paused_offset_ms: 0,
         paused:     false,
         cancelled:  false,
         cookies:    req.cookies.clone(),
@@ -1242,14 +1250,28 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     } else {
         run_single(&mut state, total, accept_ranges, start_instant)
     };
+    // Re-read disk before deciding the terminal status. Segmented downloads
+    // only see the cancelled flag in their per-thread disk reads; the local
+    // `state.cancelled` set by run_single's stream_into_file does not exist
+    // in the segmented path, so without this re-read a cancel that arrives
+    // after the segments completed would get clobbered to status="done".
+    if let Ok(disk) = read_state(state.gid) {
+        state.cancelled       = disk.cancelled || state.cancelled;
+        state.paused_offset_ms = disk.paused_offset_ms.max(state.paused_offset_ms);
+    }
     match result {
         Ok(()) => {
             if state.cancelled {
+                state.status = "cancelled".into();
+                state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
+                let _ = write_state_atomic(&state);
+                // Remove the partial bytes on disk, but keep the state file
+                // so the row stays visible under the "cancelled" filter — the
+                // user can clear it explicitly from there.
                 let _ = fs::remove_file(&state.dest);
-                let _ = fs::remove_file(state_path(state.gid)?);
             } else {
                 state.status = "done".into();
-                state.elapsed_ms = start_instant.elapsed().as_millis() as u64;
+                state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
                 let _ = write_state_atomic(&state);
             }
         }
@@ -1359,6 +1381,54 @@ fn check_control(state: &mut JobState) -> ControlSignal {
 
 enum ControlSignal { Continue, Paused, Cancelled }
 
+// Wall-clock since worker start MINUS time spent in the paused state.
+// Saturating subtraction guards against clock skew where paused_offset_ms
+// could (legally? rarely?) exceed raw — never report a backward jump.
+fn effective_elapsed_ms(start: Instant, paused_offset_ms: u64) -> u64 {
+    (start.elapsed().as_millis() as u64).saturating_sub(paused_offset_ms)
+}
+
+/// Partial-update flush for in-progress writes. Reads disk first so any
+/// status / paused / cancelled flips a `dl.pause` or `dl.cancel` invocation
+/// just landed are preserved; the worker overwrites ONLY the four fields
+/// it owns: `done`, `elapsed_ms`, `paused_offset_ms`, `worker_pid`. A naive
+/// `write_state_atomic(local_state)` was racing dl_pause / dl_cancel —
+/// every 250ms the worker flushed its stale `status: "active"` /
+/// `cancelled: false` over the disk write that dl_pause / dl_cancel had
+/// just made, so the UI saw a paused row revert to "active" until the
+/// worker's next `check_control` pass.
+pub fn flush_progress(state: &JobState) -> std::io::Result<()> {
+    match read_state(state.gid) {
+        Ok(mut disk) => {
+            disk.done             = state.done;
+            disk.elapsed_ms       = state.elapsed_ms;
+            disk.paused_offset_ms = state.paused_offset_ms;
+            disk.worker_pid       = state.worker_pid;
+            write_state_atomic(&disk)
+        }
+        // No prior file — fall back to full write so the worker can bootstrap.
+        Err(_) => write_state_atomic(state),
+    }
+}
+
+/// Like `flush_progress` but ALSO writes `status` — used at transition
+/// points the worker is authoritative for (entering pause, exiting pause).
+/// `paused` and `cancelled` still come from disk so a dl.cancel that
+/// landed during the spin-wait isn't lost.
+pub fn flush_status(state: &JobState) -> std::io::Result<()> {
+    match read_state(state.gid) {
+        Ok(mut disk) => {
+            disk.done             = state.done;
+            disk.elapsed_ms       = state.elapsed_ms;
+            disk.paused_offset_ms = state.paused_offset_ms;
+            disk.worker_pid       = state.worker_pid;
+            disk.status           = state.status.clone();
+            write_state_atomic(&disk)
+        }
+        Err(_) => write_state_atomic(state),
+    }
+}
+
 fn run_single(state: &mut JobState, total: u64, accept_ranges: bool, start_instant: Instant) -> Result<(), String> {
     fs::OpenOptions::new()
         .create(true)
@@ -1447,7 +1517,7 @@ fn run_segmented(state: &mut JobState, total: u64, start_instant: Instant) -> Re
     // updated it. Job rows then rendered "DONE  0 B / 5.9 MB" on the
     // manager + popup strip.
     state.done = done_total.load(Ordering::Relaxed);
-    state.elapsed_ms = start_instant.elapsed().as_millis() as u64;
+    state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
     if !errs.is_empty() {
         return Err(errs.join("; "));
     }
@@ -1455,14 +1525,35 @@ fn run_segmented(state: &mut JobState, total: u64, start_instant: Instant) -> Re
 }
 
 fn progress_pump(gid: u64, done_total: Arc<AtomicU64>, start_instant: Instant) {
+    // Pause-edge tracker for segmented mode. Segment workers only read disk
+    // state for pause/cancel flags; they don't mutate paused_offset_ms (any
+    // of them writing concurrently would race). progress_pump is the sole
+    // writer of state in segmented mode, so it owns the bookkeeping.
+    let mut pause_started: Option<Instant> = None;
     loop {
         thread::sleep(STATE_FLUSH_INTERVAL);
+        // Always re-read so we pick up dl.pause / dl.cancel / dl.resume
+        // writes between pumps. We mutate ONLY done / elapsed_ms /
+        // paused_offset_ms before writing back; status / paused / cancelled
+        // pass through unchanged.
         let mut state = match read_state(gid) {
             Ok(s) => s,
             Err(_) => return,
         };
         state.done = done_total.load(Ordering::Relaxed);
-        state.elapsed_ms = start_instant.elapsed().as_millis() as u64;
+        if state.paused {
+            if pause_started.is_none() {
+                pause_started = Some(Instant::now());
+            }
+            // Leave elapsed_ms untouched while paused — frozen at the value
+            // last written before pause began.
+        } else {
+            if let Some(p) = pause_started.take() {
+                state.paused_offset_ms = state.paused_offset_ms
+                    .saturating_add(p.elapsed().as_millis() as u64);
+            }
+            state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
+        }
         let _ = write_state_atomic(&state);
         if matches!(state.status.as_str(), "done" | "failed" | "cancelled") {
             return;
@@ -1509,15 +1600,25 @@ fn stream_into_file(
             ControlSignal::Cancelled => return Err(SegErr::Cancelled),
             ControlSignal::Paused => {
                 state.status = "paused".into();
-                state.elapsed_ms = start_instant.elapsed().as_millis() as u64;
-                let _ = write_state_atomic(state);
+                state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
+                // Write status="paused" through flush_status (read-merge-write)
+                // so a concurrent dl.cancel that just flipped cancelled=true on
+                // disk is preserved — a naive full-state write would clobber it.
+                let _ = flush_status(state);
+                // elapsed_ms is now frozen at the moment of pause. The wait
+                // loop below does NOT touch elapsed_ms; on resume we just
+                // accumulate the pause window into paused_offset_ms so the
+                // post-resume formula picks up where we left off.
+                let pause_start = Instant::now();
                 while state.paused && !state.cancelled {
                     thread::sleep(FLAG_CHECK_INTERVAL);
                     let _ = check_control(state);
                 }
+                state.paused_offset_ms = state.paused_offset_ms
+                    .saturating_add(pause_start.elapsed().as_millis() as u64);
                 if state.cancelled { return Err(SegErr::Cancelled); }
                 state.status = "active".into();
-                let _ = write_state_atomic(state);
+                let _ = flush_status(state);
             }
             ControlSignal::Continue => {}
         }
@@ -1529,8 +1630,11 @@ fn stream_into_file(
                 *downloaded += n as u64;
                 state.done += n as u64;
                 if last_flush.elapsed() >= STATE_FLUSH_INTERVAL {
-                    state.elapsed_ms = start_instant.elapsed().as_millis() as u64;
-                    let _ = write_state_atomic(state);
+                    state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
+                    // Partial flush — leave dl.pause / dl.cancel's writes
+                    // to `status` / `paused` / `cancelled` intact. A full
+                    // write here would race those handlers.
+                    let _ = flush_progress(state);
                     last_flush = Instant::now();
                 }
             }

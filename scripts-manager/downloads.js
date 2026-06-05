@@ -375,6 +375,24 @@ $list.addEventListener("click", async (e) => {
     }
     const gid = Number(actBtn.dataset.gid);
     actBtn.disabled = true;
+    // Optimistic UI update: flip the row's status in-place BEFORE the
+    // SW → native-host round trip so the user gets immediate feedback.
+    // pause/resume/cancel each pay 150-300ms of host startup + IPC; without
+    // this the row looks frozen until poll() lands.
+    const optimisticStatus = (
+      act === "pause"  ? "paused"    :
+      act === "resume" ? "pending"   :
+      act === "cancel" ? "cancelled" : null
+    );
+    if (optimisticStatus) {
+      const job = state.jobs.find((j) => j.gid === gid);
+      if (job && job.status !== optimisticStatus) {
+        job.status = optimisticStatus;
+        renderCats();
+        renderList();
+        renderDrawer();
+      }
+    }
     const r = await sendAct(act, gid);
     actBtn.disabled = false;
     if (!r?.ok) $status.textContent = `${act} failed: ${r?.err || "unknown"}`;
