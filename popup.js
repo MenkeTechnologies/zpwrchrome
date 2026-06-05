@@ -19,7 +19,8 @@ const CATEGORIES = [
   { id: "tree",    label: "Tree (by opener)",  key: "⌘8" },
   { id: "minimap", label: "Minimap",           key: "⌘9" },
   { id: "history", label: "History",           key: "⌘0" },
-  { id: "pass",    label: "Pass",              key: "⌘P" }
+  { id: "pass",    label: "Pass",              key: "⌘P" },
+  { id: "tech",    label: "Tech",              key: "⌘T" }
 ];
 
 // Browsing-history fetch ceiling. chrome.history.search() with text:""
@@ -61,6 +62,15 @@ const state = {
     searchResults: [],
     searchQuery: null,
     searching: false
+  },
+  // Wappalyzer tech detection — lazily loaded for the active tab when
+  // the user enters the Tech category. `hits` is sorted by category +
+  // confidence; `categories` is the upstream id→meta map.
+  tech: {
+    loaded: false,
+    hits: [],
+    categories: {},
+    err: null,
   }
 };
 
@@ -141,6 +151,25 @@ function currentList() {
       visitCount: h.visitCount,
       frecency: h.frecency,
     }));
+  } else if (cat.id === "tech") {
+    if (!state.tech.loaded) {
+      loadTech();
+      return [];
+    }
+    const f = state.filter.toLowerCase();
+    return state.tech.hits
+      .filter((h) => !f
+        || h.name.toLowerCase().includes(f)
+        || (h.cats || []).some((c) => (state.tech.categories[c]?.name || "").toLowerCase().includes(f)))
+      .map((h) => ({
+        kind:  "tech",
+        name:  h.name,
+        title: h.name,
+        version: h.version || "",
+        confidence: h.confidence || 0,
+        cats: (h.cats || []).map((c) => state.tech.categories[c]?.name).filter(Boolean),
+        url:   h.website || "",
+      }));
   } else if (cat.id === "pass") {
     if (!state.pass.loaded) {
       loadPass();
@@ -239,6 +268,14 @@ function renderList() {
       $list.innerHTML = `<div class="empty">${passMsg}</div>`;
       return;
     }
+    if (cat.id === "tech") {
+      let msg;
+      if (!state.tech.loaded)  msg = "detecting…";
+      else if (state.tech.err) msg = `tech detect: ${escapeHtml(state.tech.err)}`;
+      else                     msg = "no technologies detected on this page";
+      $list.innerHTML = `<div class="empty">${msg}</div>`;
+      return;
+    }
     $list.innerHTML = saveForm + `<div class="empty">${isScenes ? "no scenes saved yet" : "no matches"}</div>`;
     if (isScenes) wireSceneForm();
     return;
@@ -247,6 +284,24 @@ function renderList() {
   if (state.rowIdx < 0) state.rowIdx = 0;
 
   $list.innerHTML = saveForm + items.map((t, i) => {
+    if (t.kind === "tech") {
+      const name    = escapeHtml(t.name);
+      const ver     = t.version ? `<span class="tech-version">${escapeHtml(t.version)}</span>` : "";
+      const cats    = (t.cats || []).map((c) => `<span class="tech-cat">${escapeHtml(c)}</span>`).join("");
+      const conf    = t.confidence < 100 ? `<span class="tech-conf">${t.confidence}%</span>` : "";
+      const site    = t.url ? `<a href="${escapeHtml(t.url)}" class="tech-link" target="_blank" rel="noopener" title="${escapeHtml(t.url)}">↗</a>` : "";
+      return `
+        <div class="row tech-row${i === state.rowIdx ? " sel" : ""}"
+             data-idx="${i}" data-kind="tech">
+          <span class="favicon tech-glyph">⚙</span>
+          <div class="title-col">
+            <span class="name">${name}${ver}${conf}</span>
+            <span class="path">${cats || "&nbsp;"}</span>
+          </div>
+          <div class="badges">${site}</div>
+        </div>
+      `;
+    }
     if (t.kind === "pass") {
       const pth   = escapeHtml(t.path);
       const store = escapeHtml(t.store || "");
@@ -426,6 +481,43 @@ function renderList() {
   if (isScenes) wireSceneForm();
   const sel = $list.querySelector(".row.sel");
   if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+
+function loadTech() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tabId = tabs?.[0]?.id;
+    if (typeof tabId !== "number") {
+      state.tech.hits = [];
+      state.tech.loaded = true;
+      state.tech.err = "no active tab";
+      render();
+      return;
+    }
+    chrome.runtime.sendMessage({ kind: "tech.detected", tabId }, (r) => {
+      if (chrome.runtime.lastError) {
+        state.tech.hits = [];
+        state.tech.err = chrome.runtime.lastError.message;
+      } else if (r?.ok) {
+        // Sort hits by category priority (lowest first) → name asc.
+        const cats = state.tech.categories = r.categories || {};
+        const sortKey = (h) => {
+          const c = (h.cats || [])[0];
+          const p = c != null ? (cats[c]?.priority ?? 99) : 99;
+          return [p, h.name];
+        };
+        state.tech.hits = (r.hits || []).slice().sort((a, b) => {
+          const [ap, an] = sortKey(a); const [bp, bn] = sortKey(b);
+          return ap - bp || an.localeCompare(bn);
+        });
+        state.tech.err = null;
+      } else {
+        state.tech.hits = [];
+        state.tech.err = r?.err || "detection failed";
+      }
+      state.tech.loaded = true;
+      render();
+    });
+  });
 }
 
 function loadPass() {

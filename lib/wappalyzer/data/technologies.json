@@ -1,0 +1,258 @@
+{
+  "WordPress": {
+    "cats":     [1],
+    "html":     "<link[^>]+s\\d?\\.wp\\.com",
+    "meta":     { "generator": "WordPress(?:\\s+([0-9.]+))?\\;version:\\1" },
+    "scripts":  ["/wp-(?:content|includes)/"],
+    "icon":     "WordPress.svg",
+    "website":  "https://wordpress.org"
+  },
+  "Drupal": {
+    "cats":     [1],
+    "html":     "<(?:link|style)[^>]+sites/(?:default|all)/(?:themes|modules)/",
+    "headers":  { "X-Drupal-Cache": "", "X-Generator": "Drupal\\s?([\\d.]+)?\\;version:\\1" },
+    "meta":     { "generator": "Drupal\\s?([\\d.]+)?\\;version:\\1" },
+    "icon":     "Drupal.svg",
+    "website":  "https://drupal.org"
+  },
+  "Joomla": {
+    "cats":     [1],
+    "meta":     { "generator": "Joomla!?\\s?([\\d.]+)?\\;version:\\1" },
+    "icon":     "Joomla.svg",
+    "website":  "https://www.joomla.org"
+  },
+  "Ghost": {
+    "cats":     [1],
+    "meta":     { "generator": "Ghost\\s?([\\d.]+)?\\;version:\\1" },
+    "icon":     "Ghost.svg",
+    "website":  "https://ghost.org"
+  },
+
+  "Shopify": {
+    "cats":     [6],
+    "html":     "<link[^>]+//cdn\\.shopify\\.com",
+    "headers":  { "X-Shopify-Stage": "", "X-ShopId": "", "X-ShardId": "" },
+    "scripts":  ["cdn\\.shopify\\.com"],
+    "icon":     "Shopify.svg",
+    "website":  "https://www.shopify.com"
+  },
+  "WooCommerce": {
+    "cats":     [6],
+    "html":     "<link[^>]+plugins/woocommerce",
+    "scripts":  ["/(?:plugins|themes)/woocommerce"],
+    "meta":     { "generator": "WooCommerce\\s?([\\d.]+)?\\;version:\\1" },
+    "implies":  "WordPress",
+    "icon":     "WooCommerce.svg",
+    "website":  "https://woocommerce.com"
+  },
+  "Magento": {
+    "cats":     [6],
+    "html":     "<script[^>]+(?:Mage\\.Cookies|var\\s+Mage)",
+    "cookies":  { "frontend": "" },
+    "icon":     "Magento.svg",
+    "website":  "https://magento.com"
+  },
+
+  "React": {
+    "cats":     [12],
+    "html":     "<[^>]+data-react",
+    "js":       {
+      "React.version":     "(.+)\\;version:\\1",
+      "React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED": ""
+    },
+    "icon":     "React.svg",
+    "website":  "https://reactjs.org"
+  },
+  "Vue.js": {
+    "cats":     [12],
+    "html":     "<[^>]+v-(?:if|for|bind|on|model|show|cloak|html)",
+    "js":       { "Vue.version": "(.+)\\;version:\\1" },
+    "icon":     "Vue.js.svg",
+    "website":  "https://vuejs.org"
+  },
+  "Angular": {
+    "cats":     [12],
+    "html":     "<[^>]+ng-(?:app|controller|repeat|model|if|show|hide)",
+    "js":       { "ng.version.full": "([\\d.]+)\\;version:\\1" },
+    "icon":     "Angular.svg",
+    "website":  "https://angular.io"
+  },
+  "Next.js": {
+    "cats":     [12, 18],
+    "html":     "<script[^>]+/_next/static",
+    "headers":  { "X-Powered-By": "Next\\.js(?:\\s([\\d.]+))?\\;version:\\1" },
+    "js":       { "__NEXT_DATA__": "" },
+    "implies":  "React",
+    "icon":     "Next.js.svg",
+    "website":  "https://nextjs.org"
+  },
+  "Svelte": {
+    "cats":     [12],
+    "scripts":  ["/svelte(?:@[\\d.]+)?/"],
+    "icon":     "Svelte.svg",
+    "website":  "https://svelte.dev"
+  },
+  "Nuxt.js": {
+    "cats":     [12, 18],
+    "html":     "<[^>]+__nuxt|window\\.__NUXT__",
+    "js":       { "__NUXT__": "" },
+    "implies":  "Vue.js",
+    "icon":     "Nuxt.js.svg",
+    "website":  "https://nuxtjs.org"
+  },
+
+  "jQuery": {
+    "cats":     [12, 78],
+    "scripts":  ["jquery[.-]?([\\d.]+)?(?:\\.min)?\\.js\\;version:\\1"],
+    "js":       { "jQuery.fn.jquery": "(.+)\\;version:\\1" },
+    "icon":     "jQuery.svg",
+    "website":  "https://jquery.com"
+  },
+  "Bootstrap": {
+    "cats":     [78],
+    "html":     "<link[^>]+bootstrap(?:\\.min)?\\.css",
+    "scripts":  ["bootstrap(?:[.-]?([\\d.]+))?(?:\\.min)?\\.js\\;version:\\1"],
+    "icon":     "Bootstrap.svg",
+    "website":  "https://getbootstrap.com"
+  },
+
+  "Express": {
+    "cats":     [18],
+    "headers":  { "X-Powered-By": "Express" },
+    "icon":     "Express.svg",
+    "website":  "https://expressjs.com"
+  },
+  "Django": {
+    "cats":     [18],
+    "headers":  { "X-Frame-Options": "" },
+    "cookies":  { "csrftoken": "" },
+    "icon":     "Django.svg",
+    "website":  "https://www.djangoproject.com"
+  },
+  "Ruby on Rails": {
+    "cats":     [18],
+    "headers":  { "X-Powered-By": "Phusion Passenger", "X-Rack-Cache": "" },
+    "cookies":  { "_session_id": "" },
+    "icon":     "Ruby on Rails.svg",
+    "website":  "https://rubyonrails.org"
+  },
+  "Laravel": {
+    "cats":     [18],
+    "cookies":  { "laravel_session": "" },
+    "implies":  "PHP",
+    "icon":     "Laravel.svg",
+    "website":  "https://laravel.com"
+  },
+  "ASP.NET": {
+    "cats":     [18, 27],
+    "headers":  {
+      "X-Powered-By":           "ASP\\.NET",
+      "X-AspNet-Version":       "(.+)\\;version:\\1",
+      "X-AspNetMvc-Version":    "(.+)"
+    },
+    "cookies":  { "ASP.NET_SessionId": "" },
+    "icon":     "ASP.NET.svg",
+    "website":  "https://www.asp.net"
+  },
+
+  "Nginx": {
+    "cats":     [22],
+    "headers":  { "Server": "nginx(?:/([\\d.]+))?\\;version:\\1" },
+    "icon":     "Nginx.svg",
+    "website":  "https://nginx.org"
+  },
+  "Apache HTTP Server": {
+    "cats":     [22],
+    "headers":  { "Server": "Apache(?:/([\\d.]+))?\\;version:\\1" },
+    "icon":     "Apache.svg",
+    "website":  "https://httpd.apache.org"
+  },
+  "Cloudflare": {
+    "cats":     [31],
+    "headers":  { "CF-RAY": "", "Server": "cloudflare" },
+    "icon":     "CloudFlare.svg",
+    "website":  "https://www.cloudflare.com"
+  },
+  "Fastly": {
+    "cats":     [31],
+    "headers":  { "X-Served-By": "cache-", "X-Fastly-Request-ID": "" },
+    "icon":     "Fastly.svg",
+    "website":  "https://www.fastly.com"
+  },
+  "Vercel": {
+    "cats":     [62],
+    "headers":  { "Server": "Vercel", "X-Vercel-Cache": "" },
+    "icon":     "Vercel.svg",
+    "website":  "https://vercel.com"
+  },
+  "Netlify": {
+    "cats":     [62],
+    "headers":  { "Server": "Netlify", "X-NF-Request-ID": "" },
+    "icon":     "Netlify.svg",
+    "website":  "https://www.netlify.com"
+  },
+
+  "PHP": {
+    "cats":     [27],
+    "headers":  { "X-Powered-By": "PHP(?:/([\\d.]+))?\\;version:\\1" },
+    "cookies":  { "PHPSESSID": "" },
+    "icon":     "PHP.svg",
+    "website":  "https://php.net"
+  },
+
+  "Google Analytics": {
+    "cats":     [10],
+    "scripts":  ["googleanalytics\\.com", "google-analytics\\.com", "//www\\.google-analytics\\.com/"],
+    "js":       { "ga.create": "", "_gaq": "" },
+    "icon":     "Google Analytics.svg",
+    "website":  "https://analytics.google.com"
+  },
+  "Google Tag Manager": {
+    "cats":     [42],
+    "scripts":  ["googletagmanager\\.com/gtm\\.js"],
+    "icon":     "Google Tag Manager.svg",
+    "website":  "https://tagmanager.google.com"
+  },
+  "Hotjar": {
+    "cats":     [10],
+    "scripts":  ["static\\.hotjar\\.com"],
+    "js":       { "hj.q": "" },
+    "icon":     "Hotjar.svg",
+    "website":  "https://www.hotjar.com"
+  },
+  "Mixpanel": {
+    "cats":     [10],
+    "scripts":  ["cdn\\.mixpanel\\.com"],
+    "js":       { "mixpanel.__loaded": "" },
+    "icon":     "Mixpanel.svg",
+    "website":  "https://mixpanel.com"
+  },
+
+  "Stripe": {
+    "cats":     [41],
+    "scripts":  ["js\\.stripe\\.com"],
+    "js":       { "Stripe.version": "(.+)\\;version:\\1" },
+    "icon":     "Stripe.svg",
+    "website":  "https://stripe.com"
+  },
+  "PayPal": {
+    "cats":     [41],
+    "scripts":  ["paypal(?:objects)?\\.com"],
+    "icon":     "PayPal.svg",
+    "website":  "https://www.paypal.com"
+  },
+
+  "Sentry": {
+    "cats":     [13, 19],
+    "scripts":  ["sentry-cdn", "browser\\.sentry-cdn\\.com"],
+    "js":       { "Sentry.SDK_VERSION": "(.+)\\;version:\\1" },
+    "icon":     "Sentry.svg",
+    "website":  "https://sentry.io"
+  },
+  "GitHub Pages": {
+    "cats":     [62],
+    "headers":  { "Server": "GitHub\\.com", "X-GitHub-Request-Id": "" },
+    "icon":     "GitHub Pages.svg",
+    "website":  "https://pages.github.com"
+  }
+}
