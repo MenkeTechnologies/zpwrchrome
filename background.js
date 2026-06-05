@@ -26,6 +26,7 @@ import {
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "./lib/bp-pass.js";
 import { computeOtpFromUrl } from "./lib/totp.js";
+import { UA_PRESETS, getPreset, presetGroups, resolveUA } from "./lib/ua-presets.js";
 import { compileFingerprints, detect as wappDetect, scrapeSignals } from "./lib/wappalyzer/engine.js";
 // JSON-module import attributes (`with { type: "json" }`) load
 // unreliably in some Chrome MV3 SW versions — the error surfaces as
@@ -174,6 +175,80 @@ async function openFindAllTabs() {
   }
   await chrome.tabs.create({ url });
 }
+
+// UA switcher — opens the UI page.
+async function openUaSwitcher() {
+  const url = chrome.runtime.getURL("scripts-manager/ua-switcher.html");
+  const existing = await chrome.tabs.query({ url });
+  if (existing.length) {
+    await chrome.tabs.update(existing[0].id, { active: true });
+    if (existing[0].windowId != null) {
+      await chrome.windows.update(existing[0].windowId, { focused: true });
+    }
+    return;
+  }
+  await chrome.tabs.create({ url });
+}
+
+// ────────────────────────────────────────────────────────────────────
+// User-Agent switcher — persisted settings + declarativeNetRequest
+// dynamic rule that rewrites the User-Agent request header.
+//
+// Settings shape (chrome.storage.local key UA_STATE_KEY):
+//   { enabled: bool, mode: "preset" | "custom", presetId?, customUA? }
+// Rule id 1001 is dedicated to the UA modifier (so syncUaRule can
+// idempotently add/remove without touching unrelated DNR rules).
+const UA_STATE_KEY = "ua.state";
+const UA_RULE_ID   = 1001;
+
+async function getUaState() {
+  const bag = await chrome.storage.local.get(UA_STATE_KEY);
+  return bag?.[UA_STATE_KEY] || { enabled: false, mode: "preset", presetId: "chrome-mac", customUA: "" };
+}
+async function setUaState(patch) {
+  const next = { ...(await getUaState()), ...(patch || {}) };
+  await chrome.storage.local.set({ [UA_STATE_KEY]: next });
+  await syncUaRule(next);
+  return next;
+}
+
+async function syncUaRule(state) {
+  if (!chrome.declarativeNetRequest?.updateDynamicRules) return;
+  const ua = resolveUA(state);
+  try {
+    if (!ua) {
+      await chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [UA_RULE_ID],
+        addRules: [],
+      });
+      diagPush("ua.rule.cleared", {});
+      return;
+    }
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [UA_RULE_ID],
+      addRules: [{
+        id: UA_RULE_ID,
+        priority: 1,
+        condition: { urlFilter: "*", resourceTypes: [
+          "main_frame", "sub_frame", "stylesheet", "script", "image", "font",
+          "object", "xmlhttprequest", "ping", "media", "websocket", "other",
+        ] },
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "user-agent", operation: "set", value: ua }],
+        },
+      }],
+    });
+    diagPush("ua.rule.set", { uaLen: ua.length });
+  } catch (e) {
+    diagPush("ua.rule.err", { err: String(e?.message || e) });
+    console.warn("[zpwrchrome] ua-switcher rule sync:", e?.message || e);
+  }
+}
+
+// Run once on SW boot — reapply whatever was persisted so settings
+// survive SW suspension.
+(async () => { try { await syncUaRule(await getUaState()); } catch {} })();
 
 async function passMatchActive() {
   const t = await getActive();
@@ -1602,6 +1677,7 @@ const CTX_ACT_MGR    = "zpc-act-manager";
 const CTX_ACT_SCR    = "zpc-act-scripts";
 const CTX_ACT_PASS   = "zpc-act-pass";
 const CTX_ACT_FIND   = "zpc-act-find";
+const CTX_ACT_UA     = "zpc-act-ua";
 const CTX_ACT_DIAG   = "zpc-act-diag";
 const CTX_ACT_SET    = "zpc-act-settings";
 const CTX_ACT_IFACE  = "zpc-act-interface";
@@ -1658,6 +1734,7 @@ chrome.runtime.onInstalled.addListener(() => {
   create({ id: CTX_ACT_SCR,    title: "Open userscript manager",      contexts: act });
   create({ id: CTX_ACT_PASS,   title: "Open pass manager",            contexts: act });
   create({ id: CTX_ACT_FIND,   title: "Find in all tabs",             contexts: act });
+  create({ id: CTX_ACT_UA,     title: "User-Agent switcher",          contexts: act });
   create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
   create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
   create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
@@ -1685,6 +1762,7 @@ if (chrome.contextMenus) {
       [CTX_ACT_SCR]:    "/scripts-manager/manager.html",
       [CTX_ACT_PASS]:   "/scripts-manager/pass.html",
       [CTX_ACT_FIND]:   "/scripts-manager/find-all.html",
+      [CTX_ACT_UA]:     "/scripts-manager/ua-switcher.html",
       [CTX_ACT_DIAG]:   "/scripts-manager/dl-diag.html",
       [CTX_ACT_SET]:    "/scripts-manager/dl-settings.html",
       [CTX_ACT_IFACE]:  "/scripts-manager/dl-interface.html",
@@ -2699,6 +2777,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "history-delete") {
     if (!chrome.history) { sendResponse({ ok: false }); return true; }
     chrome.history.deleteUrl({ url: String(msg.url || "") }, () => sendResponse({ ok: true }));
+    return true;
+  }
+
+  // --- UA switcher ---
+  if (msg?.kind === "ua.get") {
+    (async () => {
+      const state = await getUaState();
+      sendResponse({ ok: true, state, presets: UA_PRESETS, groups: presetGroups(), resolved: resolveUA(state) });
+    })();
+    return true;
+  }
+  if (msg?.kind === "ua.set") {
+    setUaState(msg.patch || {})
+      .then((state) => sendResponse({ ok: true, state, resolved: resolveUA(state) }))
+      .catch((e)    => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "ua.clear") {
+    setUaState({ enabled: false })
+      .then((state) => sendResponse({ ok: true, state }))
+      .catch((e)    => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
 
