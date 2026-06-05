@@ -1922,12 +1922,31 @@ async function bookmarkActive() {
 // on tabs.onRemoved.
 
 const WAPP_COMPILED = compileFingerprints(WAPP_TECHNOLOGIES);
-const WAPP_JS_LOOKUPS = [];
-for (const tech of Object.values(WAPP_TECHNOLOGIES)) {
-  if (tech.js && typeof tech.js === "object") {
-    for (const k of Object.keys(tech.js)) WAPP_JS_LOOKUPS.push(k);
+// Pre-compute the deduped JS-global key list + dom-rule list so the
+// page-side scrapeSignals only does work for selectors the corpus
+// actually cares about. ~600 KB of arg payload otherwise.
+const WAPP_JS_LOOKUPS = (() => {
+  const set = new Set();
+  for (const tech of Object.values(WAPP_TECHNOLOGIES)) {
+    if (tech.js && typeof tech.js === "object") {
+      for (const k of Object.keys(tech.js)) set.add(k);
+    }
   }
-}
+  return [...set];
+})();
+const WAPP_DOM_RULES = (() => {
+  const out = [];
+  const seen = new Set();
+  for (const rec of WAPP_COMPILED) {
+    for (const rule of rec.dom) {
+      const key = `${rule.selector}|${rule.kind}|${rule.attr || rule.prop || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ selector: rule.selector, kind: rule.kind, attr: rule.attr, prop: rule.prop });
+    }
+  }
+  return out;
+})();
 
 const techHeadersByTab = new Map();   // tabId → { name: value } (last response)
 const techResultsByTab = new Map();   // tabId → [{ name, cats, confidence, version, … }]
@@ -1960,7 +1979,7 @@ async function runTechDetection(tabId) {
     const results = await chrome.scripting.executeScript({
       target: { tabId, allFrames: false },
       func:   scrapeSignals,
-      args:   [WAPP_JS_LOOKUPS],
+      args:   [WAPP_JS_LOOKUPS, WAPP_DOM_RULES],
     });
     pageSignals = results?.[0]?.result || null;
   } catch (e) {
@@ -1973,8 +1992,14 @@ async function runTechDetection(tabId) {
   const hits = wappDetect(signals, WAPP_COMPILED);
   techResultsByTab.set(tabId, hits);
   try {
+    // Per-tab tech badge — orange so it's visually distinct from the
+    // global multiplex badge colors (cyan = downloads, magenta = pass,
+    // yellow = screenshot capture, green = screenshot success).
     await chrome.action?.setBadgeText?.({ tabId, text: hits.length ? String(hits.length) : "" });
-    await chrome.action?.setBadgeBackgroundColor?.({ tabId, color: "#05d9e8" });
+    await chrome.action?.setBadgeBackgroundColor?.({ tabId, color: "#ff8c1a" });
+    if (hits.length) {
+      await chrome.action?.setTitle?.({ tabId, title: `zpwrchrome — ${hits.length} technolog${hits.length === 1 ? "y" : "ies"} detected on this tab` });
+    }
   } catch {}
   diagPush("tech.detected", { tabId, count: hits.length });
   return hits;
