@@ -5,7 +5,7 @@
 // entry editor. No third-party deps; no SW state retained client-side.
 
 import "../lib/page-nav.js";
-import { formatEntry, validatePassPath, buildTree } from "../lib/pass-entry.js";
+import { formatEntry, validatePassPath, buildTree, derivePassPath } from "../lib/pass-entry.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,6 +21,7 @@ const state = {
   filter:     "",              // search box query (case-insensitive substring)
   rawView:    false,           // editor is in raw-textarea mode (bypass formatEntry)
   lastRaw:    "",              // raw bytes from the last fetch, for the raw view
+  pathTouched: false,          // user has typed in the path field — stop auto-deriving
 };
 
 // ─── Bridge ──────────────────────────────────────────────────────────
@@ -206,6 +207,7 @@ function startNew() {
   state.dirty = true;
   state.loaded = false;
   state.lastRaw = "";
+  state.pathTouched = false;
   if (state.rawView) toggleRawView();  // form view for new entries
   renderTree();
   showForm(true);
@@ -221,7 +223,22 @@ function startNew() {
   $("ed-raw").value = "";
   renderExtraFields({});
   setEdStatus("");
-  $("ed-path").focus();
+  // Focus URL first — typical entry-creation order. Path auto-fills as
+  // the user types URL + login until they manually edit the path.
+  $("ed-url").focus();
+}
+
+// Auto-derive the entry path from URL + login while the user is typing.
+// Stops as soon as the user manually edits the path field — we never
+// fight a path the user has typed by hand.
+function maybeAutoDerivePath() {
+  if (state.mode !== "new") return;
+  if (state.pathTouched) return;
+  const derived = derivePassPath({
+    url:   $("ed-url").value,
+    login: $("ed-login").value,
+  });
+  if (derived) $("ed-path").value = derived;
 }
 
 // ─── Extra fields ───────────────────────────────────────────────────
@@ -508,6 +525,13 @@ function wire() {
   ["ed-pw", "ed-login", "ed-url", "ed-otp", "ed-notes", "ed-path"].forEach((id) => {
     $(id).addEventListener("input", markDirty);
   });
+
+  // Auto-derive entry path from URL + login while creating a new entry.
+  // The path field flips to "user-edited" the moment they type into it
+  // by hand, after which we stop overwriting it.
+  $("ed-url").addEventListener("input",   maybeAutoDerivePath);
+  $("ed-login").addEventListener("input", maybeAutoDerivePath);
+  $("ed-path").addEventListener("input",  () => { state.pathTouched = true; });
 
   window.addEventListener("keydown", (ev) => {
     if (ev.target && /^(INPUT|TEXTAREA)$/.test(ev.target.tagName)) return;

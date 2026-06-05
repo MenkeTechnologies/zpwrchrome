@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { formatEntry, validatePassPath, buildTree } from "../lib/pass-entry.js";
+import { formatEntry, validatePassPath, buildTree, derivePassPath } from "../lib/pass-entry.js";
 import { parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "../lib/bp-pass.js";
 
 const reparse = (text) => parseEntry(text);
@@ -231,6 +231,61 @@ test("round-trip: editing the password leaves other fields intact", () => {
   parsed.password = "new";
   const text = formatEntry(parsed);
   assert.equal(text, "new\nlogin: a\nurl: https://x.test/\n");
+});
+
+// ─── derivePassPath — new-entry path auto-population ────────────────
+test("derivePassPath: scheme + path + www stripped from URL", () => {
+  assert.equal(derivePassPath({ url: "https://amazon.com/foo",   login: "alice" }), "amazon.com/alice");
+  assert.equal(derivePassPath({ url: "https://www.adobe.com/",   login: "j@x.edu" }), "adobe.com/j@x.edu");
+  assert.equal(derivePassPath({ url: "http://api.example.com",   login: "root"  }), "api.example.com/root");
+});
+
+test("derivePassPath: scheme-less URL works", () => {
+  assert.equal(derivePassPath({ url: "adobe.com",   login: "alice" }), "adobe.com/alice");
+  assert.equal(derivePassPath({ url: "github.com/o", login: "bob"  }), "github.com/bob");
+});
+
+test("derivePassPath: userinfo (foo@host) is stripped", () => {
+  assert.equal(derivePassPath({ url: "https://bob:pw@amazon.com/x", login: "alice" }), "amazon.com/alice");
+});
+
+test("derivePassPath: port is stripped", () => {
+  assert.equal(derivePassPath({ url: "https://localhost:8080/x", login: "dev" }), "localhost/dev");
+});
+
+test("derivePassPath: missing URL returns null", () => {
+  assert.equal(derivePassPath({ url: "",    login: "alice" }), null);
+  assert.equal(derivePassPath({              login: "alice" }), null);
+  assert.equal(derivePassPath({}),                              null);
+  assert.equal(derivePassPath(null),                            null);
+});
+
+test("derivePassPath: missing login returns just the host (still a valid 1-segment path)", () => {
+  assert.equal(derivePassPath({ url: "https://example.com/" }),               "example.com");
+  assert.equal(derivePassPath({ url: "https://example.com/", login: "" }),    "example.com");
+  assert.equal(derivePassPath({ url: "https://example.com/", login: "  " }),  "example.com");
+});
+
+test("derivePassPath: whitespace + embedded slashes in login are stripped", () => {
+  // The login is used as a single path segment — slashes inside it would
+  // create unintended directories, so we strip them.
+  assert.equal(derivePassPath({ url: "amazon.com", login: " alice " }), "amazon.com/alice");
+  assert.equal(derivePassPath({ url: "amazon.com", login: "team/admin" }), "amazon.com/teamadmin");
+});
+
+test("derivePassPath: NUL bytes are scrubbed", () => {
+  assert.equal(derivePassPath({ url: "amazon\0.com", login: "ali\0ce" }), "amazon.com/alice");
+});
+
+test("derivePassPath: output clears validatePassPath for realistic inputs", () => {
+  for (const [url, login] of [
+    ["https://amazon.com",                "alice"],
+    ["https://www.adobe.com/",            "j@x.edu"],
+    ["http://api.example.com:9000/x?y=1", "service-account"],
+  ]) {
+    const p = derivePassPath({ url, login });
+    assert.equal(validatePassPath(p), null, `should validate: ${p}`);
+  }
 });
 
 test("validatePassPath: accepts normal nested paths", () => {
