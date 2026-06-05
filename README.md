@@ -9,7 +9,7 @@
 
 [![CI](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml)
 [![Manifest](https://img.shields.io/badge/manifest-v3-05d9e8.svg)](manifest.json)
-[![Commands](https://img.shields.io/badge/commands-51-ff2a6d.svg)](#0x02-keyboard-commands)
+[![Commands](https://img.shields.io/badge/commands-52-ff2a6d.svg)](#0x02-keyboard-commands)
 [![Theme](https://img.shields.io/badge/companion-theme-d300c5.svg)](theme/)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zpwrchrome/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -18,11 +18,11 @@
 
 > *"UNIX `pass` in the browser. Segmented download manager that owns the default. JetBrains-style tab switcher. fzf history. Tampermonkey-equivalent userscripts."*
 >
-> *"One extension, 51 commands, zero compromises."*
+> *"One extension, 52 commands, zero compromises."*
 
 ## `[CYBERPUNK HUD]`
 
-A Chrome MV3 extension that bundles six daily-driver tools into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, a Tampermonkey-equivalent userscript engine, a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG, and a Wappalyzer-compatible technology detector that fingerprints the active page against a vendored 3,993-tech corpus. 47 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
+A Chrome MV3 extension that bundles six daily-driver tools into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, a Tampermonkey-equivalent userscript engine, a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG, and a Wappalyzer-compatible technology detector that fingerprints the active page against a vendored 3,993-tech corpus. 48 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
 
 ### [`Live Site`](https://menketechnologies.github.io/zpwrchrome/) &middot; [`Source`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [`Theme`](theme/)
 
@@ -48,7 +48,7 @@ A Chrome MV3 extension that bundles six daily-driver tools into one toolbar icon
 
 ## [0x00] OVERVIEW
 
-`zpwrchrome` is a Chrome MV3 extension that bundles six daily-driver capabilities into one toolbar icon: UNIX `pass` integration (with full-page CRUD manager + profile / credit-card autofill), a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher with fzf history search, a Tampermonkey-equivalent userscript engine, full-page screenshot capture, and a Wappalyzer-compatible technology detector. 51 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
+`zpwrchrome` is a Chrome MV3 extension that bundles six daily-driver capabilities into one toolbar icon: UNIX `pass` integration (with full-page CRUD manager + profile / credit-card autofill), a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher with fzf history search, a Tampermonkey-equivalent userscript engine, full-page screenshot capture, and a Wappalyzer-compatible technology detector. 52 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via `chrome.storage.session`, survives service-worker restarts
 - **Alt+T popup** — the cyberpunk HUD with 12 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History / **Pass** / **Tech**), Cmd+1–0 jumps for the first ten, Cmd+P → Pass, Cmd+K → Tech, fzf scoring on every row
@@ -86,7 +86,7 @@ cvv: 123
 - **Full-page screenshot** — `screenshot-full-page` command (or right-click toolbar icon → "Full-page screenshot (this tab)") captures the active tab edge-to-edge, including parts off-screen. Strategy: scroll the page in viewport-sized steps with a 200 px overlap, capture each viewport via `chrome.tabs.captureVisibleTab` (Chrome's hard ~2 Hz quota → 600 ms gap + exponential-backoff retry: 1.1 s → 2.5 s → 5 s), pin every `position: fixed` / `sticky` element to `static` during capture so stickies don't appear N times, stitch tiles on an `OffscreenCanvas` in the SW, stream the PNG to the host in 512 KiB base64 chunks via `dl.writeFileChunk` (Chrome's host → ext native-messaging cap is 1 MiB), then rename the upload `.part` file to the chosen filename in your downloads dir. Hard caps: 60 tiles, ~16k × 16k output pixels. No `chrome.debugger` permission required (so no permanent yellow "DevTools attached" banner)
 - **Wappalyzer-compatible technology detection** — `lib/wappalyzer/engine.js` runs the vendored 3,993-fingerprint HTTPArchive/wappalyzer corpus (`lib/wappalyzer/data/technologies.json`, GPL-3 isolated under `LICENSE-WAPPALYZER`; engine code stays MIT). On every main_frame navigation: `webRequest.onCompleted` captures response headers per tabId; `webNavigation.onCompleted` injects `scrapeSignals` to harvest HTML / scripts / meta / cookies / window globals + pre-flights all 1,045 unique dom-selector rules in one pass; `detect()` runs the merged signals against the compiled corpus, implementing every matcher group (html / scripts / scriptSrc / text / url / meta / headers / cookies / js / dom — exists, text, attributes, properties) + implies/requires/excludes graph rewrites + `\\;version:\\1` backref resolution. The match count shares one toolbar badge with downloads + pass via `applyMultiplexedBadge` (see below); Cmd+K from the popup jumps to the 12th `Tech` category; `⤓ Export` ships the detected stack as JSON (filename `tech-<host>-<iso>.json`). `scripts/vendor-wappalyzer.sh` re-runs the corpus merge from a fresh upstream clone
 - **Three-channel toolbar badge** — single Chrome action badge multiplexes downloads (cyan), tech detection (orange), and pass matches (magenta). The visible NUMBER is the dominant counter by priority (downloads → tech → pass) and the COLOR follows it. Trailing letter tags spell out which other counters are coexisting: `t` = tech also detected, `l` = login (pass) also matching. So a tab with 10 active downloads + 5 tech + 2 pass renders `10tl`; 5 tech + 2 pass renders `5l`; 2 pass alone renders `2`. Tooltip spells out the plain-English breakdown for any state. `refreshActiveTabBadge` is the one orchestrator that repaints on `chrome.tabs.onActivated` + `chrome.tabs.onUpdated`
-- **47 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
+- **48 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
 - **Sub-popup live filter** — type to filter open + closed tabs; `↑`/`↓`/`Enter`/`Delete`/`Esc` nav
 - **Companion Chrome theme** — `theme/` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from `strykelang/docs/hud-static.css` (`--cyan #05d9e8`, `--accent #ff2a6d`, `--magenta #d300c5`, CRT scanlines, neon-border-glow card frames)
@@ -107,7 +107,7 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 1. Open `chrome://extensions`
 2. Enable **Developer mode** (top-right)
 3. Click **Load unpacked**, pick the cloned directory
-4. Open `chrome://extensions/shortcuts` to bind any of the 47 user-configurable commands
+4. Open `chrome://extensions/shortcuts` to bind any of the 48 user-configurable commands
 
 #### Native messaging host (required for `pass`, downloads, screenshots)
 
@@ -133,7 +133,7 @@ To upgrade later: `cargo install zpwrchrome-host --force` — the NM manifest al
 
 ## [0x02] KEYBOARD COMMANDS
 
-Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **47** user-bindable, for **51 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
+Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **48** user-bindable, for **52 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
 
 | Command | Default | Description |
 | --- | --- | --- |
@@ -183,6 +183,7 @@ Chrome’s MV3 manifest allows at most **4** commands with default-suggested key
 | `pass-fill-identity` | *(user-set in `chrome://extensions/shortcuts`)* | Fill whatever identity fields the active tab has — profile (name/address/email/phone/…) AND credit-card (cc-number/cc-exp/cc-csc/cardholder/…) in one keystroke. Picks the best-matching profile/* and creditcard/* entries (picker if multiple, last-used cached per host). |
 | `pass-fill-profile` | *(user-set in `chrome://extensions/shortcuts`)* | Fill profile fields only (name, address, email, phone, …) on the active tab from a `profile/*` entry in `pass`. Quick-pick overlay when multiple profiles exist. |
 | `pass-fill-cc` | *(user-set in `chrome://extensions/shortcuts`)* | Fill credit-card fields only (cc-number, cc-exp, cc-csc, cardholder, …) on the active tab from a `creditcard/*` entry in `pass`. Quick-pick overlay when multiple cards exist. |
+| `find-in-all-tabs` | *(user-set in `chrome://extensions/shortcuts`)* | Full-text search across every open tab — opens a search UI, scrapes innerText from every http(s) tab in parallel, fuzzy-filters as you type, Enter activates the chosen tab and scrolls to the match (no DevTools required) |
 | `screenshot-full-page` | *(user-set in `chrome://extensions/shortcuts`)* | Full-page screenshot — scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts) |
 | `dl-paste-url` | *(user-set in `chrome://extensions/shortcuts`)* | Download the URL currently on the clipboard via the zpwrchrome segmented downloader |
 | `dl-show-queue` | *(user-set in `chrome://extensions/shortcuts`)* | Open the zpwrchrome download manager queue view |
@@ -326,10 +327,10 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 
 | | |
 | --- | --- |
-| Total chrome.commands | **51** (manifest cap on default keys is 4 — this ext ships 4; the other 47 are user-bindable at `chrome://extensions/shortcuts`) |
+| Total chrome.commands | **52** (manifest cap on default keys is 4 — this ext ships 4; the other 48 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **2823** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
+| Test suite | **2835** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -372,7 +373,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2823 tests across 174 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2835 tests across 175 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
