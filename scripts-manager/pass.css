@@ -54,6 +54,11 @@ body {
 }
 .tbtn:hover { background: var(--bg-hover); color: var(--cyan); border-color: var(--cyan); }
 .tbtn:active { background: var(--cyan); color: var(--bg-primary); }
+.tbtn.tmpl {
+  width: auto; padding: 0 10px;
+  font-size: 11px; letter-spacing: 0.5px;
+  text-transform: lowercase;
+}
 .tsep { width: 1px; height: 22px; background: var(--border); margin: 0 6px; }
 .searchwrap { display: flex; justify-content: flex-end; }
 .search {

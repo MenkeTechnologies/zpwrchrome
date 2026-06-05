@@ -228,6 +228,53 @@ function startNew() {
   $("ed-url").focus();
 }
 
+// ─── Templates ──────────────────────────────────────────────────────
+// Profile + credit-card entries follow a conventional schema. The
+// template buttons drop empty kv-rows for each schema key so the user
+// only has to type values — keys are pre-populated. Friendly synonym
+// names are used (city / state / zipcode / cvv) — the recognizer
+// resolves them through TOKEN_SYNONYMS in lib/identity-tokens.js.
+const PROFILE_TEMPLATE_KEYS = [
+  "given-name", "family-name", "email", "phone",
+  "address", "city", "state", "zipcode", "country",
+];
+const CARD_TEMPLATE_KEYS = [
+  "cc-name", "cc-number", "cc-exp-month", "cc-exp-year", "cvv",
+];
+
+// startNewFromTemplate(prefix, keys) — runs the standard new-entry
+// reset and then pre-seeds: (a) path = "<prefix>/" so the user only
+// types the suffix, (b) one empty kv-row per template key, (c) marks
+// the path as user-edited so maybeAutoDerivePath doesn't overwrite
+// the prefix. Focus lands on the path row so the user types the suffix
+// first (the natural completion).
+function startNewFromTemplate(prefix, keys) {
+  startNew();
+  $("ed-path").value = `${prefix}/`;
+  state.pathTouched = true;            // keep the prefix from being overwritten
+  // Move cursor to the end of the path for one-keystroke completion.
+  const len = $("ed-path").value.length;
+  $("ed-path").focus();
+  try { $("ed-path").setSelectionRange(len, len); } catch {}
+  // Profile / card entries don't really have a single "password" on
+  // line 1 — clear the auto-generated one so the file starts with a
+  // free-form label the user can type, or leaves blank.
+  $("ed-pw").value = "";
+  $("ed-pw").type  = "text";          // show what they type — it's not secret
+  state.pwShown    = true;
+  // Pre-seed the kv-list with one empty row per template key.
+  const list = $("kv-list");
+  list.innerHTML = "";
+  for (const k of keys) list.appendChild(makeKvRow(k, ""));
+}
+
+function startNewProfileTemplate() {
+  startNewFromTemplate("profile", PROFILE_TEMPLATE_KEYS);
+}
+function startNewCardTemplate() {
+  startNewFromTemplate("creditcard", CARD_TEMPLATE_KEYS);
+}
+
 // Auto-derive the entry path from URL + login while the user is typing.
 // Stops as soon as the user manually edits the path field — we never
 // fight a path the user has typed by hand.
@@ -481,6 +528,8 @@ function escapeHtml(s) {
 // ─── Wire up ────────────────────────────────────────────────────────
 function wire() {
   $("t-new").addEventListener("click", startNew);
+  $("t-new-profile").addEventListener("click", startNewProfileTemplate);
+  $("t-new-card").addEventListener("click",    startNewCardTemplate);
   $("t-refresh").addEventListener("click", loadTree);
   $("t-expand").addEventListener("click", () => { state.collapsed.clear(); renderTree(); });
   $("t-collapse").addEventListener("click", () => {
