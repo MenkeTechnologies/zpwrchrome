@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // reader mode</title>
+  <link rel="stylesheet" href="reader-mode.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">📰</span>
+    <h1>zpwrchrome <span class="dim">reader mode</span></h1>
+  </div>
+  <div class="hint dim">
+    trigger from the toolbar context menu — <em>Reader mode (this tab)</em> — or bind <code>reader-mode</code> at chrome://extensions/shortcuts
+  </div>
+</header>
+
+<section class="main">
+  <aside class="left">
+    <div class="card">
+      <h2>Theme</h2>
+      <div class="radios" id="theme">
+        <label><input type="radio" name="theme" value="cyberpunk"     checked> <span>cyberpunk — strykelang HUD palette (default)</span></label>
+        <label><input type="radio" name="theme" value="classic-dark">         <span>classic dark — neutral dark grey</span></label>
+        <label><input type="radio" name="theme" value="classic-light">        <span>classic light — neutral cream</span></label>
+        <label><input type="radio" name="theme" value="sepia">                <span>sepia — warm paper</span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Typography</h2>
+      <div class="radios" id="font">
+        <label><input type="radio" name="font" value="mono"  checked> <span>monospace — Share Tech Mono</span></label>
+        <label><input type="radio" name="font" value="serif">         <span>serif — Iowan Old Style / Baskerville</span></label>
+        <label><input type="radio" name="font" value="sans">          <span>sans — system / Inter</span></label>
+      </div>
+      <label class="block">
+        <span class="lbl">Font size <span id="fontSize-val">16</span> px</span>
+        <input type="range" id="fontSize" min="12" max="28" step="1" value="16">
+      </label>
+      <label class="block">
+        <span class="lbl">Line width <span id="lineWidth-val">65</span> ch</span>
+        <input type="range" id="lineWidth" min="40" max="120" step="1" value="65">
+      </label>
+      <label class="block">
+        <span class="lbl">Line height <span id="lineHeight-val">1.65</span></span>
+        <input type="range" id="lineHeight" min="1.2" max="2.4" step="0.05" value="1.65">
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="scanlines">
+        <span>CRT scanline overlay</span>
+      </label>
+    </div>
+  </aside>
+
+  <section class="preview">
+    <div class="preview-bar">
+      <span class="dim">live preview · these settings apply to the reader-mode overlay</span>
+    </div>
+    <div class="preview-stage" id="preview-stage">
+      <div class="preview-overlay" id="zpwr-reader-mode">
+        <div class="zpwr-reader-bar">
+          <span id="prev-site">example.com</span>
+          <span>3 min read</span>
+          <span class="grow"></span>
+          <button class="close" type="button">×</button>
+        </div>
+        <div class="zpwr-reader-article">
+          <h1 class="zpwr-reader-title">The killer feature</h1>
+          <div class="zpwr-reader-meta">
+            Jane Doe<span class="sep">·</span>
+            example.com<span class="sep">·</span>
+            2026-06-05
+          </div>
+          <div class="zpwr-reader-content">
+            <p>Reader mode strips the active page to its main article and re-renders it inside a fixed-position overlay with the strykelang HUD palette. The original DOM is untouched — the overlay sits on top.</p>
+            <h2>How it works</h2>
+            <p>The content script picks an article root via a three-step heuristic: largest <code>&lt;article&gt;</code>, then <code>&lt;main&gt;</code> / <code>[role="main"]</code>, then the densest paragraph cluster outside noise containers. The clone gets sanitized (scripts / iframes / nav / forms / inline event handlers stripped) and rendered with the chosen typography.</p>
+            <blockquote>The point isn't to fight the page, but to extract its idea.</blockquote>
+            <p>Use the A−/A+ buttons in the top bar to bump font size live; the setting persists. Press <kbd>Esc</kbd> to close.</p>
+            <pre><code>// Heuristic: count &lt;p&gt; + &lt;h*&gt; in each candidate
+const score = paragraphs * 3 + headings;</code></pre>
+            <p>This preview pane is scoped under <code>#preview-stage</code> so the page's own chrome isn't restyled. Pick a theme on the left to see it update here in real time.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</section>
+
+<footer class="botbar">
+  <span id="status" class="dim">—</span>
+  <span class="grow"></span>
+  <span class="dim">settings persist in <code>chrome.storage.local["reader.mode"]</code>; the content script reads them on every open</span>
+</footer>
+
+<style id="zpwr-reader-mode-style"></style>
+<script src="reader-mode.js" type="module"></script>
+</body>
+</html>
