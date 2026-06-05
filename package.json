@@ -1,6 +1,6 @@
 {
   "name": "zpwrchrome",
-  "version": "0.22.0",
+  "version": "0.22.1",
   "private": true,
   "type": "module",
   "description": "Chrome extension — UNIX `pass` integration (browserpass-compatible), segmented download manager (default Chrome takeover), JetBrains-style tab switcher with scenes + opener-tree + minimap, fzf history search, Tampermonkey-equivalent userscripts, full-page screenshot, Wappalyzer-compatible tech detection, cyberpunk page-theme injector, Turn Off the Lights cinema dimmer, JSON viewer, UA switcher, find-in-all-tabs. 54 keyboard commands.",
