@@ -160,7 +160,7 @@ ${banner}
 
 ## \`[CYBERPUNK HUD]\`
 
-A Chrome MV3 extension that bundles four daily-driver tools into one toolbar icon: a browserpass-compatible UNIX \`pass\` integration (fill / copy / OTP / auto-submit / basic-auth injection), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel \`Range\` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to ${5000} browser-history entries, and a Tampermonkey-equivalent userscript engine. ${userBound} commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
+A Chrome MV3 extension that bundles five daily-driver tools into one toolbar icon: a browserpass-compatible UNIX \`pass\` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel \`Range\` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to ${5000} browser-history entries, a Tampermonkey-equivalent userscript engine, and a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG. ${userBound} commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
 
 ### [\`Live Site\`](https://menketechnologies.github.io/zpwrchrome/) &middot; [\`Source\`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [\`Theme\`](theme/)
 
@@ -186,7 +186,7 @@ A Chrome MV3 extension that bundles four daily-driver tools into one toolbar ico
 
 ## [0x00] OVERVIEW
 
-\`zpwrchrome\` is a Chrome MV3 extension that bundles four daily-driver capabilities into one toolbar icon: UNIX \`pass\` integration, a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher, and fzf history search. ${total} keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
+\`zpwrchrome\` is a Chrome MV3 extension that bundles five daily-driver capabilities into one toolbar icon: UNIX \`pass\` integration (with full-page CRUD manager + profile / credit-card autofill), a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher with fzf history search, a Tampermonkey-equivalent userscript engine, and full-page screenshot capture. ${total} keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via \`chrome.storage.session\`, survives service-worker restarts
 - **Alt+T popup** — the cyberpunk HUD with 11 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History / **Pass**), Cmd+1–0 jumps, fzf scoring on every row
@@ -221,6 +221,7 @@ cvv: 123
 \`\`\`
 
 - **Segmented download manager** — same Rust host vendors a multi-connection downloader (HEAD probe → N parallel \`Range\` segments, default 4, pre-allocated dest file). Cookie + User-Agent forwarded from \`chrome.cookies.getAll\` so logged-in downloads work; transient errors retry with 200 ms × 3ⁿ backoff and resume via \`Range\` from the segment-local offset; queue mirrored to \`chrome.storage.local\` so the UI paints instantly across service-worker restarts. Right-click \`Download with zpwrchrome\` on links / images / video / audio; \`dl-paste-url\` reads the clipboard via injected \`navigator.clipboard.readText\`. Live queue UI at \`scripts-manager/downloads.html\` subscribes to host push events. Filename collisions auto-rename \`foo.zip\` → \`foo (1).zip\`. Pure-Rust, vendorable TLS (\`ureq\`+rustls), no \`aria2\` or other runtime binary
+- **Full-page screenshot** — \`screenshot-full-page\` command (or right-click toolbar icon → "Full-page screenshot (this tab)") captures the active tab edge-to-edge, including parts off-screen. Strategy: scroll the page in viewport-sized steps with a 200 px overlap, capture each viewport via \`chrome.tabs.captureVisibleTab\` (Chrome's hard ~2 Hz quota → 600 ms gap + exponential-backoff retry: 1.1 s → 2.5 s → 5 s), pin every \`position: fixed\` / \`sticky\` element to \`static\` during capture so stickies don't appear N times, stitch tiles on an \`OffscreenCanvas\` in the SW, stream the PNG to the host in 512 KiB base64 chunks via \`dl.writeFileChunk\` (Chrome's host → ext native-messaging cap is 1 MiB), then rename the upload \`.part\` file to the chosen filename in your downloads dir. Hard caps: 60 tiles, ~16k × 16k output pixels. No \`chrome.debugger\` permission required (so no permanent yellow "DevTools attached" banner)
 - **${userBound} user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at \`chrome://extensions/shortcuts\` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
 - **Sub-popup live filter** — type to filter open + closed tabs; \`↑\`/\`↓\`/\`Enter\`/\`Delete\`/\`Esc\` nav
 - **Companion Chrome theme** — \`theme/\` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
@@ -393,7 +394,7 @@ The service worker holds no globals — MRU lives in \`chrome.storage.session\`.
 
 ## [0x07] CAPABILITY SURFACE
 
-zpwrchrome is four daily-driver tools in one extension. Each row names a capability and what replaces / supersedes in the typical browser power-user stack.
+zpwrchrome is five daily-driver tools in one extension. Each row names a capability and what replaces / supersedes in the typical browser power-user stack.
 
 | Capability | Replaces / supersedes | Implementation |
 | --- | --- | --- |
@@ -404,6 +405,7 @@ zpwrchrome is four daily-driver tools in one extension. Each row names a capabil
 | JetBrains-style tab switcher (MRU + scenes + opener-tree + minimap) | [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) · OneTab · Workona | cross-window MRU via \`chrome.storage.session\`, Alt+T popup with 11 categories, Cmd+E modal overlay, fzf scoring on every row, batch tab ops + clipboard utilities |
 | fzf history search | Chrome's \`chrome://history\` page · the omnibox | re-ranks \`chrome.history.search\` results by frecency, up to ${5000} entries, Backspace deletes inline |
 | Tampermonkey-equivalent userscript engine | Tampermonkey · Greasemonkey · Violentmonkey | \`@metadata\` block parser, \`@match\` pattern compilation, full GM_* shim (getValue/setValue/openInTab/setClipboard/notification), fire-log ring buffer |
+| Full-page screenshot (off-screen content included, no debugger banner) | GoFullPage · FireShot · Awesome Screenshot | \`lib/screenshot.js\` — scroll + viewport-capture + \`OffscreenCanvas\` stitch in the SW. Sticky/fixed elements pinned to \`position: static\` during capture. PNG streamed to the host via chunked \`dl.writeFileChunk\` (Chrome's 1 MiB host → ext NM cap), lands in your configured downloads dir |
 
 ### Counts & invariants
 

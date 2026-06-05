@@ -45,11 +45,30 @@
     <p>
       <strong>zpwrchrome</strong> is a browser power-tool by
       <a href="https://github.com/MenkeTechnologies" target="_blank" rel="noopener">MenkeTechnologies</a> —
-      built around four pillars: a browserpass-compatible <code>pass</code> integration,
+      built around five pillars: a browserpass-compatible <code>pass</code> integration
+      (with full-page CRUD manager + profile / credit-card autofill from
+      <code>profile/*</code> and <code>creditcard/*</code> entries),
       a Chrono-inspired segmented download manager that takes over Chrome's default downloader,
-      a JetBrains-style MRU tab switcher with scenes + opener-tree + minimap, and a
-      Tampermonkey-equivalent userscript host with a GM_* shim.
+      a JetBrains-style MRU tab switcher with scenes + opener-tree + minimap, a
+      Tampermonkey-equivalent userscript host with a GM_* shim, and a
+      <strong>full-page screenshot</strong> capture that scrolls the active tab
+      in viewport-sized steps and stitches the tiles into one PNG.
     </p>
+
+    <h3>Full-page screenshot</h3>
+    <p>
+      Bind <code>screenshot-full-page</code> at
+      <code>chrome://extensions/shortcuts</code>
+      (or right-click the toolbar icon → <em>Full-page screenshot (this tab)</em>).
+      The capture:
+    </p>
+    <ul>
+      <li>Scrolls the active tab through its full <code>scrollHeight</code> in viewport-sized steps with a 200 px overlap, captures each viewport via <code>chrome.tabs.captureVisibleTab</code>, and stitches the tiles on an <code>OffscreenCanvas</code> in the service worker.</li>
+      <li>Sleeps 600 ms between captures (Chrome enforces <code>MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND ≈ 2</code>); retries with exponential backoff (1.1 s → 2.5 s → 5 s) on quota errors.</li>
+      <li>Pins fixed / sticky elements to <code>position: static !important</code> during the capture so they don't appear N times in the stitched output; original styles are reverted on completion.</li>
+      <li>Streams the PNG to the host in 512 KiB base64 chunks via <code>dl.writeFileChunk</code> (Chrome's host → ext native-messaging cap is 1 MiB), then renames the upload <code>.part</code> file to the chosen filename in your configured downloads directory.</li>
+      <li>Hard caps: 60 tiles max (runaway infinite-scroll guard) and ~16k × 16k output pixels (memory bound). No <code>chrome.debugger</code> permission required, no permanent yellow banner.</li>
+    </ul>
 
     <p>
       The download-manager surface (this Settings UI, the queue manager,
