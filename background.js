@@ -27,8 +27,14 @@ import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "./lib/bp-pass.js";
 import { computeOtpFromUrl } from "./lib/totp.js";
 import { compileFingerprints, detect as wappDetect, scrapeSignals } from "./lib/wappalyzer/engine.js";
-import WAPP_TECHNOLOGIES from "./lib/wappalyzer/data/technologies.json" with { type: "json" };
-import WAPP_CATEGORIES   from "./lib/wappalyzer/data/categories.json"   with { type: "json" };
+// JSON-module import attributes (`with { type: "json" }`) load
+// unreliably in some Chrome MV3 SW versions — the error surfaces as
+// "Failed to load the script unexpectedly" on the technologies.json
+// path. We use fetch + JSON.parse instead, which works in every Chrome
+// version that supports MV3 SWs. The bundled .json files are
+// accessible to the SW via chrome.runtime.getURL without any
+// web_accessible_resources entry (only content scripts / web pages
+// would need WAR).
 import {
   PROFILE_TOKENS,
   CC_TOKENS,
@@ -2030,31 +2036,46 @@ function pageFindAndScroll(query) {
 // persist across SW restarts — page reload re-runs detection). Clears
 // on tabs.onRemoved.
 
-const WAPP_COMPILED = compileFingerprints(WAPP_TECHNOLOGIES);
-// Pre-compute the deduped JS-global key list + dom-rule list so the
-// page-side scrapeSignals only does work for selectors the corpus
-// actually cares about. ~600 KB of arg payload otherwise.
-const WAPP_JS_LOOKUPS = (() => {
-  const set = new Set();
-  for (const tech of Object.values(WAPP_TECHNOLOGIES)) {
-    if (tech.js && typeof tech.js === "object") {
-      for (const k of Object.keys(tech.js)) set.add(k);
+// Lazy-loaded corpus. The fetch + JSON.parse runs on first import of
+// this module (SW startup) and the awaiter `wappReady` gates every
+// consumer. Pre-compute the deduped JS-global key list + dom-rule list
+// so the page-side scrapeSignals only does work for selectors the corpus
+// actually cares about (~600 KB of arg payload otherwise).
+let WAPP_TECHNOLOGIES = {};
+let WAPP_CATEGORIES   = {};
+let WAPP_COMPILED     = [];
+let WAPP_JS_LOOKUPS   = [];
+let WAPP_DOM_RULES    = [];
+const wappReady = (async () => {
+  try {
+    const [tech, cats] = await Promise.all([
+      fetch(chrome.runtime.getURL("lib/wappalyzer/data/technologies.json")).then((r) => r.json()),
+      fetch(chrome.runtime.getURL("lib/wappalyzer/data/categories.json")).then((r) => r.json()),
+    ]);
+    WAPP_TECHNOLOGIES = tech;
+    WAPP_CATEGORIES   = cats;
+    WAPP_COMPILED     = compileFingerprints(tech);
+    const jsSet = new Set();
+    for (const t of Object.values(tech)) {
+      if (t.js && typeof t.js === "object") {
+        for (const k of Object.keys(t.js)) jsSet.add(k);
+      }
     }
-  }
-  return [...set];
-})();
-const WAPP_DOM_RULES = (() => {
-  const out = [];
-  const seen = new Set();
-  for (const rec of WAPP_COMPILED) {
-    for (const rule of rec.dom) {
-      const key = `${rule.selector}|${rule.kind}|${rule.attr || rule.prop || ""}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ selector: rule.selector, kind: rule.kind, attr: rule.attr, prop: rule.prop });
+    WAPP_JS_LOOKUPS = [...jsSet];
+    const seen = new Set();
+    for (const rec of WAPP_COMPILED) {
+      for (const rule of rec.dom) {
+        const key = `${rule.selector}|${rule.kind}|${rule.attr || rule.prop || ""}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        WAPP_DOM_RULES.push({ selector: rule.selector, kind: rule.kind, attr: rule.attr, prop: rule.prop });
+      }
     }
+    diagPush("tech.corpus.loaded", { techs: WAPP_COMPILED.length, jsKeys: WAPP_JS_LOOKUPS.length, domRules: WAPP_DOM_RULES.length });
+  } catch (e) {
+    diagPush("tech.corpus.err", { err: String(e?.message || e) });
+    console.warn("[zpwrchrome] wappalyzer corpus load:", e?.message || e);
   }
-  return out;
 })();
 
 const techHeadersByTab = new Map();   // tabId → { name: value } (last response)
@@ -2083,6 +2104,8 @@ if (chrome.webRequest?.onCompleted) {
 
 async function runTechDetection(tabId) {
   if (typeof tabId !== "number" || tabId < 0) return null;
+  await wappReady;          // wait for the corpus to load on first request
+  if (!WAPP_COMPILED.length) return null;
   let pageSignals;
   try {
     const results = await chrome.scripting.executeScript({
@@ -2697,6 +2720,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "tech.detected") {
     const tabId = Number(msg.tabId);
     (async () => {
+      await wappReady;
       const cached = techResultsByTab.get(tabId);
       if (cached) {
         sendResponse({ ok: true, tabId, hits: cached, categories: WAPP_CATEGORIES });
