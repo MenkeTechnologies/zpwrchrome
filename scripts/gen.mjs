@@ -160,7 +160,7 @@ ${banner}
 
 ## \`[CYBERPUNK HUD]\`
 
-A Chrome MV3 extension that bundles six daily-driver tools into one toolbar icon: a browserpass-compatible UNIX \`pass\` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel \`Range\` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to ${5000} browser-history entries, a Tampermonkey-equivalent userscript engine, a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG, and a Wappalyzer-compatible technology detector that fingerprints the active page against a vendored 3,993-tech corpus. ${userBound} commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
+A Chrome MV3 extension that bundles every daily-driver browser tool into one toolbar icon: a browserpass-compatible UNIX \`pass\` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel \`Range\` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to ${5000} browser-history entries, a Tampermonkey-equivalent userscript engine, a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG, a Wappalyzer-compatible technology detector that fingerprints the active page against a vendored 3,993-tech corpus, a cyberpunk page-theme injector that paints arbitrary pages with the strykelang HUD palette, a Turn Off the Lights cinema dimmer that lifts \`<video>\` above a dark overlay, an auto-detected JSON viewer, a User-Agent switcher backed by \`chrome.declarativeNetRequest\` dynamic rules, and a find-in-all-tabs full-text search. ${userBound} commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
 
 ### [\`Live Site\`](https://menketechnologies.github.io/zpwrchrome/) &middot; [\`Source\`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [\`Theme\`](theme/)
 
@@ -552,7 +552,7 @@ const html = `<!DOCTYPE html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zpwrchrome — browser power-tool (pass · downloads · tabs · history)</title>
-  <meta name="description" content="Chrome extension: UNIX \`pass\` integration, segmented download manager (Chrome default takeover), JetBrains-style tab switcher, fzf history search, Tampermonkey-equivalent userscripts. ${total} keyboard commands. Cyberpunk HUD by MenkeTechnologies.">
+  <meta name="description" content="Chrome extension: UNIX \`pass\` integration, segmented download manager (Chrome default takeover), JetBrains-style tab switcher, fzf history search, Tampermonkey-equivalent userscripts, full-page screenshot, Wappalyzer tech detection, cyberpunk page theme, Turn Off the Lights, JSON viewer, UA switcher, find-in-all-tabs. ${total} keyboard commands. Cyberpunk HUD by MenkeTechnologies.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -731,7 +731,7 @@ const html = `<!DOCTYPE html>
 
   <header class="hero">
     <h1>zpwrchrome // recent tabs</h1>
-    <p class="tagline">Browser power-tool. UNIX <code>pass</code> &middot; segmented download manager (default Chrome takeover) &middot; JetBrains-style tab switcher &middot; fzf history &middot; Tampermonkey-equivalent userscripts. ${total} keyboard commands.<br>Cyberpunk HUD palette by MenkeTechnologies.</p>
+    <p class="tagline">Browser power-tool. UNIX <code>pass</code> &middot; segmented download manager (default Chrome takeover) &middot; JetBrains-style tab switcher &middot; fzf history &middot; Tampermonkey-equivalent userscripts &middot; full-page screenshot &middot; Wappalyzer-compatible tech detection &middot; cyberpunk page theme &middot; Turn Off the Lights &middot; JSON viewer &middot; UA switcher &middot; find-in-all-tabs. ${total} keyboard commands.<br>Cyberpunk HUD palette by MenkeTechnologies.</p>
     <div class="stat-row">
       <div class="stat"><div class="n">${total}</div><div class="l">commands</div></div>
       <div class="stat"><div class="n">${withKey.length}</div><div class="l">default-keyed</div></div>
