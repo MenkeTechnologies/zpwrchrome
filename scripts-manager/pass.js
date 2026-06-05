@@ -246,23 +246,27 @@ const CARD_TEMPLATE_KEYS = [
   "cc-name", "cc-number", "cc-exp-month", "cc-exp-year", "cvv",
 ];
 
-// startNewFromTemplate(prefix, suffix, keys) — runs the standard
-// new-entry reset and then pre-seeds: (a) path = "<prefix>/<suffix>"
-// fully written out (the suffix is auto-selected so the user can hit
-// any key to replace it if they want a different name), (b) one empty
-// kv-row per template key, (c) marks the path as user-edited so
-// maybeAutoDerivePath doesn't overwrite the path.
-function startNewFromTemplate(prefix, suffix, keys) {
+// startNewFromTemplate(opts) — runs the standard new-entry reset and
+// then pre-seeds the form for one of the canonical schemas:
+//   - path  = "<prefix>/<suffix>"  (suffix auto-selected for one-key replace)
+//   - login = opts.login           (seeded with a sensible default)
+//   - url   = opts.url             (seeded with a sensible default)
+//   - kv    = one empty row per opts.keys
+// Marks path as user-edited so maybeAutoDerivePath doesn't overwrite
+// the templated path when the user starts typing login / URL.
+function startNewFromTemplate(opts) {
   startNew();
-  $("ed-path").value = `${prefix}/${suffix}`;
+  $("ed-path").value  = `${opts.prefix}/${opts.suffix}`;
+  $("ed-login").value = opts.login || "";
+  $("ed-url").value   = opts.url   || "";
   state.pathTouched = true;            // keep the templated path from being overwritten
   // Focus the path row with the SUFFIX pre-selected, so one keystroke
   // replaces it if the user wants a different name (e.g. "work" /
   // "amex" / "personal-2"), or they can just hit Tab to keep it.
   $("ed-path").focus();
   try {
-    const start = prefix.length + 1;
-    const end   = start + suffix.length;
+    const start = opts.prefix.length + 1;
+    const end   = start + opts.suffix.length;
     $("ed-path").setSelectionRange(start, end);
   } catch {}
   // Profile / card entries don't really have a single "password" on
@@ -274,14 +278,26 @@ function startNewFromTemplate(prefix, suffix, keys) {
   // Pre-seed the kv-list with one empty row per template key.
   const list = $("kv-list");
   list.innerHTML = "";
-  for (const k of keys) list.appendChild(makeKvRow(k, ""));
+  for (const k of opts.keys) list.appendChild(makeKvRow(k, ""));
 }
 
 function startNewProfileTemplate() {
-  startNewFromTemplate("profile", "personal", PROFILE_TEMPLATE_KEYS);
+  startNewFromTemplate({
+    prefix: "profile",
+    suffix: "personal",
+    login:  "you@example.com",
+    url:    "https://example.com",
+    keys:   PROFILE_TEMPLATE_KEYS,
+  });
 }
 function startNewCardTemplate() {
-  startNewFromTemplate("creditcard", "visa", CARD_TEMPLATE_KEYS);
+  startNewFromTemplate({
+    prefix: "creditcard",
+    suffix: "visa",
+    login:  "Cardholder Name",
+    url:    "https://www.visa.com",
+    keys:   CARD_TEMPLATE_KEYS,
+  });
 }
 
 // Auto-derive the entry path from URL + login while the user is typing.
