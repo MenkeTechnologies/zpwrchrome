@@ -145,12 +145,16 @@ async function pickEntry(path) {
   state.mode = "view";
   state.dirty = false;
   state.loaded = false;
+  // Reset auto-derive gate so URL / login edits on the existing entry
+  // also re-derive the path. The path field stays user-editable so the
+  // user can override the derived value or rename the entry by hand.
+  state.pathTouched = false;
   renderTree();
   showForm(true);
   $("ed-mode").textContent = "loading…";
   $("ed-mode").className = "ed-mode";
   $("ed-path").value = path;
-  $("ed-path").disabled = true;
+  $("ed-path").disabled = false;
   // Clear fields while loading so stale data doesn't flash.
   $("ed-pw").value = "";
   $("ed-login").value = "";
@@ -276,10 +280,12 @@ function startNewCardTemplate() {
 }
 
 // Auto-derive the entry path from URL + login while the user is typing.
-// Stops as soon as the user manually edits the path field — we never
-// fight a path the user has typed by hand.
+// Works for both new entries AND edits of existing entries — editing
+// the URL or login of an existing entry will redrive the path, and on
+// save the manager treats a changed path as a rename (write new file,
+// delete old). Stops as soon as the user manually edits the path field
+// — we never fight a path the user has typed by hand.
 function maybeAutoDerivePath() {
-  if (state.mode !== "new") return;
   if (state.pathTouched) return;
   const derived = derivePassPath({
     url:   $("ed-url").value,
@@ -385,19 +391,38 @@ async function doSave(ev) {
     : buildRawFromForm();
 
   $("b-save").disabled = true;
-  setEdStatus("saving…");
+  // Detect a rename: existing entry whose path changed since it was
+  // loaded. Write the new file first; if that succeeds, delete the old
+  // one. Failing the rename mid-flight leaves the OLD entry intact and
+  // surfaces the error — we never end up with neither file on disk.
+  const wasNew = state.mode === "new";
+  const isRename = !wasNew && state.selected && state.selected !== path;
+  setEdStatus(isRename ? `renaming → ${path}…` : "saving…");
   try {
     await passSave(path, text);
-    setEdStatus("saved", "ok");
+    if (isRename) {
+      try {
+        await passDelete(state.selected);
+      } catch (delErr) {
+        // New file is in place; warn but don't pretend it failed.
+        setEdStatus(`saved at new path but failed to delete old (${delErr.message})`, "err");
+        state.dirty = false;
+        state.mode = "view";
+        state.selected = path;
+        await loadTree();
+        return;
+      }
+    }
+    setEdStatus(isRename ? "renamed" : "saved", "ok");
     state.dirty = false;
-    const wasNew = state.mode === "new";
     state.mode = "view";
     state.selected = path;
     $("ed-mode").textContent = "view";
     $("ed-mode").className = "ed-mode";
-    $("ed-path").disabled = true;
-    if (wasNew) await loadTree();
-    else        renderTree();
+    // Refresh the tree on any structural change (new entry or rename)
+    // so the sidebar reflects the new path; in-place edits just rerender.
+    if (wasNew || isRename) await loadTree();
+    else                    renderTree();
   } catch (e) {
     setEdStatus(e.message, "err");
   } finally {
