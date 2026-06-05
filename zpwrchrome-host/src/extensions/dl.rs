@@ -1112,9 +1112,18 @@ pub fn dl_clear(req: &DlRequest) {
 }
 
 fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {
+    // O_EXCL lockfile per-gid. Each `chrome.runtime.sendNativeMessage` call
+    // spawns a fresh host process, so concurrent dl.pause / dl.resume on the
+    // same gid would otherwise race their read-modify-write — the loser's
+    // read sees pre-winner disk and its write clobbers the winner. The lock
+    // serializes mutate_state across processes; the worker's check_control
+    // / flush_progress / flush_status do their own merging and don't need
+    // to share this lock.
+    let lock = with_gid_lock(gid);
     let mut state = match read_state(gid) {
         Ok(s) => s,
         Err(_) => {
+            drop(lock);
             response::SendErrorAndExit(
                 errors::Code::InvalidPasswordStore,
                 Some(response::params_of(&[
@@ -1127,6 +1136,7 @@ fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {
     };
     f(&mut state);
     if let Err(e) = write_state_atomic(&state) {
+        drop(lock);
         response::SendErrorAndExit(
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
@@ -1135,6 +1145,35 @@ fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {
                 (field::ERROR,   &e.to_string()),
             ])),
         );
+    }
+    drop(lock);
+}
+
+/// Cross-process per-gid lock for `mutate_state`. Holds an `O_EXCL` lockfile
+/// at `<cache>/gid_NNNNNN.mlock` for the duration of the returned guard.
+/// On `drop`, the lockfile is removed. Same retry pattern as `next_gid`'s
+/// dir-level lock — bounded 5-second wait, 10 ms polling.
+struct GidLock { path: PathBuf }
+impl Drop for GidLock {
+    fn drop(&mut self) { let _ = fs::remove_file(&self.path); }
+}
+fn with_gid_lock(gid: u64) -> Option<GidLock> {
+    let dir = match cache_dir() { Ok(d) => d, Err(_) => return None };
+    let path = dir.join(format!("gid_{gid:06}.mlock"));
+    let start = Instant::now();
+    loop {
+        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(_) => return Some(GidLock { path }),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                if start.elapsed() > Duration::from_secs(5) {
+                    // Stale lock from a crashed process. Reap and retry once.
+                    let _ = fs::remove_file(&path);
+                    continue;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(_) => return None,   // best-effort; mutate_state still proceeds
+        }
     }
 }
 

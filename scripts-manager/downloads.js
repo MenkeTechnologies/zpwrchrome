@@ -348,13 +348,28 @@ function renderList() {
 
 // ── actions ─────────────────────────────────────────────────────────
 
+// Per-gid action chain. Multiple rapid clicks (pause→resume→pause) spawn
+// parallel host processes, each doing a read-modify-write on the same
+// gid's state file — the second read can race the first write, and the
+// "last click wins" expectation breaks. Chaining per-gid forces strict
+// click-order delivery to the host.
+const _actChain = new Map();
+
 function sendAct(action, gid) {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ kind: `dl.${action}`, gid: Number(gid) }, (r) => {
-      if (chrome.runtime.lastError) { resolve({ ok: false, err: chrome.runtime.lastError.message }); return; }
-      resolve(r || { ok: false, err: "no response" });
-    });
+  const prev = _actChain.get(gid) || Promise.resolve();
+  const tail = prev.catch(() => {}).then(() =>
+    new Promise((resolve) => {
+      chrome.runtime.sendMessage({ kind: `dl.${action}`, gid: Number(gid) }, (r) => {
+        if (chrome.runtime.lastError) { resolve({ ok: false, err: chrome.runtime.lastError.message }); return; }
+        resolve(r || { ok: false, err: "no response" });
+      });
+    })
+  );
+  _actChain.set(gid, tail);
+  tail.finally(() => {
+    if (_actChain.get(gid) === tail) _actChain.delete(gid);
   });
+  return tail;
 }
 
 $list.addEventListener("click", async (e) => {
