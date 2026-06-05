@@ -83,8 +83,14 @@ test("buildThemeCss: forceMono excludes icon-font carriers (no tofu glyphs)", ()
     ':not([class*="icon"])',
     ':not([class*="fa-"])',
     ':not([class*="material-icons"])',
+    ':not([class*="material-symbols"])',
     ':not([class*="lucide"])',
+    ':not([class*="phosphor"])',
+    ':not([class*="glyphicon"])',
     ":not([data-icon])",
+    ":not([data-lucide])",
+    ':not([data-cds="Icon"])',  // Claude / Anthropicons
+    ":not([data-radix-icon])",
   ]) {
     assert.ok(css.includes(exclusion),
       `forceMono must include exclusion ${exclusion} to avoid icon-font tofu`);
