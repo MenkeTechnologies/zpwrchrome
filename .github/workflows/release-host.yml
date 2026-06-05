@@ -1,14 +1,22 @@
 name: Release zpwrchrome-host
 
 # Builds release tarballs for every supported (arch, OS) pair and
-# attaches them to the GitHub Release that triggered the workflow.
-# Trigger: pushing a tag matching `host-v*` (e.g. host-v0.8.0). The
+# attaches them to the GitHub Release that triggered the workflow, then
+# updates the MenkeTechnologies Homebrew tap (homebrew-menketech) so
+# `brew install zpwrchrome-host` resolves to the new version.
+#
+# Trigger: pushing a tag matching `host-v*` (e.g. host-v0.9.4). The
 # Cargo.toml inside `zpwrchrome-host/` must match the tag's semver
 # component; the workflow `cargo build --release`s in that subdir.
 #
 # Tarball naming mirrors the existing MenkeTechnologies tap convention
 # (see lsofrs / awkrs / iftoprs):
 #   zpwrchrome-host-vX.Y.Z-<rust-target>.tar.gz
+#
+# Required repo secret:
+#   HOMEBREW_TAP_TOKEN — PAT with `repo` scope on
+#     MenkeTechnologies/homebrew-menketech. Same secret name lsofrs /
+#     awkrs / iftoprs already use.
 
 on:
   push:
@@ -92,3 +100,87 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+
+      - name: Upload tarball for downstream homebrew job
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarball-${{ matrix.target }}
+          path: zpwrchrome-host/${{ steps.stage.outputs.tarball }}
+
+  homebrew:
+    name: Update Homebrew tap
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Compute SHA256 sums
+        id: sha
+        shell: bash
+        run: |
+          for f in artifacts/*.tar.gz; do
+            base=$(basename "$f")
+            sum=$(sha256sum "$f" | awk '{print $1}')
+            # e.g. zpwrchrome-host-vX.Y.Z-aarch64-apple-darwin.tar.gz → aarch64_apple_darwin
+            key=$(echo "$base" | sed 's/zpwrchrome-host-v[^-]*-//; s/\.tar\.gz//; s/-/_/g; s/\./_/g')
+            echo "${key}=${sum}" >> "$GITHUB_OUTPUT"
+          done
+
+      - uses: actions/checkout@v6
+        with:
+          repository: MenkeTechnologies/homebrew-menketech
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update formula
+        shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+          SHA_ARM_MACOS: ${{ steps.sha.outputs.aarch64_apple_darwin }}
+          SHA_X86_MACOS: ${{ steps.sha.outputs.x86_64_apple_darwin }}
+          SHA_X86_LINUX: ${{ steps.sha.outputs.x86_64_unknown_linux_gnu }}
+          SHA_ARM_LINUX: ${{ steps.sha.outputs.aarch64_unknown_linux_gnu }}
+        run: |
+          set -eu
+          V="${VERSION#host-v}"
+          BASE="https://github.com/MenkeTechnologies/zpwrchrome/releases/download/${VERSION}"
+          # Helper: emit an on_arm / on_intel block only when its SHA is non-empty.
+          emit() { local guard="$1" arch="$2" sha="$3"; [ -n "$sha" ] || return 0; printf '    %s do\n      url "%s/zpwrchrome-host-v%s-%s.tar.gz"\n      sha256 "%s"\n    end\n' "$guard" "$BASE" "$V" "$arch" "$sha"; }
+          mac_blocks=$( { emit on_arm aarch64-apple-darwin "$SHA_ARM_MACOS"; emit on_intel x86_64-apple-darwin "$SHA_X86_MACOS"; } )
+          linux_blocks=$( { emit on_intel x86_64-unknown-linux-gnu "$SHA_X86_LINUX"; emit on_arm aarch64-unknown-linux-gnu "$SHA_ARM_LINUX"; } )
+          {
+            printf 'class ZpwrchromeHost < Formula\n'
+            printf '  desc "Native messaging host for zpwrchrome — UNIX pass + segmented downloader + OTP"\n'
+            printf '  homepage "https://github.com/MenkeTechnologies/zpwrchrome"\n'
+            printf '  license "MIT"\n'
+            printf '  version "%s"\n\n' "$V"
+            if [ -n "$mac_blocks" ]; then
+              printf '  on_macos do\n%s\n  end\n\n' "$mac_blocks"
+            fi
+            if [ -n "$linux_blocks" ]; then
+              printf '  on_linux do\n%s\n  end\n\n' "$linux_blocks"
+            fi
+            printf '  def install\n'
+            printf '    bin.install "zpwrchrome-host"\n'
+            printf '  end\n\n'
+            printf '  test do\n'
+            printf '    assert_match "Browserpass host app version", shell_output("#{bin}/zpwrchrome-host --version")\n'
+            printf '  end\n'
+            printf 'end\n'
+          } > tap/Formula/zpwrchrome-host.rb
+
+      - name: Push formula update
+        run: |
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/zpwrchrome-host.rb
+          if git diff --cached --quiet; then
+            echo "no changes — formula already up to date"
+            exit 0
+          fi
+          git commit -m "zpwrchrome-host: bump to ${{ github.ref_name }}"
+          git push
