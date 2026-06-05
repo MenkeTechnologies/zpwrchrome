@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 51 keyboard commands, 11 popup categories, 19 message kinds, 6,158 JS lines, 2,803 tests. Cyberpunk HUD by MenkeTechnologies.">
+  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 51 keyboard commands, 12 popup categories, 19 message kinds, 6,357 JS lines, 2,822 tests. Cyberpunk HUD by MenkeTechnologies.">
   <title>zpwrchrome &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -180,7 +180,7 @@
         <a href="https://github.com/MenkeTechnologies/zpwrchrome">GitHub</a>
       </nav>
       <p class="tagline">
-        Manifest V3 Chrome extension &middot; cross-window MRU &middot; 51 keyboard commands &middot; 11-category fzf-scored popup &middot; <code>chrome.userScripts</code> Tampermonkey-equivalent &middot; frecency-ranked history search
+        Manifest V3 Chrome extension &middot; cross-window MRU &middot; 51 keyboard commands &middot; 12-category fzf-scored popup &middot; <code>chrome.userScripts</code> Tampermonkey-equivalent &middot; frecency-ranked history search
       </p>
     </div>
   </header>
@@ -192,33 +192,33 @@
       zpwrchrome is a single-author Chrome MV3 extension built around the
       MRU (most-recently-used) tab primitive. The service worker tracks
       tab activation in <code>chrome.storage.session</code> across windows;
-      the toolbar popup renders 11 categories with
+      the toolbar popup renders 12 categories with
       fzf fuzzy filtering; a Tampermonkey-equivalent userscript engine
       runs in Chrome's native <code>USER_SCRIPT</code> world via
       <code>chrome.userScripts</code>; and a frecency-ranked
       <code>chrome.history</code> search replaces Chrome's built-in
       <code>chrome://history</code> page on <code>Cmd+Y</code>.
-      <strong>6,158 JS lines + 1,064 CSS lines + 21,312 test lines &middot; 51 commands &middot; 19 message handlers &middot; 2803 tests passing</strong>.
+      <strong>6,357 JS lines + 1,087 CSS lines + 21,512 test lines &middot; 51 commands &middot; 19 message handlers &middot; 2822 tests passing</strong>.
     </p>
 
     <div class="stat-grid">
-      <div class="stat-card"><div class="v">6,158</div><div class="l">JS Lines</div></div>
-      <div class="stat-card"><div class="v">1,064</div><div class="l">CSS Lines</div></div>
+      <div class="stat-card"><div class="v">6,357</div><div class="l">JS Lines</div></div>
+      <div class="stat-card"><div class="v">1,087</div><div class="l">CSS Lines</div></div>
       <div class="stat-card"><div class="v a">51</div><div class="l">Keyboard Commands</div></div>
-      <div class="stat-card"><div class="v g">2803</div><div class="l">Tests Passing</div></div>
-      <div class="stat-card"><div class="v">11</div><div class="l">Popup Categories</div></div>
+      <div class="stat-card"><div class="v g">2822</div><div class="l">Tests Passing</div></div>
+      <div class="stat-card"><div class="v">12</div><div class="l">Popup Categories</div></div>
       <div class="stat-card"><div class="v m">19</div><div class="l">Message Kinds</div></div>
       <div class="stat-card"><div class="v">36</div><div class="l">Dispatch Handlers</div></div>
       <div class="stat-card"><div class="v">17</div><div class="l">Permissions</div></div>
       <div class="stat-card"><div class="v">15</div><div class="l">Pure Helpers</div></div>
       <div class="stat-card"><div class="v">309</div><div class="l">Repo Files</div></div>
       <div class="stat-card"><div class="v y">4</div><div class="l">Default-Keyed</div></div>
-      <div class="stat-card"><div class="v">v0.13.0</div><div class="l">Version</div></div>
+      <div class="stat-card"><div class="v">v0.14.0</div><div class="l">Version</div></div>
     </div>
 
     <div>
-      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 28,823 total lines</p>
-      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:21.4%;"></div><span class="bar-label">JS &middot; 6,158 lines &middot; 21.4%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:73.9%;"></div><span class="bar-label">Tests &middot; 21,312 lines &middot; 73.9%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.7%;"></div><span class="bar-label">CSS &middot; 1,064 lines &middot; 3.7%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:1.0%;"></div><span class="bar-label">HTML &middot; 289 lines &middot; 1.0%</span></div>
+      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 29,245 total lines</p>
+      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:21.7%;"></div><span class="bar-label">JS &middot; 6,357 lines &middot; 21.7%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:73.6%;"></div><span class="bar-label">Tests &middot; 21,512 lines &middot; 73.6%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.7%;"></div><span class="bar-label">CSS &middot; 1,087 lines &middot; 3.7%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:1.0%;"></div><span class="bar-label">HTML &middot; 289 lines &middot; 1.0%</span></div>
     </div>
 
     <h2 class="section"><span class="hash">~</span>SUBSYSTEM BREAKDOWN</h2>
@@ -226,12 +226,12 @@
     <div class="subsystems">
         <div class="card">
           <h3>Service worker</h3>
-          <ul class="files"><li><code>background.js</code> &mdash; 3,100 lines</li></ul>
+          <ul class="files"><li><code>background.js</code> &mdash; 3,207 lines</li></ul>
           <p>MV3 SW. Cross-window MRU tracker, command dispatcher, popup/modal message API, userscript registration, scenes, history, pass + identity fill, segmented downloads, full-page screenshot.</p>
         </div>
         <div class="card">
           <h3>Popup</h3>
-          <ul class="files"><li><code>popup.html</code> &mdash; 45 lines</li><li><code>popup.css</code> &mdash; 561 lines</li><li><code>popup.js</code> &mdash; 1,047 lines</li></ul>
+          <ul class="files"><li><code>popup.html</code> &mdash; 45 lines</li><li><code>popup.css</code> &mdash; 584 lines</li><li><code>popup.js</code> &mdash; 1,139 lines</li></ul>
           <p>Cyberpunk HUD toolbar action. 11 categories (incl. PASS), fzf filter, keyboard nav, opens via Alt+T / Cmd+Y (history) / Alt+P-bindable (pass).</p>
         </div>
         <div class="card">
@@ -266,11 +266,11 @@
     <table class="file-table">
       <thead><tr><th>Path</th><th class="num">Lines</th><th class="num">Bytes</th></tr></thead>
       <tbody>
-        <tr><td><code>background.js</code></td><td class="num">3,100</td><td class="num">125,934</td></tr>
-        <tr><td><code>popup.js</code></td><td class="num">1,047</td><td class="num">43,069</td></tr>
+        <tr><td><code>background.js</code></td><td class="num">3,207</td><td class="num">129,863</td></tr>
+        <tr><td><code>popup.js</code></td><td class="num">1,139</td><td class="num">46,598</td></tr>
         <tr><td><code>tests/dl-integration.test.js</code></td><td class="num">998</td><td class="num">51,348</td></tr>
         <tr><td><code>modal/content.template.js</code></td><td class="num">930</td><td class="num">37,419</td></tr>
-        <tr><td><code>popup.css</code></td><td class="num">561</td><td class="num">17,428</td></tr>
+        <tr><td><code>popup.css</code></td><td class="num">584</td><td class="num">18,121</td></tr>
         <tr><td><code>tests/static.test.js</code></td><td class="num">560</td><td class="num">26,163</td></tr>
         <tr><td><code>tests/logic.test.js</code></td><td class="num">555</td><td class="num">22,613</td></tr>
         <tr><td><code>scripts-manager/manager.css</code></td><td class="num">503</td><td class="num">16,708</td></tr>
@@ -487,7 +487,7 @@
                                        ▼
               popup.html/.js                          modal/content.js (shadow DOM)
               ───────────────                         ─────────────────────────────
-              11 categories                            10 categories (dormant since v0.4.16)
+              12 categories                            10 categories (dormant since v0.4.16)
               fzf filter                              10 categories
               keyboard nav                            same protocol kinds
 
@@ -498,7 +498,7 @@
 </pre>
 
     <h2 class="section"><span class="hash">&amp;</span>MESSAGE PROTOCOL</h2>
-    <p class="subtitle"><strong>19</strong> message kinds handled by the service worker. Popup sends <strong>17</strong> kinds; modal sends <strong>19</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
+    <p class="subtitle"><strong>19</strong> message kinds handled by the service worker. Popup sends <strong>18</strong> kinds; modal sends <strong>19</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
     <ul class="kinds">
 
         <li><code>activate</code><span>popup/modal → SW. Switch to a tab by id + focus its window.</span></li>
@@ -534,7 +534,7 @@
     </div>
 
     <h2 class="section"><span class="hash">%</span>POPUP CATEGORIES</h2>
-    <p class="subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders 11 categories with fzf scoring against title + host. Each category is jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot). The modal mirrors the same list since v0.4.15.</p>
+    <p class="subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders 12 categories with fzf scoring against title + host. Each category is jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot). The modal mirrors the same list since v0.4.15.</p>
     <ul class="cat-list">
       <li><span class="label">All Tabs</span><span class="key">⌘1</span></li>
       <li><span class="label">Current Window</span><span class="key">⌘2</span></li>
@@ -547,6 +547,7 @@
       <li><span class="label">Minimap</span><span class="key">⌘9</span></li>
       <li><span class="label">History</span><span class="key">⌘0</span></li>
       <li><span class="label">Pass</span><span class="key">⌘P</span></li>
+      <li><span class="label">Tech</span><span class="key">⌘T</span></li>
     </ul>
 
     <h2 class="section"><span class="hash">^</span>HISTORY &mdash; FRECENCY FORMULA</h2>
@@ -586,7 +587,7 @@
     </div>
 
     <h2 class="section"><span class="hash">*</span>TESTS</h2>
-    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>2803</strong> cases across <strong>173</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
+    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>2822</strong> cases across <strong>174</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
     <table class="file-table">
       <thead><tr><th>File</th><th class="num">Tests</th><th class="num">Lines</th></tr></thead>
       <tbody>
@@ -763,7 +764,8 @@
         <tr><td><code>tests/util-large-scale.test.js</code></td><td class="num">10</td><td class="num">128</td></tr>
         <tr><td><code>tests/util-mru-cap-edge.test.js</code></td><td class="num">10</td><td class="num">63</td></tr>
         <tr><td><code>tests/validate-userscript-unit.test.js</code></td><td class="num">13</td><td class="num">87</td></tr>
-        <tr><td><code>TOTAL</code></td><td class="num"><strong>2803</strong></td><td class="num"><strong>21,312</strong></td></tr>
+        <tr><td><code>tests/wappalyzer-engine.test.js</code></td><td class="num">19</td><td class="num">200</td></tr>
+        <tr><td><code>TOTAL</code></td><td class="num"><strong>2822</strong></td><td class="num"><strong>21,512</strong></td></tr>
       </tbody>
     </table>
 
@@ -788,7 +790,7 @@
   </main>
 
   <footer>
-    zpwrchrome v0.13.0 &middot; MIT &middot; MenkeTechnologies &middot;
+    zpwrchrome v0.14.0 &middot; MIT &middot; MenkeTechnologies &middot;
     <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a> &middot;
     regenerate via <code>scripts/gen.sh</code>
   </footer>

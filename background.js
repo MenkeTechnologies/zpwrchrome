@@ -26,6 +26,9 @@ import {
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "./lib/bp-pass.js";
 import { computeOtpFromUrl } from "./lib/totp.js";
+import { compileFingerprints, detect as wappDetect, scrapeSignals } from "./lib/wappalyzer/engine.js";
+import WAPP_TECHNOLOGIES from "./lib/wappalyzer/data/technologies.json" with { type: "json" };
+import WAPP_CATEGORIES   from "./lib/wappalyzer/data/categories.json"   with { type: "json" };
 import {
   PROFILE_TOKENS,
   CC_TOKENS,
@@ -1905,6 +1908,95 @@ async function bookmarkActive() {
 }
 
 // ---------------------------------------------------------------------------
+// Wappalyzer-compatible technology detection.
+//
+// On every main_frame navigation we:
+//   1. webRequest.onCompleted   → capture response headers per tabId
+//   2. webNavigation.onCompleted → inject scrapeSignals into the page,
+//      merge with the cached headers, run wappDetect, cache the result,
+//      update the toolbar badge with the match count.
+//   3. popup pulls the cached result via the `tech.detected` bridge.
+//
+// Cache is per-tabId in module scope (fine for the SW since we don't
+// persist across SW restarts — page reload re-runs detection). Clears
+// on tabs.onRemoved.
+
+const WAPP_COMPILED = compileFingerprints(WAPP_TECHNOLOGIES);
+const WAPP_JS_LOOKUPS = [];
+for (const tech of Object.values(WAPP_TECHNOLOGIES)) {
+  if (tech.js && typeof tech.js === "object") {
+    for (const k of Object.keys(tech.js)) WAPP_JS_LOOKUPS.push(k);
+  }
+}
+
+const techHeadersByTab = new Map();   // tabId → { name: value } (last response)
+const techResultsByTab = new Map();   // tabId → [{ name, cats, confidence, version, … }]
+
+function recordResponseHeaders(tabId, headers) {
+  if (typeof tabId !== "number" || tabId < 0) return;
+  const bag = {};
+  for (const h of (headers || [])) {
+    if (!h?.name) continue;
+    bag[String(h.name).toLowerCase()] = String(h.value || "");
+  }
+  techHeadersByTab.set(tabId, bag);
+}
+
+if (chrome.webRequest?.onCompleted) {
+  chrome.webRequest.onCompleted.addListener(
+    (info) => {
+      if (info.type !== "main_frame") return;
+      recordResponseHeaders(info.tabId, info.responseHeaders);
+    },
+    { urls: ["<all_urls>"] },
+    ["responseHeaders"],
+  );
+}
+
+async function runTechDetection(tabId) {
+  if (typeof tabId !== "number" || tabId < 0) return null;
+  let pageSignals;
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: false },
+      func:   scrapeSignals,
+      args:   [WAPP_JS_LOOKUPS],
+    });
+    pageSignals = results?.[0]?.result || null;
+  } catch (e) {
+    diagPush("tech.scrape.err", { tabId, err: String(e?.message || e) });
+    return null;
+  }
+  if (!pageSignals) return null;
+  const headers = techHeadersByTab.get(tabId) || {};
+  const signals = { ...pageSignals, headers };
+  const hits = wappDetect(signals, WAPP_COMPILED);
+  techResultsByTab.set(tabId, hits);
+  try {
+    await chrome.action?.setBadgeText?.({ tabId, text: hits.length ? String(hits.length) : "" });
+    await chrome.action?.setBadgeBackgroundColor?.({ tabId, color: "#05d9e8" });
+  } catch {}
+  diagPush("tech.detected", { tabId, count: hits.length });
+  return hits;
+}
+
+if (chrome.webNavigation?.onCompleted) {
+  chrome.webNavigation.onCompleted.addListener(
+    (details) => {
+      if (details.frameId !== 0) return;
+      // Delay a tick so scrapeSignals sees populated DOM + jsGlobals.
+      setTimeout(() => { runTechDetection(details.tabId).catch(() => {}); }, 250);
+    },
+    { url: [{ schemes: ["http", "https"] }] },
+  );
+}
+
+chrome.tabs?.onRemoved?.addListener((tabId) => {
+  techHeadersByTab.delete(tabId);
+  techResultsByTab.delete(tabId);
+});
+
+// ---------------------------------------------------------------------------
 // Userscripts (Tampermonkey-style)
 
 const SCRIPTS_KEY = "userscripts";
@@ -2453,6 +2545,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "history-delete") {
     if (!chrome.history) { sendResponse({ ok: false }); return true; }
     chrome.history.deleteUrl({ url: String(msg.url || "") }, () => sendResponse({ ok: true }));
+    return true;
+  }
+
+  // --- Tech detection (Wappalyzer-compatible) ---
+  if (msg?.kind === "tech.detected") {
+    const tabId = Number(msg.tabId);
+    (async () => {
+      const cached = techResultsByTab.get(tabId);
+      if (cached) {
+        sendResponse({ ok: true, tabId, hits: cached, categories: WAPP_CATEGORIES });
+        return;
+      }
+      const hits = await runTechDetection(tabId);
+      sendResponse({ ok: true, tabId, hits: hits || [], categories: WAPP_CATEGORIES });
+    })();
     return true;
   }
 
