@@ -71,14 +71,16 @@ test("scale: 5000-node sibling forest buildTabTree+flattenTree < 200ms", () => {
   });
 });
 
-test("scale: 10,000-pattern matchUrl pass per-URL < 500ms", () => {
+test("scale: 10,000-pattern matchUrl pass per-URL < 1500ms", () => {
   // matchUrl rebuilds the regex for every pattern on every call (no cache),
   // so 10k patterns × 2 calls × 2 URLs is ~40k regex compiles. Budget is
-  // generous (10× observed on local M-series) — catches order-of-magnitude
-  // regressions, not the constant factor.
+  // generous (~3× observed on local M-series, 5× of CI-runner timings) —
+  // catches order-of-magnitude regressions, not the constant factor.
+  // GitHub's ubuntu-latest hosted runners routinely hit 540-580ms; the
+  // 500ms budget was right at the edge and flaked.
   const patterns = Array.from({ length: 10_000 },
     (_, i) => `https://host-${i}.example.com/*`);
-  bench("10k matchUrl pattern pass", 500, () => {
+  bench("10k matchUrl pattern pass", 1500, () => {
     assert.equal(matchUrl(patterns, "https://host-9999.example.com/index"), true);
     assert.equal(matchUrl(patterns, "https://nope.test/"), false);
   });
