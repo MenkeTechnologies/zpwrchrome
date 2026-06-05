@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // find in tabs</title>
+  <link rel="stylesheet" href="find-all.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🔍</span>
+    <h1>zpwrchrome <span class="dim">find in all tabs</span></h1>
+  </div>
+  <div class="searchwrap">
+    <input class="search" id="q" type="search" autocomplete="off"
+           placeholder="type to search every open tab's text…" autofocus>
+  </div>
+  <div class="status" id="status">scanning…</div>
+</header>
+
+<section class="list" id="list" tabindex="0"></section>
+
+<footer class="botbar">
+  <span id="counts">—</span>
+  <span class="grow"></span>
+  <span class="dim">↑↓ navigate · Enter open · Esc clear</span>
+</footer>
+
+<script src="find-all.js" type="module"></script>
+</body>
+</html>

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "zpwrchrome",
   "short_name": "zpwrchrome",
-  "version": "0.14.4",
+  "version": "0.15.0",
   "description": "Browser power-tool: UNIX `pass` integration (browserpass-compatible), segmented download manager that replaces Chrome's default, JetBrains-style tab switcher with MRU + scenes + opener-tree + minimap, fzf history search, and Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
@@ -153,6 +153,7 @@
     "pass-fill-profile":   { "description": "Fill profile fields only (name, address, email, phone, …) on the active tab from a `profile/*` entry in `pass`. Quick-pick overlay when multiple profiles exist." },
     "pass-fill-cc":        { "description": "Fill credit-card fields only (cc-number, cc-exp, cc-csc, cardholder, …) on the active tab from a `creditcard/*` entry in `pass`. Quick-pick overlay when multiple cards exist." },
 
+    "find-in-all-tabs":     { "description": "Full-text search across every open tab — opens a search UI, scrapes innerText from every http(s) tab in parallel, fuzzy-filters as you type, Enter activates the chosen tab and scrolls to the match (no DevTools required)" },
     "screenshot-full-page": { "description": "Full-page screenshot — scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts)" },
     "dl-paste-url":        { "description": "Download the URL currently on the clipboard via the zpwrchrome segmented downloader" },
     "dl-show-queue":       { "description": "Open the zpwrchrome download manager queue view" },
