@@ -301,6 +301,23 @@ mark.fzf-hl {
 .row.tree-row { /* padding-left set inline per depth */ }
 
 /* ----- Tech category (Wappalyzer-compatible detection) ----- */
+.tech-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; color: var(--text-dim); letter-spacing: 0.5px;
+}
+.tech-count { color: var(--orange); }
+.tech-export-link {
+  color: var(--cyan); text-decoration: none;
+  font-size: 11px; padding: 3px 10px;
+  border: 1px solid var(--cyan); border-radius: 2px;
+}
+.tech-export-link:hover {
+  background: var(--cyan); color: var(--bg-primary);
+  box-shadow: 0 0 6px var(--cyan-glow);
+}
 .tech-row .tech-glyph { color: var(--cyan); }
 .tech-version {
   margin-left: 6px; font-size: 10px;
