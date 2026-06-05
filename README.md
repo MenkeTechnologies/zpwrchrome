@@ -205,7 +205,7 @@ The `theme/` directory ships a separate Chrome theme. Same strykelang palette as
 
 | Theme image | Resolution | Purpose |
 | --- | --- | --- |
-| `theme_ntp_background.png` | 1920×1200 | New-tab-page background — grid + radial gradients + HUD corner brackets |
+| `theme_ntp_background.png` | 3840×2400 | New-tab-page background (4K-ready) — grid + radial gradients + HUD corner brackets |
 | `theme_frame.png` | 1920×120 | Window-frame strip — gradient + cyan→accent seam |
 | `theme_toolbar.png` | 1920×80 | Toolbar background |
 

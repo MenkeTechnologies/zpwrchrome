@@ -104,7 +104,7 @@ test("theme PNGs match their declared resolution", () => {
   // Pin the dimensions we documented in README/theme/README.md so a silent
   // re-render at the wrong size can't ship.
   const expected = {
-    "images/theme_ntp_background.png": [1920, 1200],
+    "images/theme_ntp_background.png": [3840, 2400],
     "images/theme_frame.png":          [1920,  120],
     "images/theme_toolbar.png":        [1920,   80]
   };

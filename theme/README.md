@@ -21,7 +21,7 @@ Chrome lets you keep at most one theme installed at a time. To remove, open
 | Path | Purpose |
 | --- | --- |
 | `manifest.json` | MV3 theme manifest (palette colors + image bindings) |
-| `images/theme_ntp_background.{svg,png}` | 1920×1200 new-tab-page background — grid + radial gradients + HUD corner brackets |
+| `images/theme_ntp_background.{svg,png}` | 3840×2400 new-tab-page background (4K-ready) — grid + radial gradients + HUD corner brackets |
 | `images/theme_frame.{svg,png}` | 1920×120 window-frame strip — gradient + seam glow |
 | `images/theme_toolbar.{svg,png}` | 1920×80 toolbar background |
 
@@ -31,7 +31,7 @@ PNGs are rasterized from the SVG sources via `rsvg-convert`:
 
 ```sh
 cd images
-rsvg-convert -w 1920 -h 1200 theme_ntp_background.svg -o theme_ntp_background.png
+rsvg-convert -w 3840 -h 2400 theme_ntp_background.svg -o theme_ntp_background.png
 rsvg-convert -w 1920 -h  120 theme_frame.svg          -o theme_frame.png
 rsvg-convert -w 1920 -h   80 theme_toolbar.svg        -o theme_toolbar.png
 ```
