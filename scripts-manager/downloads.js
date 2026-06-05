@@ -348,28 +348,23 @@ function renderList() {
 
 // ── actions ─────────────────────────────────────────────────────────
 
-// Per-gid action chain. Multiple rapid clicks (pause→resume→pause) spawn
-// parallel host processes, each doing a read-modify-write on the same
-// gid's state file — the second read can race the first write, and the
-// "last click wins" expectation breaks. Chaining per-gid forces strict
-// click-order delivery to the host.
-const _actChain = new Map();
-
+// Concurrent action calls (multiple rapid pause→resume→pause clicks) race
+// in the host's mutate_state read-modify-write. Serialization happens on
+// the host side via `with_gid_lock`, so the JS sender just fires the
+// message and treats each call independently. A 3-second sendMessage
+// timeout protects against the SW handler hanging — a stuck call would
+// otherwise leave the UI button forever disabled.
 function sendAct(action, gid) {
-  const prev = _actChain.get(gid) || Promise.resolve();
-  const tail = prev.catch(() => {}).then(() =>
-    new Promise((resolve) => {
-      chrome.runtime.sendMessage({ kind: `dl.${action}`, gid: Number(gid) }, (r) => {
-        if (chrome.runtime.lastError) { resolve({ ok: false, err: chrome.runtime.lastError.message }); return; }
-        resolve(r || { ok: false, err: "no response" });
-      });
-    })
-  );
-  _actChain.set(gid, tail);
-  tail.finally(() => {
-    if (_actChain.get(gid) === tail) _actChain.delete(gid);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    const timer = setTimeout(() => finish({ ok: false, err: "timeout" }), 3000);
+    chrome.runtime.sendMessage({ kind: `dl.${action}`, gid: Number(gid) }, (r) => {
+      clearTimeout(timer);
+      if (chrome.runtime.lastError) { finish({ ok: false, err: chrome.runtime.lastError.message }); return; }
+      finish(r || { ok: false, err: "no response" });
+    });
   });
-  return tail;
 }
 
 $list.addEventListener("click", async (e) => {
