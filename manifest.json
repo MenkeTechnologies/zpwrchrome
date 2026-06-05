@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "zpwrchrome",
   "short_name": "zpwrchrome",
-  "version": "0.15.2",
+  "version": "0.16.0",
   "description": "Browser power-tool: UNIX `pass` integration (browserpass-compatible), segmented download manager that replaces Chrome's default, JetBrains-style tab switcher with MRU + scenes + opener-tree + minimap, fzf history search, and Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
@@ -45,6 +45,13 @@
       "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
       "js": ["modal/content.js"],
       "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
+      "js": ["modal/json-viewer.js"],
+      "run_at": "document_end",
       "all_frames": false
     }
   ],
