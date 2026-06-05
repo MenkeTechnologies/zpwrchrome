@@ -82,14 +82,20 @@ test("stress: highlightWithIndices on 1000 calls finish < 100ms", () => {
   });
 });
 
-test("stress: 10,000 frecencyScore calls finish < 50ms", () => {
+test("stress: 10,000 frecencyScore calls finish < 500ms", () => {
+  // Budget was 50ms (calibrated on a fast local box). GitHub's runners
+  // routinely hit 200-300ms on the same workload — the surrounding
+  // tests use 100-2000ms ranges per the file's own "10× local timing"
+  // header. 500ms catches an order-of-magnitude regression (which is
+  // what a frecency turned O(N²) would surface as) without flaking on
+  // slow CI runners.
   const NOW = 1_700_000_000_000;
   const items = Array.from({ length: 100 }, (_, i) => ({
     visitCount: (i * 7) % 100 + 1,
     typedCount: i % 5,
     lastVisitTime: NOW - (i * 60 * 60 * 1000),
   }));
-  bench("10k frecencyScore", 50, () => {
+  bench("10k frecencyScore", 500, () => {
     for (let i = 0; i < 100; i++) {
       for (const it of items) frecencyScore(it, NOW);
     }
