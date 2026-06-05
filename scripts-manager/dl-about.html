@@ -38,7 +38,7 @@
       <span class="ico">⬇</span>
       <div>
         <h3>zpwrchrome</h3>
-        <div class="tag">UNIX <code>pass</code> · Segmented DL Manager · Tab Switcher · Userscripts · History fzf · Tech Detection · Cyberpunk Theme · Turn Off the Lights · Reader Mode · JSON · UA Switcher · Find-in-All-Tabs</div>
+        <div class="tag">UNIX <code>pass</code> · Segmented DL Manager · Tab Switcher · Userscripts · History fzf · Tech Detection · Cyberpunk Theme · Turn Off the Lights · Reader Mode · JSON · XML · UA Switcher · Find-in-All-Tabs</div>
         <div class="ver">Version <span id="ver">…</span></div>
       </div>
     </div>
@@ -63,9 +63,78 @@
       that strips the page to its main article and renders it in the
       strykelang HUD with adjustable typography,
       a <strong>JSON viewer</strong> that auto-replaces plain JSON pages with a
-      collapsible tree, and a <strong>User-Agent switcher</strong> backed by
+      collapsible tree, a sibling <strong>XML viewer</strong> for
+      <code>application/xml</code> / <code>+xml</code> vendor types plus
+      <code>.xml</code> / <code>.xsd</code> / <code>.xsl</code> /
+      <code>.rss</code> / <code>.atom</code> / <code>.svg</code> /
+      <code>.plist</code> / <code>.kml</code> / <code>.gpx</code> /
+      <code>.opml</code> / <code>.fxml</code> URLs, and a
+      <strong>User-Agent switcher</strong> backed by
       <code>chrome.declarativeNetRequest</code> dynamic rules.
     </p>
+
+    <h3>XML viewer</h3>
+    <p>
+      Auto-detects XML / SVG / RSS / Atom / plist / KML / GPX / OPML pages
+      and replaces Chrome's raw <code>&lt;pre&gt;</code> dump with a
+      DOMParser-driven collapsible tree in the strykelang HUD palette. No
+      configuration page &mdash; sits silently on every tab and only acts
+      when the content type matches. Skips the document when the JSON
+      viewer already claimed it.
+    </p>
+    <ul>
+      <li>Detection is two-pass: a cheap <code>looksLikeXml</code> string
+      pre-check (must start with <code>&lt;</code>, must NOT be HTML or
+      digit-led) gates the more expensive
+      <code>new DOMParser().parseFromString(raw, "application/xml")</code>
+      parse. If DOMParser surfaces a <code>&lt;parsererror&gt;</code>
+      element, the viewer bails so the original payload + browser-level
+      diagnostic stay visible.</li>
+      <li>Triggers on either: <code>document.contentType</code> matching
+      <code>application/xml</code> / <code>text/xml</code> /
+      <code>&lt;vendor&gt;+xml</code>, OR a path ending in any of
+      <code>.xml</code> / <code>.xsd</code> / <code>.xsl</code> /
+      <code>.xslt</code> / <code>.rss</code> / <code>.atom</code> /
+      <code>.svg</code> / <code>.plist</code> / <code>.kml</code> /
+      <code>.gpx</code> / <code>.opml</code> / <code>.fxml</code>, OR
+      the page being just a <code>&lt;pre&gt;</code> whose body parses
+      as XML (Chrome's default plain-text rendering).</li>
+      <li>Collapsible tree with separate color tokens for tag names
+      (accent magenta <code>#ff2a6d</code>), attributes (orange
+      <code>#ff8c1a</code>), attribute values (neon green
+      <code>#39ff14</code>), text content (off-white), CDATA (magenta
+      italic), comments (dim italic), and processing instructions
+      (cyan italic). Leaf elements (<code>&lt;a&gt;text&lt;/a&gt;</code>)
+      stay on one line; mixed-content and nested elements get a
+      collapsible child block with a <code>&lt;N children&gt;</code>
+      preview when collapsed.</li>
+      <li>Toolbar at top: live filter (Ctrl/Cmd+F focuses it; matches
+      tag names / attributes / values / text / CDATA / comments and
+      auto-expands ancestor collapsibles to reveal hits), <em>copy</em>
+      (raw source), <em>pretty copy</em> (re-indented via
+      <code>lib/xml-format.js</code>'s single-pass leaf-compacting
+      formatter), <em>minify copy</em> (inter-tag whitespace stripped,
+      CDATA / comments verbatim), <em>expand all</em>, <em>collapse all</em>,
+      and <em>raw</em> (toggle between the tree and the original
+      bytes).</li>
+      <li>Per-node <em>&#x29C9; xpath</em> chip on hover &mdash; copies a
+      1-based XPath (<code>/feed[1]/entry[3]/title[1]</code>) of the
+      addressed node to the clipboard.
+      <code>navigator.clipboard.writeText</code> is used when available;
+      falls back to the legacy hidden-textarea + <code>execCommand</code>
+      trick so the button still works on plain-http (non-secure-context)
+      pages.</li>
+      <li>HTTP(S) URLs in both <em>text content</em> and
+      <em>attribute values</em> are auto-linkified so feed / sitemap /
+      RSS payloads navigate without copy-paste.</li>
+      <li>Pure-helpers contract: <code>lib/xml-format.js</code> exports
+      <code>looksLikeXml</code>, <code>isXmlContentType</code>,
+      <code>hasXmlExtension</code>, <code>prettyPrint</code>,
+      <code>minify</code>, <code>countTags</code>,
+      <code>xmlByteSize</code>, <code>formatXPath</code>. 25 unit
+      tests pin auto-detect, formatting, and XPath shape (1-based
+      predicates, defaults to <code>[1]</code> when index missing).</li>
+    </ul>
 
     <h3>Post-download commands</h3>
     <p>
