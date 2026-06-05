@@ -1,4 +1,7 @@
-// popup tree keyboard nav and kill-heaviest button in popup.js.
+// popup tree keyboard nav in popup.js.
+// (The kill-heaviest button assertions in this file were removed when
+// `chrome.processes` got dropped — see tests/processes-handlers.test.js
+// for the pins guarding against its re-introduction.)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -38,24 +41,6 @@ test("popup search input resets rowIdx to zero on filter change", () => {
 
 test("popup search input calls renderList not renderCats", () => {
   assert.match(popup, /state\.filter = e\.target\.value[\s\S]*?renderList\(\)/);
-});
-
-test("popup killHeaviest button sends kill-heaviest message kind", () => {
-  assert.match(popup, /getElementById\("killHeaviest"\)/);
-  assert.match(popup, /kind: "kill-heaviest"/);
-});
-
-test("popup killHeaviest alerts when background returns ok:false", () => {
-  assert.match(popup, /if \(!r\?\.ok\) alert\("kill-heaviest: " \+ \(r\?\.error \|\| "no candidate"\)\)/);
-});
-
-test("popup killHeaviest refreshes list after attempt", () => {
-  assert.match(popup, /kill-heaviest[\s\S]*?refresh\(\)/);
-});
-
-test("popup render toggles killHeaviest button visibility from proc.available", () => {
-  const renderFn = popup.match(/function render\(\)[\s\S]*?\n\}/);
-  assert.match(renderFn[0], /killBtn\.classList\.toggle\("hidden", !state\.proc\.available\)/);
 });
 
 test("popup state.collapsedTreeIds initialized as empty Set", () => {

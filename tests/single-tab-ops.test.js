@@ -73,8 +73,9 @@ test("dispatch open-history routes to openHistoryInPopup", () => {
   assert.match(bg, /command === "open-history"\)[\s\S]*?openHistoryInPopup\(\)/);
 });
 
-test("dispatch kill-heaviest routes to killHeaviestTab", () => {
-  assert.match(bg, /command === "kill-heaviest"\)[\s\S]*?killHeaviestTab\(\)/);
+test("dispatch no longer handles kill-heaviest (chrome.processes removed)", () => {
+  assert.doesNotMatch(bg, /command === "kill-heaviest"/);
+  assert.doesNotMatch(bg, /killHeaviestTab/);
 });
 
 test("copyActiveUrl only writes when tab has a url", () => {

@@ -195,12 +195,8 @@ test("seedMru hydrates MRU from currently open tabs at startup", () => {
   assert.match(fn[0], /writeMru\(/);
 });
 
-test("kill-heaviest handler delegates to killHeaviestTab()", () => {
-  const sec = sliceHandler("kill-heaviest", 400);
-  assert.match(sec, /killHeaviestTab\(\)/);
-});
-
-test("processes-snapshot handler delegates to snapshotProcesses()", () => {
-  const sec = sliceHandler("processes-snapshot", 400);
-  assert.match(sec, /snapshotProcesses\(\)/);
+test("kill-heaviest + processes-snapshot handlers removed (dev/canary-only API)", () => {
+  // See tests/processes-handlers.test.js for the consolidated removal pins.
+  assert.doesNotMatch(bg, /msg\?\.kind === "kill-heaviest"/);
+  assert.doesNotMatch(bg, /msg\?\.kind === "processes-snapshot"/);
 });

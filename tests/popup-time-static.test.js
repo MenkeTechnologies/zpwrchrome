@@ -18,8 +18,9 @@ function extractFn(src, name) {
 }
 
 const popupTime = extractFn(popup, "timeAgo");
-const popupFmt = extractFn(popup, "fmtMb");
 const modalTime = extractFn(modal, "timeAgo");
+// fmtMb removed alongside chrome.processes integration — was only used to
+// render the proc-col memory cell. See tests/processes-handlers.test.js.
 
 test("popup timeAgo returns empty string for invalid timestamps", () => {
   assert.match(popupTime, /if \(!Number\.isFinite\(ms\) \|\| ms <= 0\) return ""/);
@@ -51,24 +52,17 @@ test("modal timeAgo matches popup tier structure", () => {
   }
 });
 
-test("popup fmtMb returns em dash for non-finite or non-positive bytes", () => {
-  assert.match(popupFmt, /if \(!Number\.isFinite\(bytes\) \|\| bytes <= 0\) return "—"/);
-});
-
-test("popup fmtMb uses integer megabytes below 100MB", () => {
-  assert.match(popupFmt, /mb < 100 \? mb\.toFixed\(0\) \+ "M"/);
-});
-
-test("popup fmtMb switches to gigabytes at 100MB and above", () => {
-  assert.match(popupFmt, /\(mb \/ 1024\)\.toFixed\(2\) \+ "G"/);
+test("popup fmtMb removed (chrome.processes integration gone)", () => {
+  assert.doesNotMatch(popup, /\bfunction fmtMb\(/);
+  assert.doesNotMatch(popup, /\bfmtMb\(/);
 });
 
 test("popup history badge calls timeAgo on lastVisitTime", () => {
   assert.match(popup, /timeAgo\(t\.lastVisitTime\)/);
 });
 
-test("popup proc column uses fmtMb on memoryBytes", () => {
-  assert.match(popup, /fmtMb\(proc\.memoryBytes\)/);
+test("popup no longer renders the proc column (chrome.processes removed)", () => {
+  assert.doesNotMatch(popup, /class="proc-col"/);
 });
 
 test("popup renderList history badge includes full locale title on lastVisitTime", () => {

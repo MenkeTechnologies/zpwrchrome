@@ -60,9 +60,9 @@ test("background handles history-list and history-delete for fzf history", () =>
   assert.ok(BG_KINDS.includes("history-delete"));
 });
 
-test("background handles processes-snapshot and kill-heaviest", () => {
-  assert.ok(BG_KINDS.includes("processes-snapshot"));
-  assert.ok(BG_KINDS.includes("kill-heaviest"));
+test("background no longer handles processes-snapshot / kill-heaviest (chrome.processes removed)", () => {
+  assert.ok(!BG_KINDS.includes("processes-snapshot"));
+  assert.ok(!BG_KINDS.includes("kill-heaviest"));
 });
 
 test("manager.js sends scripts.save via editor", () => {

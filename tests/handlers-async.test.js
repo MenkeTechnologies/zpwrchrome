@@ -42,8 +42,6 @@ const ASYNC_KINDS = [
   "scenes-delete",
   "history-list",
   "history-delete",
-  "processes-snapshot",
-  "kill-heaviest",
 ];
 
 for (const kind of ASYNC_KINDS) {

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "zpwrchrome",
   "short_name": "zpwrchrome",
-  "version": "0.12.13",
+  "version": "0.13.0",
   "description": "Browser power-tool: UNIX `pass` integration (browserpass-compatible), segmented download manager that replaces Chrome's default, JetBrains-style tab switcher with MRU + scenes + opener-tree + minimap, fzf history search, and Tampermonkey-equivalent userscripts. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
@@ -26,9 +26,6 @@
     "webRequest",
     "webRequestAuthProvider",
     "downloads"
-  ],
-  "optional_permissions": [
-    "processes"
   ],
 
   "options_ui": {
@@ -139,8 +136,6 @@
     "restore-scene-3":     { "description": "Restore scene #3" },
     "restore-scene-4":     { "description": "Restore scene #4" },
     "restore-scene-5":     { "description": "Restore scene #5" },
-
-    "kill-heaviest":       { "description": "Close the open tab consuming the most memory (Chrome dev/canary only — requires chrome.processes API)" },
 
     "pass-open-popup":     { "description": "Open popup focused on the PASS category (matches credentials for the active tab from ~/.password-store via the zpwrchrome native host)" },
     "pass-fill": {

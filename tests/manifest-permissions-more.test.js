@@ -31,8 +31,11 @@ test("manifest declares scripting permission for fallback inject", () => {
   assert.ok(manifest.permissions.includes("scripting"));
 });
 
-test("manifest optional_permissions includes processes for dev channel", () => {
-  assert.ok(manifest.optional_permissions.includes("processes"));
+test("manifest no longer requests `processes` (stable channel emits a warning for it)", () => {
+  assert.ok(!(manifest.optional_permissions || []).includes("processes"),
+    "optional_permissions must not include processes");
+  assert.ok(!(manifest.permissions || []).includes("processes"),
+    "permissions must not include processes");
 });
 
 test("manifest host_permissions grants all_urls for content script injection", () => {

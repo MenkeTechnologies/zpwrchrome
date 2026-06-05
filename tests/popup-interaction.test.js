@@ -71,8 +71,9 @@ test("popup state.collapsedTreeIds is a Set initialized empty", () => {
   assert.match(popup, /collapsedTreeIds: new Set\(\)/);
 });
 
-test("popup state.proc defaults to unavailable with empty perTab map", () => {
-  assert.match(popup, /proc: \{ available: false, perTab: \{\} \}/);
+test("popup state.proc bag removed (chrome.processes integration gone)", () => {
+  assert.doesNotMatch(popup, /proc:\s*\{/);
+  assert.doesNotMatch(popup, /state\.proc\b/);
 });
 
 test("popup refresh derives currentWindowId from active tab in MRU list", () => {

@@ -64,12 +64,9 @@ test("popup.css scene form styles scene-save-btn and scene-name input", () => {
   assert.match(css, /\.scene-name/);
 });
 
-test("popup.css kill-heaviest button uses accent color", () => {
-  assert.match(css, /\.kill-heaviest/);
-});
-
-test("popup.css proc-col styles memory/CPU column when processes API available", () => {
-  assert.match(css, /\.proc-col/);
+test("popup.css no longer ships .kill-heaviest or .proc-col rules (chrome.processes removed)", () => {
+  assert.doesNotMatch(css, /\.kill-heaviest/);
+  assert.doesNotMatch(css, /\.proc-col/);
 });
 
 test("popup.css badge variants style pinned and audible rows", () => {
