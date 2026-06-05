@@ -550,7 +550,8 @@ test("manifest permissions are all referenced by background.js or popup.js", () 
     notifications:  /chrome\.notifications\./,
     cookies:        /chrome\.cookies\./,
     webRequest:     /chrome\.webRequest\./,
-    webRequestAuthProvider: /chrome\.webRequest\.onAuthRequired/
+    webRequestAuthProvider: /chrome\.webRequest\.onAuthRequired/,
+    declarativeNetRequestWithHostAccess: /chrome\.declarativeNetRequest\./,
   };
   for (const perm of manifest.permissions) {
     assert.ok(usage[perm], `unknown permission in test mapping: ${perm}`);
