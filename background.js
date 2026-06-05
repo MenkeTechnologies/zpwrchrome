@@ -211,13 +211,36 @@ async function passClipboardCopy(text) {
   }, PASS_CLIPBOARD_CLEAR_MS);
 }
 
+// Schemeless URLs in pass entries — e.g. `10.59.0.17` or `example.com`
+// from fallbackUrlFromPath when no explicit `url:` key is present — get
+// interpreted by chrome.tabs.update as RELATIVE to the popup's origin
+// (chrome-extension://<id>/), so opening lands at e.g.
+// chrome-extension://<id>/10.59.0.17 → 404. Coerce to an absolute URL
+// here. Hostnames + bare hosts default to https:// (modern web); IPs
+// + host:port shapes default to http:// (typical internal services
+// shipped via raw IPs).
+function normalizeOpenUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return s;       // already has scheme
+  if (s.startsWith("//")) return `https:${s}`;            // protocol-relative
+  // Local-ish: raw IPv4, IPv6 in brackets, localhost, *.local — http://.
+  const head = s.split(/[\/?#]/)[0];                      // host[:port] only
+  const isIPv4 = /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(head);
+  const isIPv6 = /^\[[0-9a-f:]+\](:\d+)?$/i.test(head);
+  const isLocal = /^(localhost|[\w-]+\.local)(:\d+)?$/i.test(head);
+  const isHostPort = /^[\w.-]+:\d+$/.test(head);
+  if (isIPv4 || isIPv6 || isLocal || isHostPort) return `http://${s}`;
+  return `https://${s}`;
+}
+
 async function passOpenUrlForActive() {
   const { matches } = await passMatchActive();
   if (!matches.length) return;
   const m = matches[0];
   try {
     const entry = await bpFetchParsed(m.path);
-    const url = String(entry.url || "").trim();
+    const url = normalizeOpenUrl(entry.url);
     if (!url) return;
     const t = await getActive();
     if (t?.id) await chrome.tabs.update(t.id, { url });
@@ -229,7 +252,7 @@ async function passOpenUrlForActive() {
 async function passOpenUrlFromPath(path, newTab, _store) {
   try {
     const entry = await bpFetchParsed(path);
-    const url = String(entry.url || "").trim();
+    const url = normalizeOpenUrl(entry.url);
     if (!url) return false;
     if (newTab) {
       await chrome.tabs.create({ url });
@@ -241,6 +264,32 @@ async function passOpenUrlFromPath(path, newTab, _store) {
   } catch (e) {
     console.warn("[zpwrchrome] pass.openUrl:", e?.message || e);
     return false;
+  }
+}
+
+// Fetch + copy in one SW round-trip. Used by the popup's user / pw / otp
+// buttons because navigator.clipboard.writeText() in the popup itself
+// loses its user-gesture window across the SW + NM + GPG round-trip.
+// Routes through writeClipboard() which injects into the active page —
+// gesture context is the popup click that triggered the message.
+async function passCopyFieldForPath(path, field) {
+  if (!path || !field) return { ok: false, err: "missing path or field" };
+  try {
+    let text = "";
+    if (field === "otp") {
+      text = await bpOtpCode(path);
+    } else {
+      const entry = await bpFetchParsed(path);
+      if (field === "password" || field === "pw") text = String(entry.password || "");
+      else if (field === "username" || field === "user") text = String(entry.username || "");
+      else if (field === "url") text = normalizeOpenUrl(entry.url) || String(entry.url || "");
+      else return { ok: false, err: `unknown field: ${field}` };
+    }
+    if (!text) return { ok: false, err: `empty ${field}` };
+    await passClipboardCopy(text);
+    return { ok: true, length: text.length };
+  } catch (e) {
+    return { ok: false, err: String(e?.message || e) };
   }
 }
 
@@ -1044,23 +1093,58 @@ function fillLoginForm(username, password, autoSubmit) {
 
   let submitted = false;
   if (autoSubmit) {
-    // Walk up to the enclosing form, then prefer an explicit submit button
-    // (so onClick handlers run); fall back to form.submit() if no button is
-    // present. The form may belong to either the password field (preferred)
-    // or the standalone username field on a 2-step login page.
-    const form = (pw && pw.form) || (userEl && userEl.form) || null;
-    if (form) {
-      const submitBtn =
-        form.querySelector('button[type="submit"]') ||
-        form.querySelector('input[type="submit"]') ||
-        form.querySelector('button:not([type="button"]):not([type="reset"])');
-      if (submitBtn && !submitBtn.disabled) {
-        submitBtn.click();
-        submitted = true;
-      } else {
-        try { form.submit(); submitted = true; } catch {}
+    // Find the "Next" / "Continue" / "Sign in" button to CLICK — never
+    // form.submit(). On SPAs (React/Vue/Svelte routers), form.submit()
+    // does a hard GET navigation that puts every input value into the
+    // URL query string and reloads the page, bypassing the framework's
+    // own onClick handlers. The user's 10.59.0.17:5000/#/signin bug was
+    // exactly this: step 1 (username only) got filled, then form.submit()
+    // ran, the form had no submit button so the inputs serialized into
+    // ?username=… and the page reloaded instead of advancing to step 2.
+    //
+    // Search order:
+    //   1. <button|input type=submit> / unflagged <button> inside the form
+    //   2. The anchor field's enclosing <form> for nested wrappers
+    //   3. A few common selectors looked up document-wide as fallback
+    //      (covers buttons rendered OUTSIDE the form by the SPA, common
+    //      for shadcn/Material/Tailwind layouts)
+    const anchor = (pw && pwFilled) ? pw : userEl;
+    const form = anchor && anchor.form;
+    const findInForm = (f) => {
+      if (!f) return null;
+      const b =
+        f.querySelector('button[type="submit"]') ||
+        f.querySelector('input[type="submit"]') ||
+        f.querySelector('button:not([type="button"]):not([type="reset"])');
+      return b && !b.disabled && visible(b) ? b : null;
+    };
+    const findNearby = (start) => {
+      // BFS up the ancestor chain looking for a submit-shaped button.
+      let cur = start;
+      while (cur && cur !== cur.ownerDocument) {
+        const b =
+          cur.querySelector?.('button[type="submit"]') ||
+          cur.querySelector?.('input[type="submit"]');
+        if (b && !b.disabled && visible(b)) return b;
+        cur = cur.parentElement;
       }
+      return null;
+    };
+    const findByText = () => {
+      const rx = /^(sign[- ]?in|log[- ]?in|continue|next|submit|enter)\b/i;
+      const all = [...document.querySelectorAll('button, [role="button"], input[type="submit"]')];
+      return all.find((b) => {
+        if (b.disabled || !visible(b)) return false;
+        const t = String(b.value || b.textContent || b.getAttribute("aria-label") || "").trim();
+        return rx.test(t);
+      }) || null;
+    };
+    const submitBtn = findInForm(form) || findNearby(anchor) || findByText();
+    if (submitBtn) {
+      submitBtn.click();
+      submitted = true;
     }
+    // No form.submit() fallback by design — see comment above.
   }
   // Backward-compat: `filled` historically meant "password filled". Keep
   // that for downstream telemetry, but expose the new `pwFilled` /
@@ -2431,6 +2515,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "pass.openUrl") {
     passOpenUrlFromPath(String(msg.path || ""), !!msg.newTab, msg.store || undefined)
       .then((ok) => sendResponse({ ok }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.copyField") {
+    // SW-side fetch + copy so the clipboard write hits writeClipboard()
+    // (which injects into the active tab) — the popup's own
+    // navigator.clipboard.writeText() loses its user-gesture window
+    // across the SW + NM + GPG round-trip and silently no-ops.
+    passCopyFieldForPath(String(msg.path || ""), String(msg.field || ""))
+      .then((r) => sendResponse(r))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
