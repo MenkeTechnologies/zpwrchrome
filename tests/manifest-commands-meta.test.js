@@ -26,6 +26,22 @@ test("every manifest command has a non-empty description string", () => {
   }
 });
 
+test("background.js action context menu obeys ACTION_MENU_TOP_LEVEL_LIMIT = 6", () => {
+  // Chrome's chrome.contextMenus API caps action-context menus at 6
+  // top-level items (ACTION_MENU_TOP_LEVEL_LIMIT in the docs); items
+  // beyond #6 are silently dropped by Chrome — not failures we can
+  // catch from JS. Count: every `create({ id: …, contexts: act })`
+  // call WITHOUT a `parentId:` field is a top-level item.
+  //
+  // Match per call: `parentId:` either present (submenu child) or
+  // absent (top-level). We only count calls that include
+  // `contexts: act` (the action menu — not link/media/page menus).
+  const m = bg.match(/create\(\{[^}]*contexts:\s*act[^}]*\}/g) || [];
+  const topLevel = m.filter((s) => !/parentId/.test(s));
+  assert.ok(topLevel.length <= 6,
+    `action menu has ${topLevel.length} top-level items; Chrome silently drops items > 6 (use parentId submenus)`);
+});
+
 test("manifest command descriptions contain no literal HTML tags", () => {
   // Chrome's chrome://extensions/shortcuts page parses command
   // descriptions through a tiny HTML allowlist (parseHtmlSubset in
