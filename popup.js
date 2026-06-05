@@ -20,7 +20,10 @@ const CATEGORIES = [
   { id: "minimap", label: "Minimap",           key: "⌘9" },
   { id: "history", label: "History",           key: "⌘0" },
   { id: "pass",    label: "Pass",              key: "⌘P" },
-  { id: "tech",    label: "Tech",              key: "⌘T" }
+  // Cmd+K — Cmd+T is reserved by Chrome for new-tab and cannot be
+  // intercepted by an extension popup. K is the common "command palette"
+  // binding (VSCode, Slack, Linear) — close enough to the tech-recon vibe.
+  { id: "tech",    label: "Tech",              key: "⌘K" }
 ];
 
 // Browsing-history fetch ceiling. chrome.history.search() with text:""
@@ -259,6 +262,13 @@ function renderList() {
     </div>
   ` : "";
 
+  const techHeader = (cat.id === "tech" && state.tech.loaded && state.tech.hits.length) ? `
+    <div class="tech-header">
+      <span class="tech-count">${state.tech.hits.length} technolog${state.tech.hits.length === 1 ? "y" : "ies"} detected</span>
+      <a href="#" id="tech-export" class="tech-export-link" title="Export as JSON (Cmd+E)">⤓ export</a>
+    </div>
+  ` : "";
+
   if (!items.length) {
     if (cat.id === "pass") {
       let passMsg;
@@ -276,14 +286,14 @@ function renderList() {
       $list.innerHTML = `<div class="empty">${msg}</div>`;
       return;
     }
-    $list.innerHTML = saveForm + `<div class="empty">${isScenes ? "no scenes saved yet" : "no matches"}</div>`;
+    $list.innerHTML = saveForm + techHeader + `<div class="empty">${isScenes ? "no scenes saved yet" : "no matches"}</div>`;
     if (isScenes) wireSceneForm();
     return;
   }
   if (state.rowIdx >= items.length) state.rowIdx = items.length - 1;
   if (state.rowIdx < 0) state.rowIdx = 0;
 
-  $list.innerHTML = saveForm + items.map((t, i) => {
+  $list.innerHTML = saveForm + techHeader + items.map((t, i) => {
     if (t.kind === "tech") {
       const name    = escapeHtml(t.name);
       const ver     = t.version ? `<span class="tech-version">${escapeHtml(t.version)}</span>` : "";
@@ -479,8 +489,47 @@ function renderList() {
     });
   });
   if (isScenes) wireSceneForm();
+  const exportLink = document.getElementById("tech-export");
+  if (exportLink) {
+    exportLink.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      exportTechAsJson();
+    });
+  }
   const sel = $list.querySelector(".row.sel");
   if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+
+// Export the detected stack as JSON + CSV. Triggered by the popup's
+// `[⤓ export]` link (Tech category header) or Cmd/Ctrl+E while the
+// Tech category is active. Mirrors Wappalyzer's own export — name,
+// version, confidence, categories, website per row.
+function exportTechAsJson() {
+  if (!state.tech.loaded || !state.tech.hits.length) return;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const t = tabs?.[0];
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const hostSafe = host(t?.url || "").replace(/[^a-z0-9.-]/gi, "_") || "page";
+    const rows = state.tech.hits.map((h) => ({
+      name:       h.name,
+      version:    h.version || "",
+      confidence: h.confidence,
+      categories: (h.cats || []).map((c) => state.tech.categories[c]?.name).filter(Boolean),
+      website:    h.url || "",
+    }));
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      url:        t?.url || "",
+      title:      t?.title || "",
+      technologies: rows,
+    };
+    const json = JSON.stringify(payload, null, 2);
+    chrome.downloads?.download?.({
+      url:      "data:application/json;charset=utf-8," + encodeURIComponent(json),
+      filename: `tech-${hostSafe}-${stamp}.json`,
+      saveAs:   true,
+    });
+  });
 }
 
 function loadTech() {
@@ -778,6 +827,29 @@ document.addEventListener("keydown", (e) => {
       render();
       return;
     }
+  }
+  // Cmd/Ctrl+K → jump to Tech category. Cmd+T would be the "natural"
+  // mnemonic but Chrome reserves it for new-tab and the popup can't
+  // intercept it.
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === "k" || e.key === "K")) {
+    const techIdx = CATEGORIES.findIndex((c) => c.id === "tech");
+    if (techIdx >= 0) {
+      e.preventDefault();
+      state.catIdx = techIdx;
+      state.rowIdx = 0;
+      render();
+      return;
+    }
+  }
+  // Cmd/Ctrl+E in the Tech category → export detected stack as JSON.
+  // (Cmd+E in other categories stays bound to "switch-previous-tab"
+  // by Chrome, but the popup won't see that — Cmd+E to the popup means
+  // the popup is focused.)
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === "e" || e.key === "E")
+      && CATEGORIES[state.catIdx].id === "tech") {
+    e.preventDefault();
+    exportTechAsJson();
+    return;
   }
   // Tree-view: ← / → collapse / expand the current branch.
   if (CATEGORIES[state.catIdx].id === "tree" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
