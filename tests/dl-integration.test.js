@@ -495,17 +495,35 @@ test("toolbar badge multiplexes downloads (cyan) and pass match count (magenta) 
   assert.match(bg, /diagPush\("pass\.badge"/);
 });
 
-test("badge composite mode — when downloads AND pass match, text is `${dl}*` + tooltip carries the breakdown", () => {
+test("badge composite mode — appends `*` when downloads/tech/pass coexist + tooltip carries the breakdown", () => {
   const fn = bg.match(/async function applyMultiplexedBadge[\s\S]*?\n\}/);
   assert.ok(fn, "applyMultiplexedBadge not found");
-  // Both > 0 branch is the composite — asterisk hint + structured tooltip.
-  assert.match(fn[0], /dl > 0 && pass > 0/);
-  assert.match(fn[0], /text\s*=\s*`\$\{dl\}\*`/);
+  // Composite priority is dl → tech → pass. The dominant count is the
+  // visible number; the `*` modifier means at least one of the others
+  // is also > 0. After the tech-counter integration the syntax shifted
+  // from `${dl}*` to `String(dl) + (others ? "*" : "")` etc.
+  assert.match(fn[0], /dl > 0/);
+  assert.match(fn[0], /tech > 0/);
+  assert.match(fn[0], /pass > 0/);
+  assert.match(fn[0], /String\(dl\) \+ \(others\(/,    "dl branch must use the asterisk-modifier helper");
+  assert.match(fn[0], /String\(tech\) \+ \(pass > 0/,  "tech branch must asterisk when pass is set");
   // Tooltip is updated via chrome.action.setTitle on every paint so a hover
   // surfaces what the badge text alone can't.
   assert.match(fn[0], /chrome\.action\?\.setTitle/);
   // The tooltip mentions both counts plus a hint to use the fill shortcut.
   assert.match(fn[0], /pass match.+fill shortcut/);
+  // Tech also appears in the tooltip parts list.
+  assert.match(fn[0], /technolog\$\{tech === 1 \? "y" : "ies"\} detected/);
+});
+
+test("badge multiplexer factors active-tab tech count via refreshActiveTabBadge", () => {
+  // The orchestrator that fires on chrome.tabs.onActivated / onUpdated
+  // resolves the active tab, pulls its cached tech hits from
+  // techResultsByTab, and re-paints the badge. Without this, switching
+  // away from a tech-heavy tab would leave the prior count "stuck".
+  assert.match(bg, /async function refreshActiveTabBadge\b/);
+  assert.match(bg, /_techMatchCount\s*=\s*\(typeof tabId === "number"\)/);
+  assert.match(bg, /chrome\.tabs\?\.onActivated\?\.addListener\?\.\(\(\) => \{ refreshActiveTabBadge\(\); \}\)/);
 });
 
 test("DL_DEFAULTS exposes passShowMatchBadge:true and dl-settings.html surfaces the toggle", () => {

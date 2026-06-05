@@ -1992,14 +1992,11 @@ async function runTechDetection(tabId) {
   const hits = wappDetect(signals, WAPP_COMPILED);
   techResultsByTab.set(tabId, hits);
   try {
-    // Per-tab tech badge — orange so it's visually distinct from the
-    // global multiplex badge colors (cyan = downloads, magenta = pass,
-    // yellow = screenshot capture, green = screenshot success).
-    await chrome.action?.setBadgeText?.({ tabId, text: hits.length ? String(hits.length) : "" });
-    await chrome.action?.setBadgeBackgroundColor?.({ tabId, color: "#ff8c1a" });
-    if (hits.length) {
-      await chrome.action?.setTitle?.({ tabId, title: `zpwrchrome — ${hits.length} technolog${hits.length === 1 ? "y" : "ies"} detected on this tab` });
-    }
+    // Badge updates flow through the multiplexer (applyMultiplexedBadge)
+    // so a tab with both tech matches AND pass matches shows as e.g.
+    // "10*" rather than fighting between a per-tab tech write and the
+    // global multiplex. Refresh fires here once the count is cached.
+    refreshActiveTabBadge().catch(() => {});
   } catch {}
   diagPush("tech.detected", { tabId, count: hits.length });
   return hits;
@@ -3114,14 +3111,19 @@ function cancelBgPoll() {
   if (_bgPollTimer) { clearTimeout(_bgPollTimer); _bgPollTimer = null; }
 }
 
-// Toolbar badge. Two independent counters share the single Chrome badge:
-//   1. Active downloads (cyan #05d9e8) — wins when ≥ 1 in flight.
-//   2. Matching pass entries for the active tab (magenta #d300c5).
-// If neither has anything to show, the badge is cleared. Both can be
-// toggled independently via dl.interface.badgeShowCount and
-// dl.settings.passShowMatchBadge.
+// Toolbar badge. Three counters share the single Chrome badge:
+//   1. Active downloads (cyan #05d9e8) — wins on number when ≥ 1 in flight.
+//   2. Tech detected on active tab (orange #ff8c1a) — wins on number
+//      when no downloads but tech present.
+//   3. Matching pass entries for active tab (magenta #d300c5) — wins
+//      alone, otherwise modifies the dominant cell with `*`.
+// Composite: a trailing `*` means "one of the other two also matches".
+// Tooltip always lists the full breakdown. Per-domain toggles:
+// dl.interface.badgeShowCount + dl.settings.passShowMatchBadge (tech is
+// always shown — it's information-only, no opt-out).
 let _dlActiveCount  = 0;
 let _passMatchCount = 0;
+let _techMatchCount = 0;   // mirrors techResultsByTab.get(activeTabId).length
 async function applyMultiplexedBadge() {
   try {
     const ifc = await loadDlInterface();
@@ -3130,31 +3132,51 @@ async function applyMultiplexedBadge() {
     const showPass = dls.passShowMatchBadge !== false;   // default ON
     const dl   = showDl   ? _dlActiveCount  : 0;
     const pass = showPass ? _passMatchCount : 0;
+    const tech = _techMatchCount;
 
     let text  = "";
     let color = "#05d9e8";   // cyan default
     let title = "zpwrchrome";
 
-    if (dl > 0 && pass > 0) {
-      // Composite — downloads dominate visually, asterisk hints pass also
-      // has matches. Tooltip carries the actual breakdown so a hover
-      // reveals it.
-      text  = `${dl}*`;
+    // Priority for the visible number: downloads (most actionable) →
+    // tech (info about the current tab) → pass (a click away). Asterisk
+    // means "at least one of the other tracked counters is also > 0".
+    const others = (others_set) => [...others_set].filter(Boolean).length > 0;
+    if (dl > 0) {
+      text  = String(dl) + (others(new Set([tech, pass])) ? "*" : "");
       color = "#05d9e8";
-      title = `zpwrchrome — ${dl} active download${dl === 1 ? "" : "s"} · ${pass} pass match${pass === 1 ? "" : "es"} (hit your fill shortcut)`;
-    } else if (dl > 0) {
-      text  = String(dl);
-      color = "#05d9e8";
-      title = `zpwrchrome — ${dl} active download${dl === 1 ? "" : "s"}`;
+    } else if (tech > 0) {
+      text  = String(tech) + (pass > 0 ? "*" : "");
+      color = "#ff8c1a";
     } else if (pass > 0) {
       text  = String(pass);
       color = "#d300c5";
-      title = `zpwrchrome — ${pass} pass match${pass === 1 ? "" : "es"} for this tab (hit your fill shortcut)`;
     }
+    // Title — always describe every non-zero counter so hovering reveals
+    // exactly what `10*` is composed of.
+    const parts = [];
+    if (dl)   parts.push(`${dl} active download${dl   === 1 ? "" : "s"}`);
+    if (tech) parts.push(`${tech} technolog${tech === 1 ? "y" : "ies"} detected`);
+    if (pass) parts.push(`${pass} pass match${pass === 1 ? "" : "es"} (hit your fill shortcut)`);
+    if (parts.length) title = `zpwrchrome — ${parts.join(" · ")}`;
+
     await chrome.action?.setBadgeBackgroundColor?.({ color });
     await chrome.action?.setBadgeText?.({ text });
     await chrome.action?.setTitle?.({ title });
   } catch {}
+}
+
+// Refresh both pass-match count + tech-match count for whatever tab is
+// currently active and repaint the badge. Single source of truth that
+// handles tech, pass, and downloads in one pass.
+async function refreshActiveTabBadge() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabId = tab?.id;
+    _techMatchCount = (typeof tabId === "number") ? (techResultsByTab.get(tabId)?.length || 0) : 0;
+  } catch { _techMatchCount = 0; }
+  // refreshPassMatchBadge re-paints, so we don't need a separate call.
+  await refreshPassMatchBadge();
 }
 
 async function applyToolbarBadge(jobs) {
@@ -3187,9 +3209,9 @@ async function refreshPassMatchBadge() {
   } catch {}
 }
 
-chrome.tabs?.onActivated?.addListener?.(() => { refreshPassMatchBadge(); });
+chrome.tabs?.onActivated?.addListener?.(() => { refreshActiveTabBadge(); });
 chrome.tabs?.onUpdated?.addListener?.((tabId, change) => {
-  if (change?.url || change?.status === "complete") refreshPassMatchBadge();
+  if (change?.url || change?.status === "complete") refreshActiveTabBadge();
 });
 chrome.runtime.onInstalled.addListener(() => { refreshPassMatchBadge(); });
 chrome.runtime.onStartup.addListener(()   => { refreshPassMatchBadge(); });
