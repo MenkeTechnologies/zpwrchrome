@@ -22,7 +22,7 @@
 
 ## `[CYBERPUNK HUD]`
 
-A Chrome MV3 extension that bundles every daily-driver browser tool into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, a Tampermonkey-equivalent userscript engine, a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG, a Wappalyzer-compatible technology detector that fingerprints the active page against a vendored 3,993-tech corpus, a cyberpunk page-theme injector that paints arbitrary pages with the strykelang HUD palette, a Turn Off the Lights cinema dimmer that lifts `<video>` above a dark overlay, an auto-detected JSON viewer, a User-Agent switcher backed by `chrome.declarativeNetRequest` dynamic rules, and a find-in-all-tabs full-text search. 50 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
+A Chrome MV3 extension that bundles every daily-driver browser tool into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, a Tampermonkey-equivalent userscript engine, a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG, a Wappalyzer-compatible technology detector that fingerprints the active page against a vendored 3,993-tech corpus, a cyberpunk page-theme injector that paints arbitrary pages with the strykelang HUD palette, a Turn Off the Lights cinema dimmer that lifts `<video>` above a dark overlay, an auto-detected JSON viewer + a sibling XML viewer (covers `application/xml`, `+xml` vendor types, SVG, RSS, Atom, plist, KML, GPX, …), a User-Agent switcher backed by `chrome.declarativeNetRequest` dynamic rules, and a find-in-all-tabs full-text search. 50 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
 
 ### [`Live Site`](https://menketechnologies.github.io/zpwrchrome/) &middot; [`Source`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [`Theme`](theme/)
 
@@ -336,7 +336,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 | Total chrome.commands | **54** (manifest cap on default keys is 4 — this ext ships 4; the other 50 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **2948** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
+| Test suite | **2973** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -366,6 +366,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 | `scripts-manager/ua-switcher.{html,css,js}` + `lib/ua-presets.js` | User-Agent switcher — 16 vendor-shipped presets across 6 families plus a custom UA field. Backed by a single `chrome.declarativeNetRequest` dynamic rule (id 1001) that rewrites the `User-Agent` request header |
 | `scripts-manager/find-all.{html,css,js}` + `lib/find-snippet.js` | Find-in-all-tabs — fzf-fuzzy search across every open tab's `innerText` (parallel scrape capped at 200 KB / tab). Enter activates the chosen tab and scrolls to the match via `window.find()` |
 | `modal/json-viewer.js` + `lib/json-format.js` | Auto-detects JSON-served pages and replaces `<pre>` with a collapsible tree (RFC 6901 pointer copy, prettyPrint / minify toggles, clipboard with `execCommand` fallback for non-secure contexts) |
+| `modal/xml-viewer.js` + `lib/xml-format.js` | Auto-detects XML/SVG/RSS/Atom/plist/KML/GPX served pages and replaces `<pre>` with a DOMParser-driven collapsible tree. Attribute coloring, CDATA / comment / PI rendering, XPath copy per node, live filter, prettyPrint / minify / raw toggles, http(s) auto-linkify in text + attribute values |
 | `zpwrchrome-host/Cargo.toml` / `zpwrchrome-host/src/{lib,frame}.rs` + `src/ported/**` + `src/extensions/**` + `src/bin/zpwrchrome_host.rs` | Rust port of `browserpass-native` v3.1.2 + extension actions (`otp`, `search`, `dl.*`) over length-prefixed JSON on stdio. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see `zpwrchrome-host/docs/port_report.html` |
 | `zpwrchrome-host --install <ext-id>` (CLI flag on the binary, not a separate script) | Writes `com.menketechnologies.zpwrchrome.json` into every detected Chromium-family browser config dir on macOS / Linux. `allowed_origins` is set to `chrome-extension://<ext-id>/` so the browser will only spawn the host for this extension |
 | `zpwrchrome-host/tests/ported_*.rs` + `extensions_*.rs` | `cargo test` suite — per-fn pins for the port + extensions, end-to-end binary spawn tests, segmented download against a local HTTP fixture |
@@ -386,7 +387,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2948 tests across 181 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2973 tests across 182 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
