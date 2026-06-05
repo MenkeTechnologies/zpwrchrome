@@ -246,20 +246,25 @@ const CARD_TEMPLATE_KEYS = [
   "cc-name", "cc-number", "cc-exp-month", "cc-exp-year", "cvv",
 ];
 
-// startNewFromTemplate(prefix, keys) — runs the standard new-entry
-// reset and then pre-seeds: (a) path = "<prefix>/" so the user only
-// types the suffix, (b) one empty kv-row per template key, (c) marks
-// the path as user-edited so maybeAutoDerivePath doesn't overwrite
-// the prefix. Focus lands on the path row so the user types the suffix
-// first (the natural completion).
-function startNewFromTemplate(prefix, keys) {
+// startNewFromTemplate(prefix, suffix, keys) — runs the standard
+// new-entry reset and then pre-seeds: (a) path = "<prefix>/<suffix>"
+// fully written out (the suffix is auto-selected so the user can hit
+// any key to replace it if they want a different name), (b) one empty
+// kv-row per template key, (c) marks the path as user-edited so
+// maybeAutoDerivePath doesn't overwrite the path.
+function startNewFromTemplate(prefix, suffix, keys) {
   startNew();
-  $("ed-path").value = `${prefix}/`;
-  state.pathTouched = true;            // keep the prefix from being overwritten
-  // Move cursor to the end of the path for one-keystroke completion.
-  const len = $("ed-path").value.length;
+  $("ed-path").value = `${prefix}/${suffix}`;
+  state.pathTouched = true;            // keep the templated path from being overwritten
+  // Focus the path row with the SUFFIX pre-selected, so one keystroke
+  // replaces it if the user wants a different name (e.g. "work" /
+  // "amex" / "personal-2"), or they can just hit Tab to keep it.
   $("ed-path").focus();
-  try { $("ed-path").setSelectionRange(len, len); } catch {}
+  try {
+    const start = prefix.length + 1;
+    const end   = start + suffix.length;
+    $("ed-path").setSelectionRange(start, end);
+  } catch {}
   // Profile / card entries don't really have a single "password" on
   // line 1 — clear the auto-generated one so the file starts with a
   // free-form label the user can type, or leaves blank.
@@ -273,10 +278,10 @@ function startNewFromTemplate(prefix, keys) {
 }
 
 function startNewProfileTemplate() {
-  startNewFromTemplate("profile", PROFILE_TEMPLATE_KEYS);
+  startNewFromTemplate("profile", "personal", PROFILE_TEMPLATE_KEYS);
 }
 function startNewCardTemplate() {
-  startNewFromTemplate("creditcard", CARD_TEMPLATE_KEYS);
+  startNewFromTemplate("creditcard", "visa", CARD_TEMPLATE_KEYS);
 }
 
 // Auto-derive the entry path from URL + login while the user is typing.
