@@ -1756,20 +1756,30 @@ const CTX_ACT_REPO   = "zpc-act-repo";
 const CTX_ACT_SEP1   = "zpc-act-sep1";
 const CTX_ACT_SEP2   = "zpc-act-sep2";
 const CTX_ACT_SEP3   = "zpc-act-sep3";
+// Submenu parents — Chrome caps top-level action-context-menu items at
+// 6 (ACTION_MENU_TOP_LEVEL_LIMIT in the contextMenus API docs); items
+// beyond #6 are silently dropped. Submenu children don't count against
+// that cap, so we group everything except the 3 most-used quick
+// actions under three parent submenus.
+const CTX_SUB_MGRS   = "zpc-sub-mgrs";
+const CTX_SUB_SET    = "zpc-sub-set";
+const CTX_SUB_HELP   = "zpc-sub-help";
 
 const REPO_URL  = "https://github.com/MenkeTechnologies/zpwrchrome";
 const ISSUE_URL = "https://github.com/MenkeTechnologies/zpwrchrome/issues/new";
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   if (!chrome.contextMenus) return;
-  // No removeAll() — its async callback got eaten by SW termination
-  // and nuked the whole menu. Create() with a duplicate id silently
-  // no-ops (we void lastError on every callback), so re-running the
-  // creates on every install is idempotent: pre-existing entries stay
-  // put, new ids land cleanly. The downside is that ids removed from
-  // a future version of this code will linger as orphan menu items
-  // until the user reinstalls — that's a much smaller bug than the
-  // entire toolbar menu vanishing.
+  // Wipe stale menu state first. We do need this now because the
+  // restructure (everything-under-submenus) means old top-level ids
+  // would collide with new parentId-children of the same id; without
+  // a clean slate the create() calls silently no-op on the stale
+  // version. Wrap removeAll in a manual Promise so the await blocks
+  // SW termination regardless of whether the native API returns one.
+  await new Promise((resolve) => chrome.contextMenus.removeAll(() => {
+    void chrome.runtime.lastError;
+    resolve();
+  }));
   const ok = () => void chrome.runtime.lastError;
   // Link/media menus.
   chrome.contextMenus.create({ id: CTX_DL_LINK,  title: "Download with zpwrchrome", contexts: ["link"] }, ok);
@@ -1781,33 +1791,52 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: CTX_PG_MEDIA,  title: "zpwrchrome: download all media on page",  contexts: ["page"] }, ok);
 
   // Toolbar-icon menu (right-click on the extension's action icon).
+  //
+  // Chrome's ACTION_MENU_TOP_LEVEL_LIMIT is 6 — items 7+ are silently
+  // dropped. Layout:
+  //   1. Turn off the lights (this tab)        — per-tab quick action
+  //   2. Reader mode (this tab)                — per-tab quick action
+  //   3. Full-page screenshot (this tab)       — per-tab quick action
+  //   4. Manager pages ▸                       — submenu (no cap)
+  //   5. Settings ▸                            — submenu (no cap)
+  //   6. Help ▸                                — submenu (no cap)
   const act = ["action"];
   const create = (props) => chrome.contextMenus.create(props, ok);
-  create({ id: CTX_ACT_MGR,    title: "Open download manager",        contexts: act });
-  create({ id: CTX_ACT_SCR,    title: "Open userscript manager",      contexts: act });
-  create({ id: CTX_ACT_PASS,   title: "Open pass manager",            contexts: act });
-  create({ id: CTX_ACT_FIND,   title: "Find in all tabs",             contexts: act });
-  create({ id: CTX_ACT_UA,     title: "User-Agent switcher",          contexts: act });
-  create({ id: CTX_ACT_THEME,  title: "Cyberpunk page theme",         contexts: act });
-  create({ id: CTX_ACT_LIGHTS, title: "Turn off the lights (this tab)", contexts: act });
-  create({ id: CTX_ACT_LIGHTSCFG, title: "Lights-off settings…",       contexts: act });
-  create({ id: CTX_ACT_READER, title: "Reader mode (this tab)",        contexts: act });
-  create({ id: CTX_ACT_READERCFG, title: "Reader-mode settings…",      contexts: act });
-  create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
+
+  // === Top level (exactly 6) ====================================
+  create({ id: CTX_ACT_LIGHTS, title: "Turn off the lights (this tab)",  contexts: act });
+  create({ id: CTX_ACT_READER, title: "Reader mode (this tab)",          contexts: act });
   create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
-  create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
-  create({ id: CTX_ACT_SET,    title: "Settings — General",           contexts: act });
-  create({ id: CTX_ACT_IFACE,  title: "Settings — Interface",         contexts: act });
-  create({ id: CTX_ACT_EXTFLT, title: "Settings — Extension Filter",  contexts: act });
-  create({ id: CTX_ACT_RULES,  title: "Settings — Rule System",       contexts: act });
-  create({ id: CTX_ACT_FOLD,   title: "Change downloads folder…",     contexts: act });
-  create({ id: CTX_ACT_SEP2,   type: "separator",                     contexts: act });
-  create({ id: CTX_ACT_HELP,   title: "Help",                         contexts: act });
-  create({ id: CTX_ACT_ABOUT,  title: "About zpwrchrome",             contexts: act });
-  create({ id: CTX_ACT_EXTPG,  title: "Manage this extension",        contexts: act });
-  create({ id: CTX_ACT_SEP3,   type: "separator",                     contexts: act });
-  create({ id: CTX_ACT_ISSUE,  title: "Report an issue",              contexts: act });
-  create({ id: CTX_ACT_REPO,   title: "View source on GitHub",        contexts: act });
+  create({ id: CTX_SUB_MGRS,   title: "Manager pages",                   contexts: act });
+  create({ id: CTX_SUB_SET,    title: "Settings",                        contexts: act });
+  create({ id: CTX_SUB_HELP,   title: "Help",                            contexts: act });
+
+  // === Manager pages submenu ====================================
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_MGR,    title: "Open download manager",   contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_SCR,    title: "Open userscript manager", contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_PASS,   title: "Open pass manager",       contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_FIND,   title: "Find in all tabs",        contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_UA,     title: "User-Agent switcher",     contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_THEME,  title: "Cyberpunk page theme",    contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_LIGHTSCFG, title: "Lights-off settings…", contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_READERCFG, title: "Reader-mode settings…", contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_DIAG,   title: "Open diagnostics",        contexts: act });
+
+  // === Settings submenu =========================================
+  create({ parentId: CTX_SUB_SET, id: CTX_ACT_SET,    title: "General",            contexts: act });
+  create({ parentId: CTX_SUB_SET, id: CTX_ACT_IFACE,  title: "Interface",          contexts: act });
+  create({ parentId: CTX_SUB_SET, id: CTX_ACT_EXTFLT, title: "Extension Filter",   contexts: act });
+  create({ parentId: CTX_SUB_SET, id: CTX_ACT_RULES,  title: "Rule System",        contexts: act });
+  create({ parentId: CTX_SUB_SET, id: CTX_ACT_SEP1,   type: "separator",           contexts: act });
+  create({ parentId: CTX_SUB_SET, id: CTX_ACT_FOLD,   title: "Change downloads folder…", contexts: act });
+
+  // === Help submenu =============================================
+  create({ parentId: CTX_SUB_HELP, id: CTX_ACT_HELP,  title: "Help",                contexts: act });
+  create({ parentId: CTX_SUB_HELP, id: CTX_ACT_ABOUT, title: "About zpwrchrome",    contexts: act });
+  create({ parentId: CTX_SUB_HELP, id: CTX_ACT_EXTPG, title: "Manage this extension", contexts: act });
+  create({ parentId: CTX_SUB_HELP, id: CTX_ACT_SEP2,  type: "separator",            contexts: act });
+  create({ parentId: CTX_SUB_HELP, id: CTX_ACT_ISSUE, title: "Report an issue",     contexts: act });
+  create({ parentId: CTX_SUB_HELP, id: CTX_ACT_REPO,  title: "View source on GitHub", contexts: act });
 });
 
 if (chrome.contextMenus) {
