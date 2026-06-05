@@ -37,7 +37,7 @@
       <span class="ico">⬇</span>
       <div>
         <h3>zpwrchrome</h3>
-        <div class="tag">UNIX <code>pass</code> · Segmented DL Manager · Tab Switcher · Userscripts · History fzf · Tech Detection · Cyberpunk Theme · JSON · UA Switcher · Find-in-All-Tabs</div>
+        <div class="tag">UNIX <code>pass</code> · Segmented DL Manager · Tab Switcher · Userscripts · History fzf · Tech Detection · Cyberpunk Theme · Turn Off the Lights · JSON · UA Switcher · Find-in-All-Tabs</div>
         <div class="ver">Version <span id="ver">…</span></div>
       </div>
     </div>
@@ -56,11 +56,27 @@
       <strong>Wappalyzer-compatible technology detector</strong> running the
       vendored 3,993-fingerprint HTTPArchive corpus, a
       <strong>cyberpunk page-theme injector</strong> that paints arbitrary pages
-      with the strykelang HUD palette, a <strong>JSON viewer</strong> that auto-
-      replaces plain JSON pages with a collapsible tree, and a
-      <strong>User-Agent switcher</strong> backed by <code>chrome.declarativeNetRequest</code>
-      dynamic rules.
+      with the strykelang HUD palette, a <strong>Turn-off-the-lights cinema dimmer</strong>
+      that overlays the page in near-black and spotlights any
+      <code>&lt;video&gt;</code> element above it,
+      a <strong>JSON viewer</strong> that auto-replaces plain JSON pages with a
+      collapsible tree, and a <strong>User-Agent switcher</strong> backed by
+      <code>chrome.declarativeNetRequest</code> dynamic rules.
     </p>
+
+    <h3>Turn off the lights (cinema mode)</h3>
+    <p>
+      Port of the Turn Off the Lights Chrome extension. Trigger via the
+      <code>lights-off</code> command (bind at <code>chrome://extensions/shortcuts</code>),
+      the toolbar context menu &mdash; <em>Turn off the lights (this tab)</em>,
+      or the popup &rarr; <code>lights ▸</code> &mdash; which opens the settings UI.
+    </p>
+    <ul>
+      <li><code>modal/lights-off.js</code> walks every visible <code>&lt;video&gt;</code> element, walks the ancestor chain up to <code>&lt;body&gt;</code>, and sets <code>z-index: 2147483647</code> + (if needed) <code>position: relative</code> on every node so the player escapes any <code>overflow: hidden</code> or stacking-context clip.</li>
+      <li>A full-viewport <code>&lt;div&gt;</code> overlay sits one z-index below the video chain at <code>2147483646</code> with the configured opacity, color, and CSS fade. Click the overlay or press <kbd>Esc</kbd> to undim &mdash; both restore the original <code>z-index</code> / <code>position</code> values via the <code>data-zpwr-lights-lifted</code> attribute we tagged on each touched element.</li>
+      <li>Settings (<code>scripts-manager/lights-off.html</code>): opacity 0&ndash;1 slider, fade duration ms, overlay color picker, auto-on toggle (dim automatically on any page that has a <code>&lt;video&gt;</code>), blocklist / allowlist textarea (one host per line, dot-anchored subdomain match), live preview pane.</li>
+      <li>Per-host routing matches the cyber-theme injector model: <code>all</code> and <code>blocklist</code> treat the textarea as exclusions, <code>allowlist</code> flips polarity. Settings persist in <code>chrome.storage.local</code> under the <code>lights.off</code> key.</li>
+    </ul>
 
     <h3>Cyberpunk page-theme injector</h3>
     <p>

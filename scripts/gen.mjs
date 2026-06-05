@@ -442,6 +442,11 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 | \`modal/content.js\` | JetBrains-style Recent Tabs modal — content script, shadow DOM, 2-column layout |
 | \`scripts-manager/manager.{html,css,js}\` | Userscript engine dashboard (Tampermonkey-equivalent) |
 | \`scripts-manager/downloads.{html,css,js}\` | Live download queue UI — push-event subscription + cached snapshot rehydration |
+| \`scripts-manager/theme-injector.{html,css,js}\` + \`lib/cyber-theme-css.js\` + \`modal/cyber-theme.js\` | Cyberpunk page-theme injector — \`color-scheme: dark\` + targeted overrides for white-card patterns + intensity / forceMono / scanlines knobs. Settings persisted under \`chrome.storage.local["theme.injector"]\` and broadcast to every tab via \`storage.onChanged\` |
+| \`scripts-manager/lights-off.{html,css,js}\` + \`lib/lights-off-css.js\` + \`modal/lights-off.js\` | Turn-off-the-lights cinema dimmer — full-viewport overlay + \`<video>\` lifted above via \`z-index: 2147483647\`. Click overlay or Esc to undim; per-host block/allowlist; settings under \`chrome.storage.local["lights.off"]\` |
+| \`scripts-manager/ua-switcher.{html,css,js}\` + \`lib/ua-presets.js\` | User-Agent switcher — 16 vendor-shipped presets across 6 families plus a custom UA field. Backed by a single \`chrome.declarativeNetRequest\` dynamic rule (id 1001) that rewrites the \`User-Agent\` request header |
+| \`scripts-manager/find-all.{html,css,js}\` + \`lib/find-snippet.js\` | Find-in-all-tabs — fzf-fuzzy search across every open tab's \`innerText\` (parallel scrape capped at 200 KB / tab). Enter activates the chosen tab and scrolls to the match via \`window.find()\` |
+| \`modal/json-viewer.js\` + \`lib/json-format.js\` | Auto-detects JSON-served pages and replaces \`<pre>\` with a collapsible tree (RFC 6901 pointer copy, prettyPrint / minify toggles, clipboard with \`execCommand\` fallback for non-secure contexts) |
 | \`zpwrchrome-host/Cargo.toml\` / \`zpwrchrome-host/src/{lib,frame}.rs\` + \`src/ported/**\` + \`src/extensions/**\` + \`src/bin/zpwrchrome_host.rs\` | Rust port of \`browserpass-native\` v3.1.2 + extension actions (\`otp\`, \`search\`, \`dl.*\`) over length-prefixed JSON on stdio. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see \`zpwrchrome-host/docs/port_report.html\` |
 | \`zpwrchrome-host --install <ext-id>\` (CLI flag on the binary, not a separate script) | Writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir on macOS / Linux. \`allowed_origins\` is set to \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension |
 | \`zpwrchrome-host/tests/ported_*.rs\` + \`extensions_*.rs\` | \`cargo test\` suite — per-fn pins for the port + extensions, end-to-end binary spawn tests, segmented download against a local HTTP fixture |
@@ -1231,14 +1236,14 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
         <!-- Manager pages -->
         <rect class="box" x="56" y="222" width="220" height="56" />
         <text class="lbl"  x="68" y="242">Extension pages</text>
-        <text class="sub"  x="68" y="258">scripts-manager/* · settings × 5</text>
-        <text class="sub"  x="68" y="272">diagnostics · download manager UI</text>
+        <text class="sub"  x="68" y="258">scripts-manager/* · pass / manager / dl</text>
+        <text class="sub"  x="68" y="272">theme / lights / ua / find / settings</text>
 
         <!-- Content scripts -->
         <rect class="box" x="56" y="296" width="220" height="56" />
         <text class="lbl"  x="68" y="316">Content scripts</text>
-        <text class="sub"  x="68" y="332">modal/content.js · userscripts</text>
-        <text class="sub"  x="68" y="346">pass-fill injector · screenshot probe</text>
+        <text class="sub"  x="68" y="332">modal/{content,cyber-theme,lights-off,json-viewer}.js</text>
+        <text class="sub"  x="68" y="346">pass-fill / userscripts / screenshot probe</text>
 
         <!-- chrome.* APIs -->
         <rect class="box" x="320" y="64" width="200" height="288" />
