@@ -134,7 +134,7 @@
       `);
     }
     if (forceMono) {
-      parts.push(`*:not(code):not(pre):not(kbd):not(samp):not(tt):not(i):not(svg):not(svg *):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material-icons"]):not([class*="lucide"]):not([data-icon]) { font-family: ${t.fontStack} !important; }`);
+      parts.push(`*:not(code):not(pre):not(kbd):not(samp):not(tt):not(i):not(svg):not(svg *):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material-icons"]):not([class*="material-symbols"]):not([class*="lucide"]):not([class*="phosphor"]):not([class*="ph-"]):not([class*="glyphicon"]):not([data-icon]):not([data-lucide]):not([data-cds="Icon"]):not([data-radix-icon]) { font-family: ${t.fontStack} !important; }`);
     }
     if (scanlines) {
       parts.push(`
