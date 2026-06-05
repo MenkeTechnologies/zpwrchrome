@@ -97,7 +97,14 @@ test("buildThemeCss: darkMode applies CSS filter inversion on html + re-inverts 
   // inline styles) get the inversion re-applied so they keep their
   // original colors.
   assert.match(css, /img, video, picture, canvas, iframe/);
-  assert.match(css, /\[style\*="background-image"\]/);
+  // Inline bg-image selectors must require a `url(...)` — matching the
+  // bare `background-image` substring was the bug that left Amazon
+  // gradient-backed cards white because the re-inversion stole them
+  // back from the html-level filter.
+  assert.match(css, /\[style\*="background-image:url"\]/);
+  assert.match(css, /\[style\*="background-image: url"\]/);
+  assert.doesNotMatch(css, /\[style\*="background-image"\][^:]/,
+    "gradient inline-styles must NOT trigger re-inversion (Amazon-card regression guard)");
 });
 
 test("buildThemeCss: darkMode off → no html filter", () => {
