@@ -56,7 +56,7 @@
     if (darkMode) {
       parts.push(`
         html {
-          background-color: #181a1b !important;
+          background-color: white !important;
           filter: invert(0.92) hue-rotate(180deg) contrast(0.95) !important;
         }
         img, video, picture, canvas, iframe, embed, object,
