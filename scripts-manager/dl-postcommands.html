@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // post-download commands</title>
+  <link rel="stylesheet" href="dl-settings.css">
+  <link rel="stylesheet" href="dl-postcommands.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="downloads.html">‹ Back</a>
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <h1>zpwrchrome <span class="dim">post-download commands</span></h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <nav class="cats">
+      <a class="cat"        href="dl-settings.html">General</a>
+      <a class="cat"        href="dl-interface.html">Interface</a>
+      <a class="cat"        href="dl-extfilter.html">Extension Filter</a>
+      <a class="cat"        href="dl-rules.html">Rule System</a>
+      <a class="cat active" href="dl-postcommands.html">Post-download Commands</a>
+      <span class="sep"></span>
+      <a class="cat" href="dl-help.html">Help</a>
+      <a class="cat" href="dl-about.html">About</a>
+    </nav>
+  </aside>
+
+  <section class="content">
+    <h2>Post-download commands</h2>
+    <p class="dt-hint">
+      Run a custom command when a finished download matches a glob. Rules are
+      matched <strong>top-to-bottom, first-match-wins</strong> — reorder with
+      the <em>↑</em> / <em>↓</em> arrows.
+    </p>
+    <p class="dt-hint">
+      Commands are parsed argv-style (shlex). The available substitution
+      placeholders are
+      <code>{path}</code> (full path),
+      <code>{dir}</code> (directory),
+      <code>{name}</code> (basename),
+      <code>{base}</code> (basename without extension), and
+      <code>{ext}</code> (extension, no dot). A <code>{path}</code> containing
+      spaces still passes as a single argv entry — there is no shell, no
+      injection surface. Need pipes or redirects? Wrap your command in
+      <code>bash -c '…'</code> explicitly.
+    </p>
+
+    <table class="dt" id="pc-table">
+      <thead>
+        <tr>
+          <th style="width: 56px;">On</th>
+          <th style="width: 64px;">Confirm</th>
+          <th style="width: 160px;">Name</th>
+          <th style="width: 180px;">Glob</th>
+          <th>Command</th>
+          <th style="width: 110px;">Reorder</th>
+          <th style="width: 60px;"></th>
+        </tr>
+      </thead>
+      <tbody id="pc-rows"></tbody>
+    </table>
+
+    <div class="actions">
+      <button id="add-row" class="btn-ghost">+ Add rule</button>
+      <button id="reset"   class="btn-ghost">Clear all</button>
+      <span id="status" class="status"></span>
+    </div>
+
+    <h3>How matching works</h3>
+    <ul class="dt-hint">
+      <li><strong>Glob</strong> is matched against the file's basename, case-insensitive. <code>*</code> matches any chars, <code>?</code> matches exactly one. <code>*.tar.gz</code> matches <code>archive.tar.gz</code>; <code>*.zip</code> matches <code>foo.ZIP</code>.</li>
+      <li><strong>First-match-wins</strong>: a download matching both <code>*.zip</code> and <code>*</code> fires only the rule that appears first in the list.</li>
+      <li><strong>Disabled rules</strong> are skipped entirely (the next-down rule is considered).</li>
+      <li><strong>Confirm</strong> shows a Chrome notification with Run / Skip buttons before spawning. Useful for commands you want to opt into per download.</li>
+    </ul>
+
+    <h3>Examples</h3>
+    <table class="dt examples">
+      <thead><tr><th style="width: 200px;">Glob</th><th>Command</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>*.zip</code></td><td><code>unzip -d {dir} {path}</code></td><td>Extract zips into the same folder.</td></tr>
+        <tr><td><code>*.tar.gz</code></td><td><code>tar -xzf {path} -C {dir}</code></td><td>Extract tarballs.</td></tr>
+        <tr><td><code>*.pdf</code></td><td><code>open {path}</code></td><td>Open finished PDFs in the default viewer (macOS).</td></tr>
+        <tr><td><code>*.dmg</code></td><td><code>hdiutil attach {path}</code></td><td>Mount disk images.</td></tr>
+        <tr><td><code>*.{jpg,png}</code></td><td>(use one rule per extension)</td><td>Globs are basename-level — list extensions in separate rules.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<script src="dl-postcommands.js" type="module"></script>
+</body>
+</html>

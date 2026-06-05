@@ -11,4 +11,5 @@
 
 pub mod dl;
 pub mod otp;
+pub mod run_command;
 pub mod search;

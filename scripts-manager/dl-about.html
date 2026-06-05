@@ -24,6 +24,7 @@
       <a class="cat"        href="dl-interface.html">Interface</a>
       <a class="cat"        href="dl-extfilter.html">Extension Filter</a>
       <a class="cat"        href="dl-rules.html">Rule System</a>
+      <a class="cat"        href="dl-postcommands.html">Post-download Commands</a>
       <span class="sep"></span>
       <a class="cat"        href="dl-help.html">Help</a>
       <a class="cat active" href="dl-about.html">About</a>
@@ -65,6 +66,23 @@
       collapsible tree, and a <strong>User-Agent switcher</strong> backed by
       <code>chrome.declarativeNetRequest</code> dynamic rules.
     </p>
+
+    <h3>Post-download commands</h3>
+    <p>
+      Run a per-rule argv command the moment a download flips
+      <code>active → done</code>. Rules live at
+      <em>Post-download Commands</em> in the sidebar and match the
+      finished file's basename against a glob (<code>*.zip</code>,
+      <code>*.tar.gz</code>, case-insensitive). Matching is
+      <strong>first-rule-wins</strong> — reorder with the up/down arrows.
+    </p>
+    <ul>
+      <li><strong>Argv-style only.</strong> The command is parsed shlex-style on the JS side and shipped as an array to the host's <code>run.spawn</code> action. The host calls <code>std::process::Command::new(argv[0]).args(argv[1..])</code> — no shell, no <code>system(3)</code>, no quoting surface. A <code>{path}</code> containing whitespace or shell metacharacters stays one argv entry.</li>
+      <li><strong>Placeholders</strong>: <code>{path}</code> (full path), <code>{dir}</code>, <code>{name}</code> (basename), <code>{base}</code> (basename without extension), <code>{ext}</code> (no dot).</li>
+      <li><strong>Confirm flag</strong>: per-rule. When set, finishes a download → Chrome notification with <em>Run</em> / <em>Skip</em> buttons. The pending argv survives SW suspends via <code>chrome.storage.session</code> so the buttons still work after the worker idles out.</li>
+      <li><strong>Output</strong>: stdout / stderr captured (64 KiB cap each), exit code reported, 30s default timeout (max 5 min) kills runaways with code 124. Result surfaces as a notification.</li>
+      <li><strong>Shell features</strong> (pipes, redirects, <code>&amp;&amp;</code>) require wrapping the rule's command in <code>bash -c '…'</code> explicitly — opting in keeps the default surface injection-free.</li>
+    </ul>
 
     <h3>Reader mode</h3>
     <p>
