@@ -887,9 +887,41 @@ test("background.js pass-fill keystroke handler diag-traces every step", () => {
 test("fillLoginForm returns structured result so diag can record per-frame outcome", () => {
   const fn = bg.match(/function fillLoginForm\([\s\S]*?\n\}/);
   assert.ok(fn, "fillLoginForm not found");
-  // Old contract was `return true;` — must now be a structured object.
-  assert.match(fn[0], /return \{ filled: false, reason: "no_visible_password_field"/);
-  assert.match(fn[0], /return \{ filled: !!password, userFilled, submitted, origin:/);
+  // Browserpass-parity rewrite (2026-06): used to bail with
+  // `{ filled: false, reason: "no_visible_password_field" }` when there
+  // was no password field on the page, which broke 2-step login pages
+  // (Google / Microsoft / Okta — username-only step 1, password-only
+  // step 2). New contract returns granular pwFilled + userFilled, and
+  // only bails when BOTH password and username inputs are absent.
+  assert.match(fn[0], /reason:\s+(?:pw\s*\?\s*"no_visible_username_field"|"no_visible_login_or_password_field")/);
+  assert.match(fn[0], /return \{ filled: pwFilled, pwFilled, userFilled, submitted, origin:/);
+  // The helpers that distinguish the two cases:
+  assert.match(fn[0], /findUsernameAnchoredOnPassword/, "with-password path uses the document-order anchor");
+  assert.match(fn[0], /findStandaloneUsername/,         "no-password path uses a heuristic");
+  assert.match(fn[0], /looksLikeUsername/,              "heuristic predicate present");
+});
+
+test("fillLoginForm no-password path matches username by autocomplete/type/keyword", () => {
+  // Pins the keyword set for findStandaloneUsername — regression guard
+  // if someone strips a keyword by accident.
+  const fn = bg.match(/function fillLoginForm\([\s\S]*?\n\}/);
+  assert.ok(fn);
+  // looksLikeUsername must cover at least: type=email, autocomplete=username/email,
+  // and the user(name)/email/login/account keyword family.
+  assert.match(fn[0], /t === "email"/);
+  assert.match(fn[0], /autocomplete[\s\S]*username/);
+  assert.match(fn[0], /user\(name\)\?/);
+  assert.match(fn[0], /\\b\(user.+email.+login/);
+});
+
+test("pass.fill caller treats userFilled-only frames as success (browserpass parity)", () => {
+  // Without this, a 2-step login page where step 1 = username-only would
+  // be reported as "no fill" because pwFilled=false. The summary code
+  // must OR userFilled in.
+  assert.match(bg, /pwFilled === true \|\| r\?\.result\?\.userFilled === true/,
+    "passFillFromPath success check must accept userFilled-only frames");
+  assert.match(bg, /summary\.filter\(\(s\) => s\.pwFilled \|\| s\.userFilled\)/,
+    "passFillActive summary must count userFilled-only frames");
 });
 
 test("takeover handler honors downloadDir > lastDir > ~/Downloads", () => {
