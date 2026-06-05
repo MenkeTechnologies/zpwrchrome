@@ -26,6 +26,22 @@ test("every manifest command has a non-empty description string", () => {
   }
 });
 
+test("manifest command descriptions contain no literal HTML tags", () => {
+  // Chrome's chrome://extensions/shortcuts page parses command
+  // descriptions through a tiny HTML allowlist (parseHtmlSubset in
+  // extensions.js). An unsupported tag like <video> throws
+  // `VIDEO is not supported` at render time and the whole shortcut
+  // list for the extension fails to display. We caught this with the
+  // lights-off description's "<video>" — write descriptions with
+  // backticks or the word, never angle brackets around a tag name.
+  const TAG_LIKE = /<[a-z][a-z0-9]*\b/i;
+  for (const name of names) {
+    const desc = commands[name].description || "";
+    assert.ok(!TAG_LIKE.test(desc),
+      `command "${name}" description has a tag-like substring (Chrome's shortcuts UI will reject it): "${desc}"`);
+  }
+});
+
 test("manifest command descriptions are unique (no copy-paste duplicates)", () => {
   const descs = names.map((n) => commands[n].description);
   const uniq = new Set(descs);
