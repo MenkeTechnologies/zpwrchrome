@@ -33,6 +33,28 @@
   <section class="content doc">
     <h2>Help</h2>
 
+    <h3>Full-page screenshot</h3>
+    <p>
+      Captures the active tab edge-to-edge — even the parts off-screen.
+      Trigger via the toolbar context menu
+      (right-click the icon → <em>Full-page screenshot (this tab)</em>)
+      or bind <code>screenshot-full-page</code> to a key at
+      <code>chrome://extensions/shortcuts</code>.
+    </p>
+    <p>What it does:</p>
+    <ul>
+      <li>Scrolls the page in viewport-sized steps with a 200 px overlap so sticky / fixed elements stitch cleanly.</li>
+      <li>Captures each viewport via <code>chrome.tabs.captureVisibleTab</code>; sleeps 600 ms between captures (Chrome's hard quota is ~2 captures / s). Quota errors retry with exponential backoff.</li>
+      <li>Temporarily forces every <code>position: fixed</code> / <code>sticky</code> element to <code>static</code> during capture, restoring originals on completion.</li>
+      <li>Stitches tiles on an <code>OffscreenCanvas</code> in the service worker, writes a PNG to your configured downloads directory via the host's chunked <code>dl.writeFileChunk</code> protocol (works around Chrome's 1 MiB host → ext native-messaging cap).</li>
+      <li>Hard caps: 60 tiles, ~16k × 16k output pixels — prevents memory blow-up on runaway infinite-scroll pages.</li>
+    </ul>
+    <p>
+      No <code>chrome.debugger</code> permission is required — none of the leading
+      consumer screenshot extensions use it either, because it triggers a
+      permanent yellow "DevTools attached" banner.
+    </p>
+
     <h3>Batch Descriptors</h3>
     <p>
       Used to expand a URL pattern into multiple downloads.
