@@ -14,6 +14,7 @@ const state = {
     intensity: "medium",
     forceMono: false,
     scanlines: false,
+    darkMode:  false,
   },
 };
 
@@ -42,6 +43,7 @@ function render() {
   }
   $("forceMono").checked = !!state.bag.forceMono;
   $("scanlines").checked = !!state.bag.scanlines;
+  $("darkMode").checked  = !!state.bag.darkMode;
   $("domains").value     = (state.bag.domains || []).join("\n");
   $("domains-lbl").textContent = state.bag.mode === "allowlist"
     ? "Allowlist (one host per line)"
@@ -55,6 +57,7 @@ function updatePreview() {
         intensity: state.bag.intensity,
         forceMono: state.bag.forceMono,
         scanlines: state.bag.scanlines,
+        darkMode:  state.bag.darkMode,
       })
     : "";
   // Scope every selector under #preview-body so the page's own chrome
@@ -108,6 +111,7 @@ document.querySelectorAll('input[name="mode"]').forEach((r) => {
 });
 $("forceMono").addEventListener("change", (ev) => { state.bag.forceMono = !!ev.target.checked; updatePreview(); save(); });
 $("scanlines").addEventListener("change", (ev) => { state.bag.scanlines = !!ev.target.checked; updatePreview(); save(); });
+$("darkMode").addEventListener("change",  (ev) => { state.bag.darkMode  = !!ev.target.checked; updatePreview(); save(); });
 $("domains").addEventListener("change", (ev) => { state.bag.domains = parseDomains(ev.target.value); save(); });
 
 load();
