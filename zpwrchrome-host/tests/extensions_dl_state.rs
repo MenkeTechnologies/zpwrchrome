@@ -14,8 +14,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use zpwrchrome_host::extensions::dl::{
-    cache_dir, default_download_dir, guess_filename, list_all_jobs, next_gid, read_state,
-    sanitize_filename, state_path, unique_dest_path, write_state_atomic, JobState,
+    cache_dir, default_download_dir, flush_progress, flush_status, guess_filename,
+    list_all_jobs, next_gid, read_state, sanitize_filename, state_path,
+    unique_dest_path, write_state_atomic, JobState,
 };
 
 // Single shared lock around env-var mutation across tests (cargo runs tests
@@ -78,6 +79,7 @@ fn write_then_read_state_round_trips_all_fields() {
         segments:   4,
         started_at: 1_700_000_000,
         elapsed_ms: 1234,
+        paused_offset_ms: 0,
         paused:     false,
         cancelled:  false,
         cookies:    "session=abc".into(),
@@ -122,8 +124,8 @@ fn list_all_jobs_returns_every_state_file_sorted_by_gid() {
     let make = |gid: u64, status: &str| JobState {
         gid, url: format!("https://x/{gid}"), dest: format!("/tmp/{gid}"),
         total: 0, done: 0, status: status.into(), err: None,
-        segments: 1, started_at: 0, elapsed_ms: 0, paused: false,
-        cancelled: false, cookies: String::new(), user_agent: String::new(),
+        segments: 1, started_at: 0, elapsed_ms: 0, paused_offset_ms: 0,
+        paused: false, cancelled: false, cookies: String::new(), user_agent: String::new(),
         worker_pid: 0,
     };
     write_state_atomic(&make(3, "active")).unwrap();
@@ -226,6 +228,120 @@ fn unique_dest_handles_dotfile_prefix() {
     fs::write(d.join(".bashrc"), "x").unwrap();
     assert_eq!(unique_dest_path(&d, ".bashrc"), d.join(".bashrc (1)"));
     let _ = fs::remove_dir_all(&d);
+}
+
+#[test]
+fn paused_offset_ms_round_trips_and_defaults_zero_on_old_state() {
+    // Two guarantees: (a) the new field round-trips through write+read,
+    // (b) state files written by an older host without the field still
+    // deserialize cleanly (paused_offset_ms = 0).
+    let _g = ENV_LOCK.lock().unwrap();
+    let d = isolated_cache("paused-offset");
+    unsafe { std::env::set_var("ZPWRCHROME_DL_CACHE_DIR", &d) };
+    let state = JobState {
+        gid: 42, url: "https://x/y".into(), dest: "/tmp/y".into(),
+        total: 100, done: 50, status: "paused".into(), err: None,
+        segments: 1, started_at: 0, elapsed_ms: 5000,
+        paused_offset_ms: 12_345,
+        paused: true, cancelled: false,
+        cookies: String::new(), user_agent: String::new(), worker_pid: 0,
+    };
+    write_state_atomic(&state).unwrap();
+    let got = read_state(42).unwrap();
+    assert_eq!(got.paused_offset_ms, 12_345);
+
+    // Now drop a hand-rolled state file WITHOUT the field — simulating a
+    // download started under the prior host binary. It must deserialize and
+    // default paused_offset_ms to 0 rather than fail.
+    let old_json = serde_json::json!({
+        "gid": 99, "url": "https://x/old", "dest": "/tmp/old",
+        "total": 0, "done": 0, "status": "done", "segments": 1,
+        "started_at": 0, "elapsed_ms": 0, "paused": false, "cancelled": false,
+        "cookies": "", "userAgent": "", "worker_pid": 0,
+    });
+    fs::write(state_path(99).unwrap(), serde_json::to_string(&old_json).unwrap()).unwrap();
+    let old = read_state(99).unwrap();
+    assert_eq!(old.paused_offset_ms, 0,
+        "old state files must deserialize with paused_offset_ms defaulting to 0");
+    unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
+    let _ = fs::remove_dir_all(&d);
+}
+
+#[test]
+fn flush_progress_preserves_status_paused_cancelled_set_by_other_writers() {
+    // Pin the contract that powers the dl.pause / dl.cancel race fix:
+    // the worker's periodic flush must NOT clobber `status`, `paused`, or
+    // `cancelled` that dl.pause / dl.cancel just wrote to disk.
+    let _g = ENV_LOCK.lock().unwrap();
+    let d = isolated_cache("flush-progress");
+    unsafe { std::env::set_var("ZPWRCHROME_DL_CACHE_DIR", &d) };
+
+    // Disk state — simulates dl.cancel having just landed.
+    let on_disk = JobState {
+        gid: 7, url: "https://x/y".into(), dest: "/tmp/y".into(),
+        total: 100, done: 10, status: "cancelled".into(), err: None,
+        segments: 1, started_at: 0, elapsed_ms: 1000, paused_offset_ms: 0,
+        paused: false, cancelled: true,
+        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+    };
+    write_state_atomic(&on_disk).unwrap();
+
+    // Worker's stale local state — its in-memory view still says "active"
+    // because dl.cancel arrived between the worker's last check_control
+    // sync and now.
+    let local = JobState {
+        gid: 7, url: "https://x/y".into(), dest: "/tmp/y".into(),
+        total: 100, done: 60, status: "active".into(), err: None,
+        segments: 1, started_at: 0, elapsed_ms: 5000, paused_offset_ms: 0,
+        paused: false, cancelled: false,
+        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+    };
+    flush_progress(&local).unwrap();
+
+    let after = read_state(7).unwrap();
+    assert_eq!(after.status,    "cancelled", "periodic flush must NOT overwrite status from dl.cancel");
+    assert_eq!(after.cancelled, true,        "periodic flush must NOT overwrite cancelled=true from dl.cancel");
+    assert_eq!(after.done,      60,          "worker-owned done field must update");
+    assert_eq!(after.elapsed_ms,5000,        "worker-owned elapsed_ms must update");
+
+    unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
+    let _ = fs::remove_dir_all(&d);
+}
+
+#[test]
+fn flush_status_writes_status_but_preserves_paused_cancelled() {
+    // The transition writes (entering / exiting pause) use flush_status,
+    // which DOES want to update status but must still preserve `paused`
+    // and `cancelled` from disk so a dl.cancel that landed during the
+    // spin-wait isn't lost.
+    let _g = ENV_LOCK.lock().unwrap();
+    let d = isolated_cache("flush-status");
+    unsafe { std::env::set_var("ZPWRCHROME_DL_CACHE_DIR", &d) };
+
+    // Disk: cancelled flag set by dl.cancel right before the worker
+    // transitioned to "active" (its resume-write).
+    let on_disk = JobState {
+        gid: 8, url: "https://x/y".into(), dest: "/tmp/y".into(),
+        total: 100, done: 10, status: "paused".into(), err: None,
+        segments: 1, started_at: 0, elapsed_ms: 1000, paused_offset_ms: 500,
+        paused: false, cancelled: true,   // dl.cancel just flipped these
+        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+    };
+    write_state_atomic(&on_disk).unwrap();
+
+    let local = JobState {
+        gid: 8, url: "https://x/y".into(), dest: "/tmp/y".into(),
+        total: 100, done: 50, status: "active".into(), err: None,
+        segments: 1, started_at: 0, elapsed_ms: 5500, paused_offset_ms: 500,
+        paused: false, cancelled: false,   // stale
+        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+    };
+    flush_status(&local).unwrap();
+
+    let after = read_state(8).unwrap();
+    assert_eq!(after.status,    "active",  "flush_status should write the worker's transition status");
+    assert_eq!(after.cancelled, true,      "flush_status must preserve cancelled=true that dl.cancel wrote");
+    assert_eq!(after.done,      50);
 }
 
 #[test]

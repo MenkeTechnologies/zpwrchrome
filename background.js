@@ -27,6 +27,7 @@ import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "./lib/bp-pass.js";
 import { computeOtpFromUrl } from "./lib/totp.js";
 import { UA_PRESETS, getPreset, presetGroups, resolveUA } from "./lib/ua-presets.js";
+import { STATE_KEY as DL_POSTCMD_KEY, pickRule as pickPostCmdRule, buildSpawn as buildPostCmdSpawn } from "./lib/dl-postcommands.js";
 import { compileFingerprints, detect as wappDetect, scrapeSignals } from "./lib/wappalyzer/engine.js";
 // JSON-module import attributes (`with { type: "json" }`) load
 // unreliably in some Chrome MV3 SW versions — the error surfaces as
@@ -3581,17 +3582,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 let _dlLastStatus = new Map();
 async function notifyJobTransitions(jobs) {
   const ifc = await loadDlInterface();
-  if (!ifc.notifyOnComplete && !ifc.notifyOnError) { _dlLastStatus = new Map(jobs.map((j) => [j.gid, j.status])); return; }
   for (const j of jobs) {
     const prev = _dlLastStatus.get(j.gid);
     if (prev === j.status) continue;
-    if (ifc.notifyOnComplete && j.status === "done" && prev && prev !== "done") {
-      chrome.notifications?.create({
-        type: "basic",
-        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-        title: "zpwrchrome — download complete",
-        message: (j.dest || "").split(/[\\/]/).pop() || `gid ${j.gid}`,
-      });
+    if (j.status === "done" && prev && prev !== "done") {
+      if (ifc.notifyOnComplete) {
+        chrome.notifications?.create({
+          type: "basic",
+          iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+          title: "zpwrchrome — download complete",
+          message: (j.dest || "").split(/[\\/]/).pop() || `gid ${j.gid}`,
+        });
+      }
+      // Independent of the completion notification: run any matching
+      // post-download command. Errors surface as a notification but never
+      // throw out of the transition pass.
+      runPostDownloadCommand(j).catch((e) =>
+        diagPush("dl.postcmd.unexpected", { gid: j.gid, err: String(e?.message || e) }));
     } else if (ifc.notifyOnError && j.status === "failed" && prev && prev !== "failed") {
       chrome.notifications?.create({
         type: "basic",
@@ -3602,4 +3609,118 @@ async function notifyJobTransitions(jobs) {
     }
   }
   _dlLastStatus = new Map(jobs.map((j) => [j.gid, j.status]));
+}
+
+// ─── Post-download custom commands ────────────────────────────────────
+// Per-rule argv-style commands fired on download completion. Rules are
+// stored under `chrome.storage.local["dl.postCommands"]`; matching is
+// first-rule-wins on the destination basename. If the matched rule has
+// `confirm: true` a Chrome notification asks Run / Skip — the pending
+// argv survives SW suspends via chrome.storage.session keyed by the
+// notification ID. No shell is invoked anywhere on this path: the host's
+// `run.spawn` accepts an argv array and passes it straight to
+// `std::process::Command::new(argv[0]).args(argv[1..])`.
+
+const DL_POSTCMD_PENDING_PREFIX = "dl.postcmd.pending.";
+
+async function runPostDownloadCommand(job) {
+  const dest = job?.dest || "";
+  if (!dest) return;
+  const { [DL_POSTCMD_KEY]: state } = await chrome.storage.local.get(DL_POSTCMD_KEY);
+  const rules = Array.isArray(state?.rules) ? state.rules : [];
+  const rule = pickPostCmdRule(rules, dest);
+  if (!rule) return;
+  const { argv, displayCommand } = buildPostCmdSpawn(rule, dest);
+  if (!argv.length) {
+    diagPush("dl.postcmd.skip_empty", { gid: job.gid, ruleId: rule.id, name: rule.name });
+    return;
+  }
+  diagPush("dl.postcmd.match", {
+    gid: job.gid, ruleId: rule.id, name: rule.name, confirm: !!rule.confirm,
+    argv0: argv[0], argc: argv.length,
+  });
+  if (rule.confirm) {
+    await stagePostCmdConfirm(job, rule, argv, displayCommand);
+  } else {
+    await spawnPostCmd(job, rule, argv, displayCommand);
+  }
+}
+
+async function stagePostCmdConfirm(job, rule, argv, displayCommand) {
+  if (!chrome.notifications) {
+    // No notification API — fall back to running silently.
+    await spawnPostCmd(job, rule, argv, displayCommand);
+    return;
+  }
+  const notifId = `${DL_POSTCMD_PENDING_PREFIX}${job.gid}.${Date.now()}`;
+  await chrome.storage.session.set({
+    [notifId]: { gid: job.gid, ruleId: rule.id, ruleName: rule.name || "", argv, displayCommand, dest: job.dest },
+  });
+  chrome.notifications.create(notifId, {
+    type:     "basic",
+    iconUrl:  chrome.runtime.getURL("icons/icon128.png"),
+    title:    `zpwrchrome — run ${rule.name || "post-download command"}?`,
+    message:  displayCommand.length > 200 ? displayCommand.slice(0, 200) + "…" : displayCommand,
+    buttons:  [{ title: "Run" }, { title: "Skip" }],
+    requireInteraction: true,
+  });
+}
+
+async function spawnPostCmd(job, rule, argv, displayCommand) {
+  try {
+    const resp = await bpSend({ action: "run.spawn", argv });
+    const d = resp?.data || {};
+    diagPush("dl.postcmd.ok", {
+      gid: job.gid, ruleId: rule.id, code: d.code, ms: d.durationMs,
+      truncated: !!d.truncated, stderrLen: (d.stderr || "").length,
+    });
+    if (chrome.notifications) {
+      const ok = d.code === 0;
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: ok
+          ? `zpwrchrome — ${rule.name || "post-download command"} done`
+          : `zpwrchrome — ${rule.name || "post-download command"} exited ${d.code}`,
+        message: ok
+          ? (displayCommand.length > 200 ? displayCommand.slice(0, 200) + "…" : displayCommand)
+          : ((d.stderr || displayCommand).split("\n").slice(0, 3).join("\n").slice(0, 300)),
+      });
+    }
+  } catch (e) {
+    diagPush("dl.postcmd.err", {
+      gid: job.gid, ruleId: rule.id, err: String(e?.message || e),
+    });
+    chrome.notifications?.create({
+      type: "basic",
+      iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+      title: `zpwrchrome — ${rule.name || "post-download command"} failed`,
+      message: String(e?.message || e),
+    });
+  }
+}
+
+if (chrome.notifications?.onButtonClicked) {
+  chrome.notifications.onButtonClicked.addListener(async (notifId, btnIdx) => {
+    if (!notifId.startsWith(DL_POSTCMD_PENDING_PREFIX)) return;
+    const { [notifId]: pending } = await chrome.storage.session.get(notifId);
+    await chrome.storage.session.remove(notifId);
+    chrome.notifications.clear(notifId);
+    if (!pending) return;
+    if (btnIdx === 0) {
+      await spawnPostCmd(
+        { gid: pending.gid, dest: pending.dest },
+        { id: pending.ruleId, name: pending.ruleName, confirm: true },
+        pending.argv, pending.displayCommand,
+      );
+    } else {
+      diagPush("dl.postcmd.skip", { gid: pending.gid, ruleId: pending.ruleId });
+    }
+  });
+}
+if (chrome.notifications?.onClosed) {
+  chrome.notifications.onClosed.addListener(async (notifId) => {
+    if (!notifId.startsWith(DL_POSTCMD_PENDING_PREFIX)) return;
+    await chrome.storage.session.remove(notifId);
+  });
 }
