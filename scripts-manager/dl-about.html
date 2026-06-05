@@ -37,7 +37,7 @@
       <span class="ico">⬇</span>
       <div>
         <h3>zpwrchrome</h3>
-        <div class="tag">UNIX <code>pass</code> · Segmented Download Manager · Tab Switcher · Userscripts · History fzf</div>
+        <div class="tag">UNIX <code>pass</code> · Segmented DL Manager · Tab Switcher · Userscripts · History fzf · Tech Detection · Cyberpunk Theme · JSON · UA Switcher · Find-in-All-Tabs</div>
         <div class="ver">Version <span id="ver">…</span></div>
       </div>
     </div>
@@ -45,15 +45,37 @@
     <p>
       <strong>zpwrchrome</strong> is a browser power-tool by
       <a href="https://github.com/MenkeTechnologies" target="_blank" rel="noopener">MenkeTechnologies</a> —
-      built around five pillars: a browserpass-compatible <code>pass</code> integration
+      built around the following pillars: a browserpass-compatible <code>pass</code> integration
       (with full-page CRUD manager + profile / credit-card autofill from
       <code>profile/*</code> and <code>creditcard/*</code> entries),
       a Chrono-inspired segmented download manager that takes over Chrome's default downloader,
       a JetBrains-style MRU tab switcher with scenes + opener-tree + minimap, a
-      Tampermonkey-equivalent userscript host with a GM_* shim, and a
-      <strong>full-page screenshot</strong> capture that scrolls the active tab
-      in viewport-sized steps and stitches the tiles into one PNG.
+      Tampermonkey-equivalent userscript host with a GM_* shim,
+      a <strong>full-page screenshot</strong> capture that scrolls the active tab
+      in viewport-sized steps and stitches the tiles into one PNG, a
+      <strong>Wappalyzer-compatible technology detector</strong> running the
+      vendored 3,993-fingerprint HTTPArchive corpus, a
+      <strong>cyberpunk page-theme injector</strong> that paints arbitrary pages
+      with the strykelang HUD palette, a <strong>JSON viewer</strong> that auto-
+      replaces plain JSON pages with a collapsible tree, and a
+      <strong>User-Agent switcher</strong> backed by <code>chrome.declarativeNetRequest</code>
+      dynamic rules.
     </p>
+
+    <h3>Cyberpunk page-theme injector</h3>
+    <p>
+      <code>modal/cyber-theme.js</code> runs at <code>document_start</code> on
+      every http(s) tab and paints the page with the strykelang HUD palette.
+      Configure at <em>Open theme injector</em> on the toolbar context menu
+      (or popup → <code>theme ▸</code>). Knobs:
+    </p>
+    <ul>
+      <li><strong>intensity</strong> — <em>subtle</em> = links + headings + scrollbars only / <em>medium</em> = + body bg + form fields + code blocks / <em>full</em> = + tables, cards, dimmed images.</li>
+      <li><strong>dark mode</strong> — smart overlay using <code>color-scheme: dark</code> + targeted overrides for common white-card patterns: Amazon AUI <code>.a-box</code> / <code>.order-header</code> / <code>.delivery-box</code> / <code>.bia-content</code>, generic <code>[class*="card|panel|widget"]</code>, ARIA dialogs, and inline <code>background: white|#fff|rgb(255,…)</code>. Deliberately <em>not</em> <code>filter: invert()</code> — that approach inverted already-dark pages too.</li>
+      <li><strong>forceMono</strong> — Share Tech Mono everywhere except icon-font carriers (<code>&lt;i&gt;</code> / <code>&lt;svg&gt;</code> / <code>[class*="icon|fa-|material-icons|material-symbols|lucide|phosphor|glyphicon"]</code> / <code>[data-icon|data-lucide|data-cds="Icon"|data-radix-icon]</code>) so Anthropicons, Material Symbols, Lucide, etc. keep their glyphs.</li>
+      <li><strong>scanlines</strong> — CRT-style horizontal overlay via <code>body::after</code>.</li>
+      <li><strong>blocklist / allowlist</strong> — per-host textarea (one host per line). Settings broadcast to every open tab via <code>chrome.storage.onChanged</code>; no reload needed.</li>
+    </ul>
 
     <h3>Full-page screenshot</h3>
     <p>
