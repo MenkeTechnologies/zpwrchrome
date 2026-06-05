@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "zpwrchrome",
   "short_name": "zpwrchrome",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "Browser power-tool: UNIX `pass` integration (browserpass-compatible) + segmented download manager (default Chrome takeover) + JetBrains-style tab switcher with MRU/scenes/opener-tree/minimap + fzf history search + Tampermonkey-equivalent userscripts + full-page screenshot + Wappalyzer-compatible tech detection + cyberpunk page-theme injector + Turn Off the Lights cinema dimmer + JSON viewer + User-Agent switcher + find-in-all-tabs. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
@@ -66,6 +66,13 @@
       "matches": ["<all_urls>"],
       "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
       "js": ["modal/lights-off.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
+      "js": ["modal/reader-mode.js"],
       "run_at": "document_idle",
       "all_frames": false
     }
@@ -177,6 +184,7 @@
 
     "find-in-all-tabs":     { "description": "Full-text search across every open tab — opens a search UI, scrapes innerText from every http(s) tab in parallel, fuzzy-filters as you type, Enter activates the chosen tab and scrolls to the match (no DevTools required)" },
     "lights-off":           { "description": "Turn off the lights — dim the entire active page with a near-black overlay while lifting any <video> elements above it (cinema-mode for YouTube and beyond). Click the overlay or press Esc to undim" },
+    "reader-mode":          { "description": "Reader mode — strip the active page to its main article and render it in a strykelang HUD overlay with adjustable typography. Click × in the top bar or press Esc to close" },
     "screenshot-full-page": { "description": "Full-page screenshot — scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts)" },
     "dl-paste-url":        { "description": "Download the URL currently on the clipboard via the zpwrchrome segmented downloader" },
     "dl-show-queue":       { "description": "Open the zpwrchrome download manager queue view" },
