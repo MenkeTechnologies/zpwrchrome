@@ -119,6 +119,7 @@ async function dispatch(command) {
   if (command === "pass-copy-user")       return passCopyForActive("user");
   if (command === "pass-copy-otp")        return passCopyForActive("otp");
   if (command === "pass-open-url")        return passOpenUrlForActive();
+  if (command === "pass-fill-identity")   return passFillIdentityCombinedActive();
   if (command === "pass-fill-profile")    return passFillIdentityActive("profile");
   if (command === "pass-fill-cc")         return passFillIdentityActive("creditcard");
   if (command === "screenshot-full-page") return doScreenshotFullPage();
@@ -269,13 +270,68 @@ async function passFillIdentityActive(kind) {
     diagPush("pass.identity.fill.skip", { kind, reason: "no_active_tab" });
     return;
   }
-  let paths;
-  try {
-    paths = await bpListEntriesUnderPrefix(`${kind}/`);
-  } catch (e) {
-    diagPush("pass.identity.fill.list_err", { kind, err: String(e?.message || e) });
-    console.warn("[zpwrchrome] identity fill list:", e?.message || e);
+  const host = hostnameOf(t.url || "");
+  const fields = await pickAndFetchIdentityFields(t.id, host, kind);
+  if (!fields) return;
+  await injectIdentityFill(t.id, fields, { kinds: [kind] });
+}
+
+// Combined fill: gather fields from BOTH profile/* and creditcard/*
+// entries (each kind goes through its own pick/cache/picker), merge
+// into one bag, inject fillIdentityForm once. The fill function only
+// touches recognized fields on the page — so a page with only profile
+// inputs gets only profile values written, even when we passed CC
+// values in the bag. Single keystroke for a checkout that has both.
+async function passFillIdentityCombinedActive() {
+  diagPush("pass.identity.fill.combined.start");
+  const t = await getActive();
+  if (!t?.id) {
+    diagPush("pass.identity.fill.combined.skip", { reason: "no_active_tab" });
     return;
+  }
+  const host = hostnameOf(t.url || "");
+  const merged = {};
+  const usedKinds = [];
+  for (const kind of ["profile", "creditcard"]) {
+    let paths;
+    try {
+      paths = await bpListEntriesUnderPrefix(`${kind}/`);
+    } catch (e) {
+      diagPush("pass.identity.fill.combined.list_err", { kind, err: String(e?.message || e) });
+      continue;
+    }
+    if (!paths.length) continue;  // silent skip — no need to nag when the
+                                  // user has only one of the two kinds
+    const fields = await pickAndFetchIdentityFields(t.id, host, kind, paths);
+    if (!fields) continue;
+    Object.assign(merged, fields);
+    usedKinds.push(kind);
+  }
+  if (!usedKinds.length) {
+    notify({
+      title: "zpwrchrome — pass identity fill",
+      message: "No `profile/*` or `creditcard/*` entries in the pass store. Add one in the pass manager (toolbar right-click → Open pass manager).",
+    });
+    return;
+  }
+  await injectIdentityFill(t.id, merged, { kinds: usedKinds });
+}
+
+// Shared pick + fetch: list entries under `${kind}/` (or use the
+// already-listed paths), use the last-used cache for an exact 1-entry
+// store or as the picker's default for multi-entry stores, fetch and
+// return the entry's fields bag (with top-level url/username promoted
+// so the recognizer sees them).
+async function pickAndFetchIdentityFields(tabId, host, kind, prelistedPaths) {
+  let paths = prelistedPaths;
+  if (!paths) {
+    try {
+      paths = await bpListEntriesUnderPrefix(`${kind}/`);
+    } catch (e) {
+      diagPush("pass.identity.fill.list_err", { kind, err: String(e?.message || e) });
+      console.warn("[zpwrchrome] identity fill list:", e?.message || e);
+      return null;
+    }
   }
   diagPush("pass.identity.fill.candidates", { kind, count: paths.length, paths });
   if (!paths.length) {
@@ -283,9 +339,8 @@ async function passFillIdentityActive(kind) {
       title: "zpwrchrome — pass identity fill",
       message: `No \`${kind}/\` entries in the pass store. Add one in the pass manager (toolbar right-click → Open pass manager).`,
     });
-    return;
+    return null;
   }
-  const host = hostnameOf(t.url || "");
   let chosen;
   if (paths.length === 1) {
     chosen = paths[0];
@@ -294,10 +349,10 @@ async function passFillIdentityActive(kind) {
     const ordered = last && paths.includes(last)
       ? [last, ...paths.filter((p) => p !== last)]
       : paths;
-    chosen = await showIdentityPicker(t.id, kind, ordered);
+    chosen = await showIdentityPicker(tabId, kind, ordered);
     if (!chosen) {
       diagPush("pass.identity.fill.cancelled", { kind });
-      return;
+      return null;
     }
     await setIdentityLastUsed(kind, host, chosen);
   }
@@ -307,31 +362,33 @@ async function passFillIdentityActive(kind) {
   } catch (e) {
     diagPush("pass.identity.fill.fetch_err", { kind, path: chosen, err: String(e?.message || e) });
     console.warn("[zpwrchrome] identity fill fetch:", e?.message || e);
-    return;
+    return null;
   }
   const fields = { ...(entry.fields || {}) };
-  // Top-level url/username already promoted by parseEntry — surface
-  // them as canonical-key field values so the recognizer sees them.
   if (entry.url      && !fields.url)   fields.url   = entry.url;
   if (entry.username && !fields.email && /@/.test(entry.username)) fields.email = entry.username;
+  return fields;
+}
+
+async function injectIdentityFill(tabId, fields, { kinds }) {
   try {
     const results = await chrome.scripting.executeScript({
-      target: { tabId: t.id, allFrames: true },
+      target: { tabId, allFrames: true },
       func: fillIdentityForm,
       args: [fields, TOKEN_SYNONYMS, [...PROFILE_TOKENS, ...CC_TOKENS]],
     });
     const totalFilled = (results || []).reduce((s, r) => s + (r?.result?.filled || 0), 0);
     diagPush("pass.identity.fill.injected", {
-      kind, path: chosen, frames: results?.length || 0, totalFilled,
+      kinds, frames: results?.length || 0, totalFilled,
     });
     if (totalFilled === 0) {
       notify({
         title: "zpwrchrome — pass identity fill",
-        message: `No recognized ${kind} fields on this page.`,
+        message: `No recognized ${kinds.join(" / ")} fields on this page.`,
       });
     }
   } catch (e) {
-    diagPush("pass.identity.fill.inject_err", { kind, err: String(e?.message || e) });
+    diagPush("pass.identity.fill.inject_err", { kinds, err: String(e?.message || e) });
     console.warn("[zpwrchrome] identity fill inject:", e?.message || e);
   }
 }
