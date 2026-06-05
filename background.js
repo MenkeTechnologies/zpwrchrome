@@ -133,6 +133,7 @@ async function dispatch(command) {
   if (command === "pass-fill-profile")    return passFillIdentityActive("profile");
   if (command === "pass-fill-cc")         return passFillIdentityActive("creditcard");
   if (command === "find-in-all-tabs")     return openFindAllTabs();
+  if (command === "lights-off")           return toggleLightsOffActive();
   if (command === "screenshot-full-page") return doScreenshotFullPage();
   if (command === "dl-paste-url")         return dlPasteUrl();
   if (command === "dl-show-queue")        return dlShowQueue();
@@ -165,6 +166,42 @@ async function openPassManager() {
 // existing one). Same pattern as openPassManager / openScriptsManager.
 async function openFindAllTabs() {
   const url = chrome.runtime.getURL("scripts-manager/find-all.html");
+  const existing = await chrome.tabs.query({ url });
+  if (existing.length) {
+    await chrome.tabs.update(existing[0].id, { active: true });
+    if (existing[0].windowId != null) {
+      await chrome.windows.update(existing[0].windowId, { focused: true });
+    }
+    return;
+  }
+  await chrome.tabs.create({ url });
+}
+
+// Turn off the lights — send a toggle message to the active tab's
+// content script. The script in modal/lights-off.js owns the overlay
+// element + the lifted-video state; the SW just kicks the toggle.
+async function toggleLightsOffActive() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || tab.id == null) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "lights-off:toggle" });
+  } catch {
+    // Tab without the content script (chrome://, store, etc.) — try
+    // an on-the-fly inject so toolbar context menu still works on
+    // pages we'd normally skip.
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["modal/lights-off.js"],
+      });
+      await chrome.tabs.sendMessage(tab.id, { type: "lights-off:toggle" });
+    } catch {}
+  }
+}
+
+// Lights-off manager page (opacity/fade/color/blocklist).
+async function openLightsOffManager() {
+  const url = chrome.runtime.getURL("scripts-manager/lights-off.html");
   const existing = await chrome.tabs.query({ url });
   if (existing.length) {
     await chrome.tabs.update(existing[0].id, { active: true });
@@ -1679,6 +1716,8 @@ const CTX_ACT_PASS   = "zpc-act-pass";
 const CTX_ACT_FIND   = "zpc-act-find";
 const CTX_ACT_UA     = "zpc-act-ua";
 const CTX_ACT_THEME  = "zpc-act-theme";
+const CTX_ACT_LIGHTS = "zpc-act-lights";
+const CTX_ACT_LIGHTSCFG = "zpc-act-lightscfg";
 const CTX_ACT_DIAG   = "zpc-act-diag";
 const CTX_ACT_SET    = "zpc-act-settings";
 const CTX_ACT_IFACE  = "zpc-act-interface";
@@ -1737,6 +1776,8 @@ chrome.runtime.onInstalled.addListener(() => {
   create({ id: CTX_ACT_FIND,   title: "Find in all tabs",             contexts: act });
   create({ id: CTX_ACT_UA,     title: "User-Agent switcher",          contexts: act });
   create({ id: CTX_ACT_THEME,  title: "Cyberpunk page theme",         contexts: act });
+  create({ id: CTX_ACT_LIGHTS, title: "Turn off the lights (this tab)", contexts: act });
+  create({ id: CTX_ACT_LIGHTSCFG, title: "Lights-off settings…",       contexts: act });
   create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
   create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
   create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
@@ -1766,6 +1807,7 @@ if (chrome.contextMenus) {
       [CTX_ACT_FIND]:   "/scripts-manager/find-all.html",
       [CTX_ACT_UA]:     "/scripts-manager/ua-switcher.html",
       [CTX_ACT_THEME]:  "/scripts-manager/theme-injector.html",
+      [CTX_ACT_LIGHTSCFG]: "/scripts-manager/lights-off.html",
       [CTX_ACT_DIAG]:   "/scripts-manager/dl-diag.html",
       [CTX_ACT_SET]:    "/scripts-manager/dl-settings.html",
       [CTX_ACT_IFACE]:  "/scripts-manager/dl-interface.html",
@@ -1781,6 +1823,12 @@ if (chrome.contextMenus) {
     }
     if (info.menuItemId === CTX_ACT_EXTPG) {
       chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
+      return;
+    }
+    if (info.menuItemId === CTX_ACT_LIGHTS) {
+      Promise.resolve()
+        .then(() => toggleLightsOffActive())
+        .catch((e) => console.error("[zpwrchrome] lights-off:", e));
       return;
     }
     if (info.menuItemId === CTX_ACT_SHOT) {

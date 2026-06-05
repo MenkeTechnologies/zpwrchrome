@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // lights-off</title>
+  <link rel="stylesheet" href="lights-off.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">💡</span>
+    <h1>zpwrchrome <span class="dim">lights-off (cinema mode)</span></h1>
+  </div>
+  <label class="toggle">
+    <input type="checkbox" id="enabled">
+    <span class="toggle-slider"></span>
+    <span class="toggle-label" id="toggle-label">off</span>
+  </label>
+</header>
+
+<section class="main">
+  <aside class="left">
+    <div class="card">
+      <h2>Overlay</h2>
+      <label class="block">
+        <span class="lbl">Opacity (<span id="opacity-val">0.85</span>)</span>
+        <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.85">
+      </label>
+      <label class="block">
+        <span class="lbl">Fade duration (ms)</span>
+        <input type="number" id="fadeMs" min="0" max="60000" step="50" value="300">
+      </label>
+      <label class="block">
+        <span class="lbl">Overlay color</span>
+        <input type="color" id="color" value="#000000">
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>Behavior</h2>
+      <label class="switch">
+        <input type="checkbox" id="autoOn">
+        <span><strong>auto-on</strong> — dim automatically when a &lt;video&gt; is on the page</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="liftPlayer" checked>
+        <span>lift &lt;video&gt; player above the overlay (recommended)</span>
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>Site rules</h2>
+      <div class="radios" id="mode">
+        <label><input type="radio" name="mode" value="all"       checked> <span>theme every site (blocklist below)</span></label>
+        <label><input type="radio" name="mode" value="allowlist">         <span>theme only sites in the list below</span></label>
+      </div>
+      <label class="block">
+        <span class="lbl" id="domains-lbl">Blocklist (one host per line)</span>
+        <textarea id="domains" rows="6" spellcheck="false" placeholder="example.com&#10;news.ycombinator.com"></textarea>
+      </label>
+    </div>
+  </aside>
+
+  <section class="preview">
+    <div class="preview-bar">
+      <span class="dim">live preview · the overlay below uses your current settings</span>
+      <span class="grow"></span>
+      <button class="btn" id="preview-toggle">Toggle</button>
+    </div>
+    <div class="preview-stage" id="preview-stage">
+      <div class="preview-fake-page">
+        <h1>Sample page</h1>
+        <p>Some body text, links, and a fake video player to show how the overlay sits relative to the page content.</p>
+        <div class="fake-video">
+          <span>▶ fake &lt;video&gt; element</span>
+        </div>
+        <p>The overlay would normally cover everything except the video; the video stays lit (this preview just paints the overlay over the stage, not the whole window).</p>
+      </div>
+      <div class="preview-overlay" id="preview-overlay" aria-hidden="true"></div>
+    </div>
+  </section>
+</section>
+
+<footer class="botbar">
+  <span id="status" class="dim">—</span>
+  <span class="grow"></span>
+  <span class="dim">trigger from the toolbar context menu or bind <code>lights-off</code> at chrome://extensions/shortcuts</span>
+</footer>
+
+<script src="lights-off.js" type="module"></script>
+</body>
+</html>
