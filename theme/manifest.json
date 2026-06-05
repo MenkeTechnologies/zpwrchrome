@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "zpwrchrome — Cyberpunk HUD theme",
   "short_name": "zpwrchrome theme",
-  "version": "0.11.14",
+  "version": "0.11.15",
   "description": "Companion theme for the zpwrchrome extension. Strykelang HUD palette: deep-space ink, neon cyan, magenta scanlines.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",

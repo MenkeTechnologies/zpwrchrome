@@ -25,6 +25,12 @@ import {
 } from "./lib/userscript.js";
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "./lib/bp-pass.js";
+import {
+  PROFILE_TOKENS,
+  CC_TOKENS,
+  TOKEN_SYNONYMS,
+  expandFieldValue,
+} from "./lib/identity-tokens.js";
 import { loadSettings as loadDlSettings, DL_DEFAULTS as DL_SETTINGS_DEFAULTS, saveSettings as saveDlSettings } from "./scripts-manager/dl-settings.js";
 import { loadInterface as loadDlInterface, DL_INTERFACE_DEFAULTS } from "./scripts-manager/dl-interface.js";
 import { loadRules as loadDlRules } from "./scripts-manager/dl-rules.js";
@@ -113,6 +119,8 @@ async function dispatch(command) {
   if (command === "pass-copy-user")       return passCopyForActive("user");
   if (command === "pass-copy-otp")        return passCopyForActive("otp");
   if (command === "pass-open-url")        return passOpenUrlForActive();
+  if (command === "pass-fill-profile")    return passFillIdentityActive("profile");
+  if (command === "pass-fill-cc")         return passFillIdentityActive("creditcard");
   if (command === "screenshot-full-page") return doScreenshotFullPage();
   if (command === "dl-paste-url")         return dlPasteUrl();
   if (command === "dl-show-queue")        return dlShowQueue();
@@ -234,6 +242,422 @@ async function passOpenUrlFromPath(path, newTab, _store) {
     return false;
   }
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Identity / credit-card fill.
+//
+// Entries under `profile/*` and `creditcard/*` in the pass store are
+// treated as autofill sources. Their `key: value` block uses WHATWG
+// HTML autocomplete tokens directly (cc-number, cc-exp, given-name,
+// street-address, postal-code, …) — see lib/identity-tokens.js for the
+// full set + the recognizer.
+//
+// Flow:
+//   1. List entries under the prefix.
+//   2. If 2+, inject a shadow-DOM picker into the active tab (last-used
+//      cached per host) and wait for the user's choice.
+//   3. Fetch + decrypt the chosen entry via the BP host.
+//   4. Inject fillIdentityForm() into every frame of the active tab,
+//      passing the fields bag + synonym map + token list as args.
+const IDENTITY_LAST_USED_KEY = "pass.identity.lastUsed";
+const IDENTITY_PICKER_TIMEOUT_MS = 60_000;
+
+async function passFillIdentityActive(kind) {
+  diagPush("pass.identity.fill.start", { kind });
+  const t = await getActive();
+  if (!t?.id) {
+    diagPush("pass.identity.fill.skip", { kind, reason: "no_active_tab" });
+    return;
+  }
+  let paths;
+  try {
+    paths = await bpListEntriesUnderPrefix(`${kind}/`);
+  } catch (e) {
+    diagPush("pass.identity.fill.list_err", { kind, err: String(e?.message || e) });
+    console.warn("[zpwrchrome] identity fill list:", e?.message || e);
+    return;
+  }
+  diagPush("pass.identity.fill.candidates", { kind, count: paths.length, paths });
+  if (!paths.length) {
+    notify({
+      title: "zpwrchrome — pass identity fill",
+      message: `No \`${kind}/\` entries in the pass store. Add one in the pass manager (toolbar right-click → Open pass manager).`,
+    });
+    return;
+  }
+  const host = hostnameOf(t.url || "");
+  let chosen;
+  if (paths.length === 1) {
+    chosen = paths[0];
+  } else {
+    const last = await getIdentityLastUsed(kind, host);
+    const ordered = last && paths.includes(last)
+      ? [last, ...paths.filter((p) => p !== last)]
+      : paths;
+    chosen = await showIdentityPicker(t.id, kind, ordered);
+    if (!chosen) {
+      diagPush("pass.identity.fill.cancelled", { kind });
+      return;
+    }
+    await setIdentityLastUsed(kind, host, chosen);
+  }
+  let entry;
+  try {
+    entry = await bpFetchParsed(chosen);
+  } catch (e) {
+    diagPush("pass.identity.fill.fetch_err", { kind, path: chosen, err: String(e?.message || e) });
+    console.warn("[zpwrchrome] identity fill fetch:", e?.message || e);
+    return;
+  }
+  const fields = { ...(entry.fields || {}) };
+  // Top-level url/username already promoted by parseEntry — surface
+  // them as canonical-key field values so the recognizer sees them.
+  if (entry.url      && !fields.url)   fields.url   = entry.url;
+  if (entry.username && !fields.email && /@/.test(entry.username)) fields.email = entry.username;
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: t.id, allFrames: true },
+      func: fillIdentityForm,
+      args: [fields, TOKEN_SYNONYMS, [...PROFILE_TOKENS, ...CC_TOKENS]],
+    });
+    const totalFilled = (results || []).reduce((s, r) => s + (r?.result?.filled || 0), 0);
+    diagPush("pass.identity.fill.injected", {
+      kind, path: chosen, frames: results?.length || 0, totalFilled,
+    });
+    if (totalFilled === 0) {
+      notify({
+        title: "zpwrchrome — pass identity fill",
+        message: `No recognized ${kind} fields on this page.`,
+      });
+    }
+  } catch (e) {
+    diagPush("pass.identity.fill.inject_err", { kind, err: String(e?.message || e) });
+    console.warn("[zpwrchrome] identity fill inject:", e?.message || e);
+  }
+}
+
+async function bpListEntriesUnderPrefix(prefix) {
+  const all = await bpListEntries();
+  return all.filter((p) => p.startsWith(prefix)).sort();
+}
+
+async function getIdentityLastUsed(kind, host) {
+  const bag = await chrome.storage.local.get(IDENTITY_LAST_USED_KEY);
+  const m = bag?.[IDENTITY_LAST_USED_KEY] || {};
+  return m?.[`${kind}|${host || ""}`] || null;
+}
+async function setIdentityLastUsed(kind, host, path) {
+  const bag = await chrome.storage.local.get(IDENTITY_LAST_USED_KEY);
+  const m = bag?.[IDENTITY_LAST_USED_KEY] || {};
+  m[`${kind}|${host || ""}`] = path;
+  await chrome.storage.local.set({ [IDENTITY_LAST_USED_KEY]: m });
+}
+
+function notify(opts) {
+  if (!chrome.notifications) return;
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+    title:   opts.title   || "zpwrchrome",
+    message: opts.message || "",
+  }, () => void chrome.runtime.lastError);
+}
+
+// In-tab shadow-DOM picker. Resolves to the chosen path or null on cancel
+// / timeout. The picker page-side sends `identity.picker.result` back to
+// the SW; we wire a one-shot listener tagged with a reqId so multiple
+// concurrent invocations don't cross-talk.
+async function showIdentityPicker(tabId, kind, paths) {
+  const reqId = (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/[^a-z0-9-]/gi, "");
+  return new Promise(async (resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      chrome.runtime.onMessage.removeListener(onMsg);
+      resolve(v);
+    };
+    const onMsg = (msg, _sender, sendResponse) => {
+      if (msg?.kind !== "identity.picker.result" || msg.reqId !== reqId) return;
+      sendResponse?.({ ok: true });
+      finish(msg.path || null);
+    };
+    chrome.runtime.onMessage.addListener(onMsg);
+    setTimeout(() => finish(null), IDENTITY_PICKER_TIMEOUT_MS);
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId, allFrames: false },
+        func:   openIdentityPicker,
+        args:   [reqId, kind, paths],
+      });
+    } catch (e) {
+      console.warn("[zpwrchrome] identity picker inject:", e?.message || e);
+      finish(null);
+    }
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Page-injected functions — must be self-contained (no closures over
+// background.js module scope). Args are JSON-serialized by
+// chrome.scripting.executeScript.
+//
+// fillIdentityForm walks every visible <input>/<select>/<textarea> in
+// the current frame, recognizes its autocomplete token, looks up a
+// value in the fields bag (with alias-chain fallbacks for cc-exp,
+// name ↔ given/family, street-address ↔ address-line1/2/3), and writes
+// via the native value setter so React/Vue/Lit observers fire.
+function fillIdentityForm(fields, synonyms, knownTokens) {
+  const known = new Set(knownTokens);
+  function normalize(s) {
+    return String(s || "").toLowerCase().replace(/[_\s]+/g, "-");
+  }
+  function labelText(el) {
+    const doc = el.ownerDocument;
+    if (el.id) {
+      try {
+        const lab = doc.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (lab) return lab.textContent || "";
+      } catch {}
+    }
+    let p = el.parentElement;
+    while (p) {
+      if (p.tagName === "LABEL") return p.textContent || "";
+      p = p.parentElement;
+    }
+    const labId = el.getAttribute("aria-labelledby");
+    if (labId) {
+      const lab = doc.getElementById(labId);
+      if (lab) return lab.textContent || "";
+    }
+    return "";
+  }
+  function visible(el) {
+    if (!el || el.disabled || el.readOnly) return false;
+    const t = String(el.type || "").toLowerCase();
+    if (t === "hidden" || t === "submit" || t === "button" || t === "reset" ||
+        t === "image"  || t === "file"   || t === "checkbox" || t === "radio") return false;
+    if (t === "password") return false;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const cs = el.ownerDocument.defaultView.getComputedStyle(el);
+    if (cs.visibility === "hidden" || cs.display === "none") return false;
+    return true;
+  }
+  function nativeSet(el, val) {
+    const proto = Object.getPrototypeOf(el);
+    const desc = Object.getOwnPropertyDescriptor(proto, "value");
+    if (desc && desc.set) desc.set.call(el, val);
+    else el.value = val;
+    el.dispatchEvent(new Event("input",  { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function recognize(spec) {
+    const ac = String(spec.autocomplete || "").trim().toLowerCase();
+    if (ac) {
+      if (known.has(ac)) return ac;
+      for (const t of ac.split(/\s+/)) if (known.has(t)) return t;
+      if (ac === "off" || ac === "current-password" || ac === "new-password") return null;
+    }
+    const hay = [spec.name, spec.id, spec.label, spec.placeholder].map(normalize).join(" ");
+    let best = null;
+    let bestLen = 0;
+    for (const token in synonyms) {
+      for (const syn of synonyms[token]) {
+        const sn = normalize(syn);
+        if (hay.includes(sn) && sn.length > bestLen) {
+          best = token; bestLen = sn.length;
+        }
+      }
+    }
+    if (best) return best;
+    const tp = String(spec.type || "").toLowerCase();
+    if (tp === "email") return "email";
+    if (tp === "tel")   return "tel";
+    return null;
+  }
+  function expand(token) {
+    const direct = fields[token];
+    if (direct != null && direct !== "") return String(direct);
+    if (token === "cc-exp" && fields["cc-exp-month"] && fields["cc-exp-year"]) {
+      const m = String(fields["cc-exp-month"]);
+      const y = String(fields["cc-exp-year"]);
+      return `${m.length === 1 ? "0" + m : m}/${y.slice(-2)}`;
+    }
+    if (token === "cc-exp-month" && fields["cc-exp"]) {
+      const m = String(fields["cc-exp"]).match(/^(\d{1,2})[\/-]/);
+      return m ? (m[1].length === 1 ? "0" + m[1] : m[1]) : null;
+    }
+    if (token === "cc-exp-year" && fields["cc-exp"]) {
+      const m = String(fields["cc-exp"]).match(/[\/-](\d{2,4})$/);
+      return m ? m[1] : null;
+    }
+    if (token === "name") {
+      const parts = [fields["given-name"], fields["additional-name"], fields["family-name"]].filter(Boolean);
+      return parts.length ? parts.join(" ") : null;
+    }
+    if (token === "cc-name") {
+      if (fields.name) return String(fields.name);
+      const p1 = [fields["cc-given-name"], fields["cc-family-name"]].filter(Boolean);
+      if (p1.length) return p1.join(" ");
+      const p2 = [fields["given-name"], fields["family-name"]].filter(Boolean);
+      return p2.length ? p2.join(" ") : null;
+    }
+    if (token === "given-name") {
+      const n = String(fields.name || "").trim();
+      return n ? n.split(/\s+/)[0] : null;
+    }
+    if (token === "family-name") {
+      const n = String(fields.name || "").trim();
+      if (!n) return null;
+      const parts = n.split(/\s+/);
+      return parts.length > 1 ? parts[parts.length - 1] : null;
+    }
+    if (token === "street-address") {
+      const lines = [fields["address-line1"], fields["address-line2"], fields["address-line3"]].filter(Boolean);
+      return lines.length ? lines.join("\n") : null;
+    }
+    if (token === "address-line1") {
+      const street = String(fields["street-address"] || "");
+      return street ? street.split("\n")[0] : null;
+    }
+    if (token === "country-name") {
+      return fields.country != null ? String(fields.country) : null;
+    }
+    return null;
+  }
+  const filled = [];
+  const candidates = document.querySelectorAll("input, select, textarea");
+  for (const el of candidates) {
+    if (!visible(el)) continue;
+    const token = recognize({
+      autocomplete: el.autocomplete || "",
+      name:         el.name         || "",
+      id:           el.id           || "",
+      label:        labelText(el),
+      placeholder:  el.placeholder  || "",
+      type:         el.type         || "",
+    });
+    if (!token) continue;
+    const val = expand(token);
+    if (val == null || val === "") continue;
+    nativeSet(el, val);
+    filled.push({ token, name: el.name || "", id: el.id || "" });
+  }
+  return { filled: filled.length, fields: filled, origin: location?.origin || "" };
+}
+
+// In-tab shadow-DOM picker. Same z-index ceiling as the tab-switcher
+// modal; closed shadow so the host page can't restyle it.
+function openIdentityPicker(reqId, kind, paths) {
+  const existing = document.getElementById(`__zpc_idpicker_${reqId}`);
+  if (existing) existing.remove();
+  const host = document.createElement("div");
+  host.id = `__zpc_idpicker_${reqId}`;
+  host.style.cssText = "all: initial; position: fixed; inset: 0; z-index: 2147483647;";
+  const root = host.attachShadow({ mode: "closed" });
+  root.innerHTML = `
+    <style>
+      :host, * { box-sizing: border-box; }
+      .scrim {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'Share Tech Mono', 'SF Mono', monospace;
+      }
+      .box {
+        background: #0d0d1a; border: 1px solid #05d9e8;
+        box-shadow: 0 0 24px rgba(5,217,232,0.4);
+        padding: 16px 18px;
+        border-radius: 4px;
+        min-width: 360px; max-width: 540px;
+        color: #e0f0ff;
+      }
+      h1 {
+        font-size: 11px; color: #05d9e8;
+        margin: 0 0 12px;
+        letter-spacing: 2px; text-transform: uppercase;
+        font-weight: 700;
+      }
+      input {
+        width: 100%; box-sizing: border-box;
+        background: #05050a; border: 1px solid #1a1a3e;
+        color: #e0f0ff;
+        font-family: inherit; font-size: 12px;
+        padding: 6px 10px; border-radius: 2px;
+        margin-bottom: 10px;
+      }
+      input:focus { outline: none; border-color: #05d9e8; box-shadow: 0 0 4px rgba(5,217,232,0.4); }
+      ul { list-style: none; padding: 0; margin: 0; max-height: 360px; overflow: auto; }
+      li {
+        padding: 8px 10px; cursor: pointer;
+        border-left: 2px solid transparent;
+        font-size: 13px; color: #e0f0ff;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      li.sel { background: #12122a; border-left-color: #05d9e8; color: #05d9e8; }
+      li:hover { background: #12122a; }
+      .hint {
+        font-size: 10px; color: #7a8ba8;
+        margin-top: 12px; text-align: right;
+        letter-spacing: 1px;
+      }
+    </style>
+    <div class="scrim">
+      <div class="box" role="dialog" aria-modal="true">
+        <h1>fill ${kind} from pass</h1>
+        <input id="q" type="search" autocomplete="off" placeholder="filter…" autofocus>
+        <ul id="lst"></ul>
+        <div class="hint">↑↓ select · Enter fill · Esc cancel</div>
+      </div>
+    </div>
+  `;
+  document.documentElement.appendChild(host);
+  const q   = root.getElementById("q");
+  const lst = root.getElementById("lst");
+  let idx = 0;
+  let filt = paths.slice();
+  function render() {
+    if (filt.length === 0) {
+      lst.innerHTML = `<li style="color:#7a8ba8;cursor:default;">no matches</li>`;
+      return;
+    }
+    if (idx >= filt.length) idx = filt.length - 1;
+    if (idx < 0) idx = 0;
+    lst.innerHTML = filt.map((p, i) =>
+      `<li class="${i === idx ? "sel" : ""}" data-i="${i}">${p.replace(/[<>&"]/g, (c) => ({ "<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;" }[c]))}</li>`
+    ).join("");
+    Array.from(lst.querySelectorAll("li[data-i]")).forEach((el) => {
+      el.addEventListener("click", () => { idx = Number(el.dataset.i); send(filt[idx]); });
+      el.addEventListener("mouseenter", () => { idx = Number(el.dataset.i); render(); });
+    });
+  }
+  function refilter() {
+    const s = q.value.trim().toLowerCase();
+    filt = s ? paths.filter((p) => p.toLowerCase().includes(s)) : paths.slice();
+    idx = 0;
+    render();
+  }
+  function send(path) {
+    chrome.runtime.sendMessage({ kind: "identity.picker.result", reqId, path }, () => void chrome.runtime.lastError);
+    cleanup();
+  }
+  function cleanup() {
+    document.removeEventListener("keydown", onKey, true);
+    host.remove();
+  }
+  function onKey(ev) {
+    if (ev.key === "ArrowDown") { idx++; render(); ev.preventDefault(); ev.stopPropagation(); }
+    else if (ev.key === "ArrowUp") { idx--; render(); ev.preventDefault(); ev.stopPropagation(); }
+    else if (ev.key === "Enter")   { if (filt[idx]) send(filt[idx]); ev.preventDefault(); ev.stopPropagation(); }
+    else if (ev.key === "Escape")  { send(null); ev.preventDefault(); ev.stopPropagation(); }
+  }
+  document.addEventListener("keydown", onKey, true);
+  q.addEventListener("input", refilter);
+  render();
+  setTimeout(() => q.focus(), 0);
+}
+// ────────────────────────────────────────────────────────────────────
 
 const PASS_SETTINGS_KEY = "pass.settings";
 const PASS_SETTINGS_DEFAULTS = {
