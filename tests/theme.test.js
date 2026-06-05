@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 
@@ -131,8 +132,17 @@ test("no Chrome runtime artifacts (Cached Theme.pak) are tracked", () => {
   // Chrome auto-generates `theme/Cached Theme.pak` inside an unpacked theme
   // directory the moment the theme is loaded. It's a binary cache; ours
   // bled into a prior commit before .gitignore caught up.
-  for (const e of readdirSync(THEME)) {
-    assert.ok(!/\.pak$/.test(e), `Chrome cache artifact must not ship: ${e}`);
+  //
+  // The intent is "no .pak is COMMITTED" — not "no .pak exists on disk."
+  // Chrome regenerates the cache the next time the theme is loaded, so a
+  // filesystem-only check false-fails on any developer who has ever
+  // loaded the unpacked theme. Ask git for the tracked-file list so the
+  // test reflects what would actually ship.
+  const tracked = execSync("git ls-files theme/", { cwd: ROOT, encoding: "utf8" })
+    .split("\n").filter(Boolean);
+  for (const f of tracked) {
+    assert.ok(!/\.pak$/.test(f),
+      `Chrome cache artifact must not ship: ${f} (gitignore catches it; this assertion catches anything that slipped past)`);
   }
 });
 
