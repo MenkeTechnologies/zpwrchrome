@@ -920,11 +920,9 @@ document.getElementById("open-find").addEventListener("click", (e) => {
   window.close();
 });
 
-document.getElementById("open-lights").addEventListener("click", (e) => {
-  e.preventDefault();
-  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/lights-off.html") });
-  window.close();
-});
+// (lights settings page reachable via toolbar context menu → "Lights-off
+// settings…" + chrome://extensions/shortcuts. Not in the popup hint to
+// keep the header's search-input column from getting squeezed.)
 
 // ── bottom downloads strip (always-visible glance) ────────────────────
 //
