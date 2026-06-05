@@ -52,42 +52,43 @@
        Brackets at the safe-area corners look decoratively indoor on
        a true 4K full-image view, but they survive Chrome chrome eating
        the top/bottom of the image at every common resolution. -->
-  <g stroke="#05d9e8" stroke-opacity="0.35" fill="none" stroke-width="1.5">
+  <g stroke="#05d9e8" stroke-opacity="0.35" fill="none" stroke-width="1.0">
     <!-- Outer ring — only visible to viewports that see most of the PNG -->
-    <path d="M 50 50 L 200 50"/>
-    <path d="M 50 50 L 50 200"/>
-    <path d="M 1870 50 L 1720 50"/>
-    <path d="M 1870 50 L 1870 200"/>
-    <path d="M 50 1150 L 200 1150"/>
-    <path d="M 50 1150 L 50 1000"/>
-    <path d="M 1870 1150 L 1720 1150"/>
-    <path d="M 1870 1150 L 1870 1000"/>
+    <path d="M 50 50 L 130 50"/>
+    <path d="M 50 50 L 50 130"/>
+    <path d="M 1870 50 L 1790 50"/>
+    <path d="M 1870 50 L 1870 130"/>
+    <path d="M 50 1150 L 130 1150"/>
+    <path d="M 50 1150 L 50 1070"/>
+    <path d="M 1870 1150 L 1790 1150"/>
+    <path d="M 1870 1150 L 1870 1070"/>
   </g>
 
-  <!-- Inner ring — sized for 1920x1080-or-bigger Chrome windows.
-       Stroke is brighter than the outer ring so it carries the HUD identity
-       at the size most users will actually see. -->
-  <g stroke="#05d9e8" stroke-opacity="0.55" fill="none" stroke-width="1.8">
-    <path d="M 495 315 L 635 315"/>
-    <path d="M 495 315 L 495 455"/>
-    <path d="M 1425 315 L 1285 315"/>
-    <path d="M 1425 315 L 1425 455"/>
-    <path d="M 495 885 L 635 885"/>
-    <path d="M 495 885 L 495 745"/>
-    <path d="M 1425 885 L 1285 885"/>
-    <path d="M 1425 885 L 1425 745"/>
+  <!-- Inner ring — sized for 1920x1080-or-bigger Chrome windows. Arms are
+       60 SVG units (~120 px in the 3840x2400 PNG). Stroke is brighter than
+       the outer ring so it carries the HUD identity at the size most users
+       will actually see, but not so thick it looks heavy. -->
+  <g stroke="#05d9e8" stroke-opacity="0.55" fill="none" stroke-width="1.2">
+    <path d="M 495 315 L 555 315"/>
+    <path d="M 495 315 L 495 375"/>
+    <path d="M 1425 315 L 1365 315"/>
+    <path d="M 1425 315 L 1425 375"/>
+    <path d="M 495 885 L 555 885"/>
+    <path d="M 495 885 L 495 825"/>
+    <path d="M 1425 885 L 1365 885"/>
+    <path d="M 1425 885 L 1425 825"/>
   </g>
 
   <!-- Sub-bracket accent dots at each safe-area corner. -->
   <g fill="#05d9e8" fill-opacity="0.6">
-    <circle cx="495"  cy="315" r="3"/>
-    <circle cx="1425" cy="315" r="3"/>
-    <circle cx="495"  cy="885" r="3"/>
-    <circle cx="1425" cy="885" r="3"/>
+    <circle cx="495"  cy="315" r="2"/>
+    <circle cx="1425" cy="315" r="2"/>
+    <circle cx="495"  cy="885" r="2"/>
+    <circle cx="1425" cy="885" r="2"/>
   </g>
 
   <!-- Brand caption — positioned inside the safe area so users on common
        1920x1080 windows can actually read it. -->
-  <text x="510" y="350" font-family="Share Tech Mono, monospace" font-size="14" fill="#05d9e8" fill-opacity="0.7" letter-spacing="3">SYS://ZPWRCHROME</text>
-  <text x="510" y="370" font-family="Share Tech Mono, monospace" font-size="11" fill="#7a8ba8" letter-spacing="2">// menketechnologies // hud_v2</text>
+  <text x="510" y="345" font-family="Share Tech Mono, monospace" font-size="9" fill="#05d9e8" fill-opacity="0.7" letter-spacing="2">SYS://ZPWRCHROME</text>
+  <text x="510" y="360" font-family="Share Tech Mono, monospace" font-size="7" fill="#7a8ba8" letter-spacing="1.5">// menketechnologies // hud_v2</text>
 </svg>
