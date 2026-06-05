@@ -37,7 +37,7 @@
       <span class="ico">⬇</span>
       <div>
         <h3>zpwrchrome</h3>
-        <div class="tag">UNIX <code>pass</code> · Segmented DL Manager · Tab Switcher · Userscripts · History fzf · Tech Detection · Cyberpunk Theme · Turn Off the Lights · JSON · UA Switcher · Find-in-All-Tabs</div>
+        <div class="tag">UNIX <code>pass</code> · Segmented DL Manager · Tab Switcher · Userscripts · History fzf · Tech Detection · Cyberpunk Theme · Turn Off the Lights · Reader Mode · JSON · UA Switcher · Find-in-All-Tabs</div>
         <div class="ver">Version <span id="ver">…</span></div>
       </div>
     </div>
@@ -58,18 +58,37 @@
       <strong>cyberpunk page-theme injector</strong> that paints arbitrary pages
       with the strykelang HUD palette, a <strong>Turn-off-the-lights cinema dimmer</strong>
       that overlays the page in near-black and spotlights any
-      <code>&lt;video&gt;</code> element above it,
+      <code>&lt;video&gt;</code> element above it, a <strong>Reader mode</strong>
+      that strips the page to its main article and renders it in the
+      strykelang HUD with adjustable typography,
       a <strong>JSON viewer</strong> that auto-replaces plain JSON pages with a
       collapsible tree, and a <strong>User-Agent switcher</strong> backed by
       <code>chrome.declarativeNetRequest</code> dynamic rules.
     </p>
+
+    <h3>Reader mode</h3>
+    <p>
+      Strips the active page to its main article and renders it inside a
+      fixed-position overlay with the strykelang HUD palette. No
+      Readability.js dependency &mdash; purely heuristic extraction. Trigger
+      via the <code>reader-mode</code> command, the toolbar context menu
+      &mdash; <em>Reader mode (this tab)</em> &mdash; or the global nav strip
+      on any settings page.
+    </p>
+    <ul>
+      <li>Three-step extraction: largest <code>&lt;article&gt;</code> &rarr; <code>&lt;main&gt;</code> / <code>[role="main"]</code> &rarr; densest paragraph cluster outside <em>nav</em> / <em>aside</em> / <em>footer</em> / <em>ad</em> / <em>share</em> / <em>comment</em> / <em>widget</em> containers.</li>
+      <li>Clone is sanitized before render: <code>&lt;script&gt;</code> / <code>&lt;style&gt;</code> / <code>&lt;iframe&gt;</code> / <code>&lt;form&gt;</code> / <code>&lt;nav&gt;</code> / inline <code>on*</code> event handlers all stripped. Relative URLs resolved to absolute so images and links still work inside the overlay.</li>
+      <li>Four themes (<em>cyberpunk</em> default, <em>classic-dark</em>, <em>classic-light</em>, <em>sepia</em>) &times; three font families (<em>mono</em>, <em>serif</em>, <em>sans</em>). Font-size / line-width / line-height sliders + optional CRT scanlines. Settings UI at <code>scripts-manager/reader-mode.html</code> with a live preview pane.</li>
+      <li>Top-bar live controls: <em>A&minus;</em> / <em>A+</em> bump font size on the fly and persist; <kbd>Esc</kbd> or the &times; closes. Original page DOM is untouched the whole time &mdash; the overlay just sits on top.</li>
+    </ul>
 
     <h3>Turn off the lights (cinema mode)</h3>
     <p>
       Port of the Turn Off the Lights Chrome extension. Trigger via the
       <code>lights-off</code> command (bind at <code>chrome://extensions/shortcuts</code>),
       the toolbar context menu &mdash; <em>Turn off the lights (this tab)</em>,
-      or the popup &rarr; <code>lights ▸</code> &mdash; which opens the settings UI.
+      or the global nav strip on any settings page &mdash; which opens the
+      lights-off settings UI.
     </p>
     <ul>
       <li><code>modal/lights-off.js</code> walks every visible <code>&lt;video&gt;</code> element, walks the ancestor chain up to <code>&lt;body&gt;</code>, and sets <code>z-index: 2147483647</code> + (if needed) <code>position: relative</code> on every node so the player escapes any <code>overflow: hidden</code> or stacking-context clip.</li>
