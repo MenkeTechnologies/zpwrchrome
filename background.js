@@ -3138,15 +3138,19 @@ async function applyMultiplexedBadge() {
     let color = "#05d9e8";   // cyan default
     let title = "zpwrchrome";
 
-    // Priority for the visible number: downloads (most actionable) →
-    // tech (info about the current tab) → pass (a click away). Asterisk
-    // means "at least one of the other tracked counters is also > 0".
-    const others = (others_set) => [...others_set].filter(Boolean).length > 0;
+    // Priority for the visible NUMBER: downloads (most actionable) →
+    // tech (info about the current tab) → pass (a click away). Trailing
+    // letter tags spell out which OTHER counters are also non-zero:
+    //   t = tech also detected
+    //   l = login (pass) match also present
+    // So a tab with 10 downloads + 5 tech + 2 pass shows "10tl"; a tab
+    // with 5 tech + 2 pass shows "5l"; a tab with just 2 pass shows "2".
+    const tag = (cond, ch) => cond ? ch : "";
     if (dl > 0) {
-      text  = String(dl) + (others(new Set([tech, pass])) ? "*" : "");
+      text  = String(dl) + tag(tech > 0, "t") + tag(pass > 0, "l");
       color = "#05d9e8";
     } else if (tech > 0) {
-      text  = String(tech) + (pass > 0 ? "*" : "");
+      text  = String(tech) + tag(pass > 0, "l");
       color = "#ff8c1a";
     } else if (pass > 0) {
       text  = String(pass);
