@@ -183,10 +183,14 @@ test("toolbar-icon right-click menu (contexts: action) ships Chrono-equivalent i
     ["CTX_ACT_MGR",    /Open download manager/],
     ["CTX_ACT_SCR",    /Open userscript manager/],
     ["CTX_ACT_DIAG",   /Open diagnostics/],
-    ["CTX_ACT_SET",    /Settings — General/],
-    ["CTX_ACT_IFACE",  /Settings — Interface/],
-    ["CTX_ACT_EXTFLT", /Settings — Extension Filter/],
-    ["CTX_ACT_RULES",  /Settings — Rule System/],
+    // Settings entries moved under the "Settings" parent submenu when
+    // the action menu was restructured to fit Chrome's 6-item top-level
+    // cap (ACTION_MENU_TOP_LEVEL_LIMIT). Titles no longer need the
+    // "Settings — " prefix because the submenu name already carries it.
+    ["CTX_ACT_SET",    /title:\s*"General"/],
+    ["CTX_ACT_IFACE",  /title:\s*"Interface"/],
+    ["CTX_ACT_EXTFLT", /title:\s*"Extension Filter"/],
+    ["CTX_ACT_RULES",  /title:\s*"Rule System"/],
     ["CTX_ACT_FOLD",   /Change downloads folder…/],
     ["CTX_ACT_HELP",   /title:\s*"Help"/],
     ["CTX_ACT_ABOUT",  /About zpwrchrome/],
