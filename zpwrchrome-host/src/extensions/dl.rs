@@ -1470,6 +1470,14 @@ pub fn flush_progress(state: &JobState) -> std::io::Result<()> {
             disk.elapsed_ms       = state.elapsed_ms;
             disk.paused_offset_ms = state.paused_offset_ms;
             disk.worker_pid       = state.worker_pid;
+            // We're being called from the worker's active read path — if
+            // disk still says "pending" (e.g. dl_resume after a prior
+            // pause/fail/cancel and the worker hasn't hit a transition
+            // write since), reconcile to "active". Without this fix the
+            // UI label stays "pending" forever for the rest of the run.
+            if !disk.paused && disk.status == "pending" {
+                disk.status = "active".into();
+            }
             write_state_atomic(&disk)
         }
         // No prior file — fall back to full write so the worker can bootstrap.
@@ -1619,9 +1627,14 @@ fn progress_pump(gid: u64, done_total: Arc<AtomicU64>, start_instant: Instant) {
     loop {
         thread::sleep(STATE_FLUSH_INTERVAL);
         // Always re-read so we pick up dl.pause / dl.cancel / dl.resume
-        // writes between pumps. We mutate ONLY done / elapsed_ms /
-        // paused_offset_ms before writing back; status / paused / cancelled
-        // pass through unchanged.
+        // writes between pumps. We mutate done / elapsed_ms /
+        // paused_offset_ms; status / paused / cancelled pass through —
+        // with one exception: a "pending" status with paused=false is a
+        // stale dl.resume write that the worker (us, here) is the only
+        // one positioned to clear. Flip it to "active" so the UI label
+        // tracks reality. Without this, segmented downloads that the
+        // user paused-then-resumed stay labelled "pending" forever even
+        // though bytes are flowing.
         let mut state = match read_state(gid) {
             Ok(s) => s,
             Err(_) => return,
@@ -1639,6 +1652,9 @@ fn progress_pump(gid: u64, done_total: Arc<AtomicU64>, start_instant: Instant) {
                     .saturating_add(p.elapsed().as_millis() as u64);
             }
             state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
+            if state.status == "pending" {
+                state.status = "active".into();
+            }
         }
         let _ = write_state_atomic(&state);
         if matches!(state.status.as_str(), "done" | "failed" | "cancelled") {
