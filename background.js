@@ -134,6 +134,7 @@ async function dispatch(command) {
   if (command === "pass-fill-cc")         return passFillIdentityActive("creditcard");
   if (command === "find-in-all-tabs")     return openFindAllTabs();
   if (command === "lights-off")           return toggleLightsOffActive();
+  if (command === "reader-mode")          return toggleReaderModeActive();
   if (command === "screenshot-full-page") return doScreenshotFullPage();
   if (command === "dl-paste-url")         return dlPasteUrl();
   if (command === "dl-show-queue")        return dlShowQueue();
@@ -195,6 +196,26 @@ async function toggleLightsOffActive() {
         files: ["modal/lights-off.js"],
       });
       await chrome.tabs.sendMessage(tab.id, { type: "lights-off:toggle" });
+    } catch {}
+  }
+}
+
+// Reader mode — strip active page to its main article inside an overlay.
+// Same fallback pattern as toggleLightsOffActive: try a sendMessage to
+// the content script first; if no listener (tab without the script
+// because the SW was woken before document_idle), inject on the fly.
+async function toggleReaderModeActive() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || tab.id == null) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "reader-mode:toggle" });
+  } catch {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["modal/reader-mode.js"],
+      });
+      await chrome.tabs.sendMessage(tab.id, { type: "reader-mode:toggle" });
     } catch {}
   }
 }
@@ -1718,6 +1739,8 @@ const CTX_ACT_UA     = "zpc-act-ua";
 const CTX_ACT_THEME  = "zpc-act-theme";
 const CTX_ACT_LIGHTS = "zpc-act-lights";
 const CTX_ACT_LIGHTSCFG = "zpc-act-lightscfg";
+const CTX_ACT_READER = "zpc-act-reader";
+const CTX_ACT_READERCFG = "zpc-act-readercfg";
 const CTX_ACT_DIAG   = "zpc-act-diag";
 const CTX_ACT_SET    = "zpc-act-settings";
 const CTX_ACT_IFACE  = "zpc-act-interface";
@@ -1778,6 +1801,8 @@ chrome.runtime.onInstalled.addListener(() => {
   create({ id: CTX_ACT_THEME,  title: "Cyberpunk page theme",         contexts: act });
   create({ id: CTX_ACT_LIGHTS, title: "Turn off the lights (this tab)", contexts: act });
   create({ id: CTX_ACT_LIGHTSCFG, title: "Lights-off settings…",       contexts: act });
+  create({ id: CTX_ACT_READER, title: "Reader mode (this tab)",        contexts: act });
+  create({ id: CTX_ACT_READERCFG, title: "Reader-mode settings…",      contexts: act });
   create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
   create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
   create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
@@ -1808,6 +1833,7 @@ if (chrome.contextMenus) {
       [CTX_ACT_UA]:     "/scripts-manager/ua-switcher.html",
       [CTX_ACT_THEME]:  "/scripts-manager/theme-injector.html",
       [CTX_ACT_LIGHTSCFG]: "/scripts-manager/lights-off.html",
+      [CTX_ACT_READERCFG]: "/scripts-manager/reader-mode.html",
       [CTX_ACT_DIAG]:   "/scripts-manager/dl-diag.html",
       [CTX_ACT_SET]:    "/scripts-manager/dl-settings.html",
       [CTX_ACT_IFACE]:  "/scripts-manager/dl-interface.html",
@@ -1829,6 +1855,12 @@ if (chrome.contextMenus) {
       Promise.resolve()
         .then(() => toggleLightsOffActive())
         .catch((e) => console.error("[zpwrchrome] lights-off:", e));
+      return;
+    }
+    if (info.menuItemId === CTX_ACT_READER) {
+      Promise.resolve()
+        .then(() => toggleReaderModeActive())
+        .catch((e) => console.error("[zpwrchrome] reader-mode:", e));
       return;
     }
     if (info.menuItemId === CTX_ACT_SHOT) {
