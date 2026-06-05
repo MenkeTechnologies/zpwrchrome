@@ -572,7 +572,13 @@ pub fn dl_list() {
 pub fn dl_pause(req: &DlRequest) {
     mutate_state(req.gid, "dl.pause", |s| {
         s.paused = true;
-        if s.status == "active" { s.status = "paused".into(); }
+        // Flip status to "paused" for any in-flight state — `pending` (user
+        // clicked pause before the worker transitioned to active), `active`
+        // (mid-stream), or even `paused` (idempotent). Terminal states
+        // ("done", "cancelled", "failed") are left alone.
+        if !matches!(s.status.as_str(), "done" | "cancelled" | "failed") {
+            s.status = "paused".into();
+        }
     });
     response::SendOk(DlActionResponse { gid: req.gid, status: "paused".into() });
 }
@@ -1237,7 +1243,17 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     // Claim ownership of this gid — dl_resume reads this and uses
     // worker_alive() to decide whether to respawn.
     state.worker_pid = std::process::id();
-    write_state_atomic(&state)?;
+    // flush_worker (not write_state_atomic) so a dl.pause / dl.cancel that
+    // landed between dl.add and this point isn't clobbered. We're
+    // authoritative for status here; paused/cancelled come from disk.
+    flush_worker(&state)?;
+    // Re-sync our local view of paused/cancelled from disk so the rest of
+    // run_worker (probe → run_segmented/single → terminal) sees the same
+    // truth check_control would.
+    if let Ok(disk) = read_state(gid) {
+        state.paused    = disk.paused;
+        state.cancelled = disk.cancelled;
+    }
 
     // Probe headers. Try HEAD first; some CDNs (GitHub release assets
     // redirect to objects.githubusercontent.com pre-signed S3 URLs that
@@ -1281,10 +1297,22 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
             state.dest = new_dest.to_string_lossy().into_owned();
         }
     }
-    write_state_atomic(&state)?;
+    flush_worker(&state)?;
+    // Re-sync paused/cancelled from disk after the probe (could be ~seconds).
+    if let Ok(disk) = read_state(gid) {
+        state.paused    = disk.paused;
+        state.cancelled = disk.cancelled;
+    }
+    // If the user cancelled while we were probing, surface that immediately
+    // — running run_segmented/single only to bail seconds later wastes their
+    // bandwidth. The terminal-decision block below handles cleanup; jumping
+    // there directly via a tagged dummy result keeps one exit path.
+    let cancelled_during_probe = state.cancelled;
 
     let do_segments = total >= MIN_SEGMENT_BYTES && accept_ranges && state.segments > 1;
-    let result = if do_segments {
+    let result = if cancelled_during_probe {
+        Ok(())   // skip the download — terminal block below sees cancelled=true and writes "cancelled"
+    } else if do_segments {
         run_segmented(&mut state, total, start_instant)
     } else {
         run_single(&mut state, total, accept_ranges, start_instant)
@@ -1303,7 +1331,7 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
             if state.cancelled {
                 state.status = "cancelled".into();
                 state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
-                let _ = write_state_atomic(&state);
+                let _ = flush_worker(&state);
                 // Remove the partial bytes on disk, but keep the state file
                 // so the row stays visible under the "cancelled" filter — the
                 // user can clear it explicitly from there.
@@ -1311,7 +1339,7 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
             } else {
                 state.status = "done".into();
                 state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
-                let _ = write_state_atomic(&state);
+                let _ = flush_worker(&state);
             }
         }
         Err(e) => { let _ = finish_err(&mut state, e); }
@@ -1402,8 +1430,7 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
 fn finish_err(state: &mut JobState, msg: String) -> std::io::Result<()> {
     state.status = "failed".into();
     state.err = Some(msg);
-    write_state_atomic(state)?;
-    Ok(())
+    flush_worker(state)
 }
 
 // Reusable polling: between chunks, re-read state file to pick up
@@ -1463,6 +1490,26 @@ pub fn flush_status(state: &JobState) -> std::io::Result<()> {
             disk.worker_pid       = state.worker_pid;
             disk.status           = state.status.clone();
             write_state_atomic(&disk)
+        }
+        Err(_) => write_state_atomic(state),
+    }
+}
+
+/// Full-state worker flush — writes EVERY worker-owned field (status, dest,
+/// total, err on top of the four `flush_progress` fields) while preserving
+/// the two dl-handler-owned flags (`paused`, `cancelled`) from disk. Used
+/// at the worker's three "structural" write sites: initial start, after the
+/// HEAD/range probe (where dest may have been renamed and total filled in),
+/// and at terminal status writes. Without this, a dl.pause / dl.cancel that
+/// landed between dl.add and worker startup would be clobbered by the
+/// worker's full local-state write.
+pub fn flush_worker(state: &JobState) -> std::io::Result<()> {
+    match read_state(state.gid) {
+        Ok(disk) => {
+            let mut merged = state.clone();
+            merged.paused    = disk.paused;
+            merged.cancelled = disk.cancelled;
+            write_state_atomic(&merged)
         }
         Err(_) => write_state_atomic(state),
     }
