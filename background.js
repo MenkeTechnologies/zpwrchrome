@@ -25,6 +25,7 @@ import {
 } from "./lib/userscript.js";
 import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "./lib/bp-pass.js";
+import { computeOtpFromUrl } from "./lib/totp.js";
 import {
   PROFILE_TOKENS,
   CC_TOKENS,
@@ -176,7 +177,7 @@ async function passCopyForActive(field) {
   diagPush("pass.copy.match", { field, host, path: m.path, total: matches.length });
   try {
     if (field === "otp") {
-      const code = await bpOtpCode(m.path);
+      const code = await passOtpCodeForPath(m.path);
       if (!code) { diagPush("pass.copy.no_otp", { path: m.path }); return; }
       await passClipboardCopy(code);
       diagPush("pass.copy.ok", { field, path: m.path });
@@ -277,7 +278,7 @@ async function passCopyFieldForPath(path, field) {
   try {
     let text = "";
     if (field === "otp") {
-      text = await bpOtpCode(path);
+      text = await passOtpCodeForPath(path);
     } else {
       const entry = await bpFetchParsed(path);
       if (field === "password" || field === "pw") text = String(entry.password || "");
@@ -2501,7 +2502,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg?.kind === "pass.otp") {
-    bpOtpCode(String(msg.path || ""))
+    passOtpCodeForPath(String(msg.path || ""))
       .then((otp) => sendResponse({ ok: true, otp }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
@@ -2944,6 +2945,12 @@ async function bpDeleteEntry(path) {
 }
 
 // `otp` extension action — host shells `pass otp` and returns the code.
+// PATH-issue note: Chrome doesn't pass the user's shell PATH to the
+// native messaging host, so `pass` typically isn't found
+// (/opt/homebrew/bin/pass on macOS, /usr/local/bin/pass elsewhere).
+// passOtpCodeForPath() below is the new entry point that computes TOTP
+// client-side from the entry's otpauth:// URL via Web Crypto and only
+// falls back to this `pass otp` shell-out when the entry has no URL.
 async function bpOtpCode(path) {
   const file = path.endsWith(".gpg") ? path : `${path}.gpg`;
   const resp = await bpSend({
@@ -2953,6 +2960,34 @@ async function bpOtpCode(path) {
     settings: { stores: bpStores() },
   });
   return resp.data?.code || "";
+}
+
+// passOtpCodeForPath(path) — TOTP / HOTP from the entry's otpauth://
+// URL (decoded from the GPG fetch result). No shell-out, no pass-otp
+// extension dependency, no PATH dependency. Falls back to `pass otp`
+// only when the entry has no otpauth URL at all (still useful for
+// users who rely on pass-otp's own state files for HOTP counters).
+async function passOtpCodeForPath(path) {
+  let entry;
+  try {
+    entry = await bpFetchParsed(path);
+  } catch (e) {
+    throw new Error(`fetch failed: ${e?.message || e}`);
+  }
+  const url = String(entry.otpUrl || "").trim();
+  if (url) {
+    try {
+      return await computeOtpFromUrl(url);
+    } catch (e) {
+      throw new Error(`compute totp: ${e?.message || e}`);
+    }
+  }
+  // No client-computable otpauth URL — last-resort fall back to the
+  // host's `pass otp` action. This will fail with `Unable to spawn pass
+  // otp` on a typical Chrome-spawned host (no PATH), but the error is
+  // surfaced rather than silently returning empty so the user knows
+  // their entry doesn't have an otpauth:// URL in it.
+  return bpOtpCode(path);
 }
 
 // dl.* extension actions — one round-trip each.

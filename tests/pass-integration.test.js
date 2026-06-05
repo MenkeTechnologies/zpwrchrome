@@ -49,6 +49,27 @@ test("background.js has normalizeOpenUrl helper that defends against schemeless 
   assert.match(bg, /`https:\/\/\$\{s\}`/,           "everything else defaults to https://");
 });
 
+test("OTP is computed client-side from otpauth:// URL via Web Crypto, with `pass otp` only as last-resort", () => {
+  // Background: Chrome doesn't pass shell PATH to the NM host, so
+  // `Command::new("pass")` in the Rust host can't find pass and returns
+  // "Unable to spawn `pass otp`". We compute TOTP/HOTP from the entry's
+  // otpauth:// URL in the SW via Web Crypto instead. Pinned here so any
+  // future refactor doesn't accidentally route OTP back through bpOtpCode.
+  assert.match(bg, /async function passOtpCodeForPath\b/,
+    "passOtpCodeForPath helper must exist");
+  assert.match(bg, /import\s+\{\s*computeOtpFromUrl\s*\}\s+from\s+["']\.\/lib\/totp\.js["']/,
+    "background.js must import computeOtpFromUrl");
+  assert.match(bg, /passOtpCodeForPath[\s\S]+?await computeOtpFromUrl\(url\)/,
+    "passOtpCodeForPath must compute via computeOtpFromUrl(entry.otpUrl)");
+  assert.match(bg, /passOtpCodeForPath[\s\S]+?return bpOtpCode\(path\)/,
+    "passOtpCodeForPath must fall back to bpOtpCode when no otpauth URL");
+  // Every caller now goes through passOtpCodeForPath, never bpOtpCode directly.
+  for (const site of ["passCopyForActive", "passCopyFieldForPath", 'msg\\?\\.kind === "pass\\.otp"']) {
+    const re = new RegExp(`${site}[\\s\\S]{0,800}?passOtpCodeForPath`);
+    assert.match(bg, re, `${site} must call passOtpCodeForPath`);
+  }
+});
+
 test("fillLoginForm autoSubmit CLICKS a button — never form.submit() (SPA-safe)", () => {
   // Caught at 10.59.0.17:5000/#/signin: step 1 (username only) got filled,
   // then form.submit() did a GET navigation that serialized every input
@@ -239,13 +260,17 @@ test("popup pass copy buttons use callback form (not bare await) on sendMessage"
 
 test("background pass.* message handlers all delegate through BP helpers", () => {
   // pass.match → bpMatchByHost, pass.list → bpListEntries, pass.search →
-  // bpSend({action:"search"}), pass.fetch → bpFetchParsed, pass.otp → bpOtpCode.
+  // bpSend({action:"search"}), pass.fetch → bpFetchParsed.
+  // pass.otp goes through passOtpCodeForPath which computes TOTP client-side
+  // from the entry's otpauth:// URL (Web Crypto), only falling back to the
+  // host's `pass otp` shell-out when the entry has no otpauth URL —
+  // see notes in lib/totp.js + tests/totp.test.js.
   const cases = {
     "pass.match":  /bpMatchByHost/,
     "pass.list":   /bpListEntries/,
     "pass.search": /action: "search"/,
     "pass.fetch":  /bpFetchParsed/,
-    "pass.otp":    /bpOtpCode/,
+    "pass.otp":    /passOtpCodeForPath/,
   };
   for (const [kind, expected] of Object.entries(cases)) {
     const re = new RegExp(
