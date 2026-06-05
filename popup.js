@@ -43,9 +43,6 @@ const state = {
   firstRender: true,
   // Tree view: collapsed subtree ids kept in-memory per popup session.
   collapsedTreeIds: new Set(),
-  // Processes: lazily fetched when the user enters a category that uses
-  // them. { available, perTab: { tabId: { cpu, memoryBytes } } }.
-  proc: { available: false, perTab: {} },
   // PASS — lazily loaded on first entry into the category. matches is a
   // list of entry paths (e.g. "amazon.com/wizard"); host is the active
   // tab's hostname used for the match; loaded flips to true after the
@@ -309,10 +306,6 @@ function renderList() {
     const toggle = isTree && t._hasChildren
       ? `<button class="tree-toggle" data-tid="${t.id}" title="${t._collapsed ? "expand" : "collapse"} branch">${t._collapsed ? "▶" : "▼"}</button>`
       : (isTree ? `<span class="tree-toggle ghost"></span>` : "");
-    const proc = state.proc.perTab[t.id];
-    const procCol = state.proc.available
-      ? `<span class="proc-col" title="memory · CPU %">${proc ? fmtMb(proc.memoryBytes) : "—"}<br><span class="muted">${proc ? proc.cpu.toFixed(1) + "%" : "—"}</span></span>`
-      : "";
     return `
       <div class="row${i === state.rowIdx ? " sel" : ""}${t.active ? " active-tab" : ""}${isTree ? " tree-row" : ""}"
            data-idx="${i}" data-kind="${t.kind}"
@@ -325,7 +318,6 @@ function renderList() {
           <span class="name">${titleHtml}</span>
           <span class="path">${hostHtml}</span>
         </div>
-        ${procCol}
         <div class="badges">${badges.join("")}</div>
       </div>
     `;
@@ -519,12 +511,6 @@ function flashButton(btn, ok, restore) {
   }, 800);
 }
 
-function fmtMb(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "—";
-  const mb = bytes / (1024 * 1024);
-  return mb < 100 ? mb.toFixed(0) + "M" : (mb / 1024).toFixed(2) + "G";
-}
-
 function timeAgo(ms) {
   if (!Number.isFinite(ms) || ms <= 0) return "";
   const sec = Math.floor((Date.now() - ms) / 1000);
@@ -594,8 +580,6 @@ function wireSceneForm() {
 function render() {
   renderCats();
   renderList();
-  const killBtn = document.getElementById("killHeaviest");
-  if (killBtn) killBtn.classList.toggle("hidden", !state.proc.available);
 }
 
 function activate(idx) {
@@ -631,30 +615,26 @@ function refresh() {
                           ?? null;
     chrome.runtime.sendMessage({ kind: "scenes-list" }, (sd) => {
       state.scenes = sd?.scenes || [];
-      // Best-effort processes snapshot. No-op on stable Chrome.
-      chrome.runtime.sendMessage({ kind: "processes-snapshot" }, (pd) => {
-        state.proc = pd && pd.available ? pd : { available: false, perTab: {} };
-        loadHistory(() => {
-          if (state.firstRender) {
-            // open-history (Cmd+Y) writes pendingCategory before openPopup;
-            // pick it up exactly once.
-            chrome.storage.session.get("pendingCategory", (bag) => {
-              const pending = bag?.pendingCategory;
-              if (pending) {
-                const idx = CATEGORIES.findIndex((c) => c.id === pending);
-                if (idx >= 0) state.catIdx = idx;
-                chrome.storage.session.remove("pendingCategory");
-              }
-              const items = currentList();
-              const i = items.findIndex((t) => t.active);
-              state.rowIdx = i >= 0 && i + 1 < items.length ? i + 1 : 0;
-              state.firstRender = false;
-              render();
-            });
-          } else {
+      loadHistory(() => {
+        if (state.firstRender) {
+          // open-history (Cmd+Y) writes pendingCategory before openPopup;
+          // pick it up exactly once.
+          chrome.storage.session.get("pendingCategory", (bag) => {
+            const pending = bag?.pendingCategory;
+            if (pending) {
+              const idx = CATEGORIES.findIndex((c) => c.id === pending);
+              if (idx >= 0) state.catIdx = idx;
+              chrome.storage.session.remove("pendingCategory");
+            }
+            const items = currentList();
+            const i = items.findIndex((t) => t.active);
+            state.rowIdx = i >= 0 && i + 1 < items.length ? i + 1 : 0;
+            state.firstRender = false;
             render();
-          }
-        });
+          });
+        } else {
+          render();
+        }
       });
     });
   });
@@ -678,13 +658,6 @@ $q.addEventListener("input", (e) => {
   state.filter = e.target.value;
   state.rowIdx = 0;
   renderList();
-});
-
-document.getElementById("killHeaviest")?.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ kind: "kill-heaviest" }, (r) => {
-    if (!r?.ok) alert("kill-heaviest: " + (r?.error || "no candidate"));
-    refresh();
-  });
 });
 
 document.addEventListener("keydown", (e) => {

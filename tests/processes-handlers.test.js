@@ -1,4 +1,9 @@
-// processes-snapshot and kill-heaviest message handlers in background.js.
+// chrome.processes integration REMOVED — the API is dev/canary-only and
+// emits a warning ("'processes' requires dev channel or newer") on stable
+// channels. This file used to pin processes-snapshot / kill-heaviest /
+// snapshotProcesses / killHeaviestTab. It now pins the ABSENCE of all of
+// those, so a future refactor can't silently re-introduce the permission
+// or the dead code paths.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,93 +13,55 @@ import { dirname, resolve, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
-const bg = readFileSync(join(ROOT, "background.js"), "utf8");
+const read = (p) => readFileSync(join(ROOT, p), "utf8");
 
-function sliceHandler(kind, len = 500) {
-  const marker = `msg?.kind === "${kind}"`;
-  const idx = bg.indexOf(marker);
-  assert.ok(idx >= 0, `handler for "${kind}" not found`);
-  return bg.slice(idx, idx + len);
-}
+const manifest = JSON.parse(read("manifest.json"));
+const bg      = read("background.js");
+const popup   = read("popup.js");
+const popupH  = read("popup.html");
+const popupC  = read("popup.css");
 
-function fnBody(name) {
-  const m = bg.match(new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\n\\}`));
-  assert.ok(m, `${name} not found`);
-  return m[0];
-}
-
-test("processes-snapshot handler delegates to snapshotProcesses", () => {
-  const sec = sliceHandler("processes-snapshot", 400);
-  assert.match(sec, /snapshotProcesses\(\)/);
-  assert.match(sec, /\.then\(\(data\) => sendResponse\(data\)\)/);
+test("manifest no longer requests `processes` permission (stable-channel safe)", () => {
+  assert.ok(!manifest.permissions?.includes?.("processes"),
+    "permissions must NOT include processes");
+  assert.ok(!(manifest.optional_permissions || []).includes("processes"),
+    "optional_permissions must NOT include processes");
+  // Sanity: the whole optional_permissions key should be either absent or
+  // not list processes. Most-aggressive: assert undefined entirely.
+  if (manifest.optional_permissions) {
+    assert.ok(!manifest.optional_permissions.includes("processes"));
+  }
 });
 
-test("processes-snapshot catch returns available:false with empty perTab", () => {
-  const sec = sliceHandler("processes-snapshot", 400);
-  assert.match(sec, /catch\(\(e\) => sendResponse\(\{ available: false, error: String\(e\), perTab: \{\} \}\)\)/);
+test("manifest no longer declares `kill-heaviest` command", () => {
+  assert.ok(!("kill-heaviest" in (manifest.commands || {})),
+    "kill-heaviest must be removed from manifest.commands");
 });
 
-test("kill-heaviest handler delegates to killHeaviestTab", () => {
-  const sec = sliceHandler("kill-heaviest", 400);
-  assert.match(sec, /killHeaviestTab\(\)/);
+test("background.js has no chrome.processes references", () => {
+  assert.doesNotMatch(bg, /chrome\.processes/,         "chrome.processes call site");
+  assert.doesNotMatch(bg, /processesApiAvailable/,     "processesApiAvailable helper");
+  assert.doesNotMatch(bg, /\bsnapshotProcesses\b/,     "snapshotProcesses helper");
+  assert.doesNotMatch(bg, /\bkillHeaviestTab\b/,       "killHeaviestTab helper");
+  assert.doesNotMatch(bg, /"processes-snapshot"/,      "processes-snapshot message handler");
+  assert.doesNotMatch(bg, /"kill-heaviest"/,           "kill-heaviest message handler / dispatch");
 });
 
-test("kill-heaviest ok:true when tabId is numeric", () => {
-  const sec = sliceHandler("kill-heaviest", 400);
-  assert.match(sec, /sendResponse\(\{ ok: typeof tabId === "number", tabId \}\)/);
+test("popup.js has no kill-heaviest / proc-col / state.proc references", () => {
+  assert.doesNotMatch(popup, /killHeaviest/,           "killHeaviest button hook");
+  assert.doesNotMatch(popup, /kill-heaviest/,          "kill-heaviest message kind");
+  assert.doesNotMatch(popup, /processes-snapshot/,     "processes-snapshot refresh chain");
+  assert.doesNotMatch(popup, /state\.proc\b/,          "state.proc bag");
+  assert.doesNotMatch(popup, /proc-col/,               "per-row proc column");
+  assert.doesNotMatch(popup, /\bfmtMb\(/,              "fmtMb byte formatter (only used by proc col)");
 });
 
-test("kill-heaviest catch returns ok:false with error string", () => {
-  const sec = sliceHandler("kill-heaviest", 400);
-  assert.match(sec, /catch\(\(e\) => sendResponse\(\{ ok: false, error: String\(e\) \}\)\)/);
+test("popup.html has no killHeaviest button", () => {
+  assert.doesNotMatch(popupH, /id="killHeaviest"/, "killHeaviest button must be gone");
+  assert.doesNotMatch(popupH, /kill heaviest/i,    "no 'kill heaviest' UI text");
 });
 
-test("snapshotProcesses unavailable path includes human-readable reason", () => {
-  const fn = fnBody("snapshotProcesses");
-  assert.match(fn, /reason: "chrome\.processes unavailable on this channel"/);
-});
-
-test("snapshotProcesses sums cpu across all process tasks for a tab", () => {
-  const fn = fnBody("snapshotProcesses");
-  assert.match(fn, /cur\.cpu \+= cpu/);
-});
-
-test("snapshotProcesses treats missing privateMemory as zero", () => {
-  const fn = fnBody("snapshotProcesses");
-  assert.match(fn, /typeof p\.privateMemory === "number" \? p\.privateMemory : 0/);
-});
-
-test("killHeaviestTab ranks tabs by memoryBytes descending", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /\.sort\(\(a, b\) => b\.mem - a\.mem\)/);
-});
-
-test("killHeaviestTab removes tab via chrome.tabs.remove", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /await chrome\.tabs\.remove\(worst\.tabId\)/);
-});
-
-test("killHeaviestTab returns undefined when no process data exists", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /if \(!worst\) return undefined/);
-});
-
-test("killHeaviestTab catch on tabs.remove returns undefined", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /catch \{ return undefined; \}/);
-});
-
-test("dispatch kill-heaviest routes to killHeaviestTab function", () => {
-  assert.match(bg, /command === "kill-heaviest"\)[\s\S]*?killHeaviestTab\(\)/);
-});
-
-test("popup renderList shows proc column only when state.proc.available", () => {
-  const popup = readFileSync(join(ROOT, "popup.js"), "utf8");
-  assert.match(popup, /state\.proc\.available/);
-  assert.match(popup, /class="proc-col"/);
-});
-
-test("popup proc column shows cpu percentage with one decimal", () => {
-  const popup = readFileSync(join(ROOT, "popup.js"), "utf8");
-  assert.match(popup, /proc\.cpu\.toFixed\(1\)/);
+test("popup.css has no .kill-heaviest or .proc-col rules", () => {
+  assert.doesNotMatch(popupC, /\.kill-heaviest\b/);
+  assert.doesNotMatch(popupC, /\.proc-col\b/);
 });

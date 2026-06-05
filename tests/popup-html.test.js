@@ -34,12 +34,9 @@ test("popup.html declares cats and list mount points", () => {
   assert.match(html, /id="list"/);
 });
 
-test("popup.html killHeaviest button starts hidden", () => {
-  assert.match(html, /id="killHeaviest"[^>]*class="[^"]*hidden/);
-});
-
-test("popup.html killHeaviest title mentions dev/canary processes API", () => {
-  assert.match(html, /title="Close the most memory-heavy tab \(Chrome dev\/canary only\)"/);
+test("popup.html no longer ships the killHeaviest button (chrome.processes removed)", () => {
+  assert.doesNotMatch(html, /id="killHeaviest"/);
+  assert.doesNotMatch(html, /kill heaviest/i);
 });
 
 test("popup.html open-scripts link is present with hash href (handled in JS)", () => {

@@ -46,9 +46,10 @@ test("popup loadHistory invokes done callback after history arrives", () => {
   assert.match(fn[0], /done\(\)/);
 });
 
-test("popup render() toggles killHeaviest visibility from proc.available", () => {
+test("popup render() no longer touches killHeaviest (chrome.processes removed)", () => {
   const fn = popup.match(/function render\(\)[\s\S]*?\n\}/);
-  assert.match(fn[0], /killBtn\.classList\.toggle\("hidden", !state\.proc\.available\)/);
+  assert.doesNotMatch(fn[0], /killBtn/);
+  assert.doesNotMatch(fn[0], /state\.proc/);
 });
 
 test("popup render() calls renderCats then renderList", () => {

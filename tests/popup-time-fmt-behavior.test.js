@@ -19,33 +19,16 @@ function extractFn(src, name) {
   return new Function(`${m[0]}; return ${name};`)();
 }
 
-const fmtMb = extractFn(popup, "fmtMb");
+// fmtMb was the byte→"M"/"G" formatter for the per-row proc column. It
+// got deleted alongside the chrome.processes integration — there's no
+// other code path that needs MB formatting in the popup. Pinned here so
+// a re-introduction is caught loudly.
+test("fmtMb is removed from popup.js (chrome.processes integration gone)", () => {
+  assert.doesNotMatch(popup, /\bfunction fmtMb\(/);
+  assert.doesNotMatch(popup, /\bfmtMb\(/);
+});
+
 const timeAgo = extractFn(popup, "timeAgo");
-
-test("fmtMb returns em-dash for NaN, Infinity, 0, and negative bytes", () => {
-  assert.equal(fmtMb(NaN), "—");
-  assert.equal(fmtMb(Infinity), "—");
-  assert.equal(fmtMb(-1), "—");
-  assert.equal(fmtMb(0), "—");
-});
-
-test("fmtMb formats sub-100MB values as integer megabytes with M suffix", () => {
-  // 1 MB == 1024*1024 bytes => "1M"
-  assert.equal(fmtMb(1 * 1024 * 1024), "1M");
-  // 99 MB still uses M (boundary is mb < 100)
-  assert.equal(fmtMb(99 * 1024 * 1024), "99M");
-  // 50.4 MB rounds to 50M via toFixed(0)
-  assert.equal(fmtMb(50.4 * 1024 * 1024), "50M");
-});
-
-test("fmtMb switches to GB at exactly 100MB and uses 2-decimal format", () => {
-  // 100 MB is NOT < 100 => uses G branch: (100/1024).toFixed(2) = "0.10G"
-  assert.equal(fmtMb(100 * 1024 * 1024), "0.10G");
-  // 1 GB exactly == 1024 MB / 1024 = 1.00G
-  assert.equal(fmtMb(1024 * 1024 * 1024), "1.00G");
-  // 1.5 GB
-  assert.equal(fmtMb(1.5 * 1024 * 1024 * 1024), "1.50G");
-});
 
 test("timeAgo returns empty string for non-finite or non-positive timestamps", () => {
   assert.equal(timeAgo(NaN), "");
