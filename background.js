@@ -1760,21 +1760,16 @@ const CTX_ACT_SEP3   = "zpc-act-sep3";
 const REPO_URL  = "https://github.com/MenkeTechnologies/zpwrchrome";
 const ISSUE_URL = "https://github.com/MenkeTechnologies/zpwrchrome/issues/new";
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(() => {
   if (!chrome.contextMenus) return;
-  // MV3 service workers terminate as soon as the onInstalled handler
-  // returns. The previous (synchronous) version of this code put the
-  // create() calls inside removeAll's callback — but removeAll resolves
-  // ASYNC, and the SW shut down before the callback fired, dropping
-  // every create silently. Visible symptom: only the menu entries that
-  // happened to persist from a prior version's storage stuck around;
-  // everything new (Full-page screenshot, Lights-off, Reader-mode, …)
-  // vanished after the update.
-  //
-  // Make the handler `async` and await removeAll() — the SW stays
-  // alive through the await, then we synchronously fire every create
-  // on a confirmed-clean slate.
-  await chrome.contextMenus.removeAll();
+  // No removeAll() — its async callback got eaten by SW termination
+  // and nuked the whole menu. Create() with a duplicate id silently
+  // no-ops (we void lastError on every callback), so re-running the
+  // creates on every install is idempotent: pre-existing entries stay
+  // put, new ids land cleanly. The downside is that ids removed from
+  // a future version of this code will linger as orphan menu items
+  // until the user reinstalls — that's a much smaller bug than the
+  // entire toolbar menu vanishing.
   const ok = () => void chrome.runtime.lastError;
   // Link/media menus.
   chrome.contextMenus.create({ id: CTX_DL_LINK,  title: "Download with zpwrchrome", contexts: ["link"] }, ok);
