@@ -410,10 +410,29 @@
     setTimeout(() => { btn.textContent = orig; }, 900);
   }
   function copyText(t, btn) {
-    navigator.clipboard.writeText(t).then(
-      () => flashStatus(btn, "copied"),
-      () => flashStatus(btn, "fail"),
-    );
+    // navigator.clipboard is only defined in secure contexts (https,
+    // localhost, file://). On plain http (e.g. 0.0.0.0:8000) it's
+    // undefined entirely — we fall back to the legacy execCommand
+    // hidden-textarea trick so the button still works.
+    const done = (ok) => flashStatus(btn, ok ? "copied" : "fail");
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(t).then(() => done(true), () => legacyCopy(t, done));
+      return;
+    }
+    legacyCopy(t, done);
+  }
+  function legacyCopy(text, done) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      done(ok);
+    } catch { done(false); }
   }
   function nodeCount(v) {
     let n = 0;
