@@ -183,7 +183,7 @@
     "pass-fill-cc":        { "description": "Fill credit-card fields only (cc-number, cc-exp, cc-csc, cardholder, …) on the active tab from a `creditcard/*` entry in `pass`. Quick-pick overlay when multiple cards exist." },
 
     "find-in-all-tabs":     { "description": "Full-text search across every open tab — opens a search UI, scrapes innerText from every http(s) tab in parallel, fuzzy-filters as you type, Enter activates the chosen tab and scrolls to the match (no DevTools required)" },
-    "lights-off":           { "description": "Turn off the lights — dim the entire active page with a near-black overlay while lifting any <video> elements above it (cinema-mode for YouTube and beyond). Click the overlay or press Esc to undim" },
+    "lights-off":           { "description": "Turn off the lights — dim the entire active page with a near-black overlay while lifting any video elements above it (cinema-mode for YouTube and beyond). Click the overlay or press Esc to undim" },
     "reader-mode":          { "description": "Reader mode — strip the active page to its main article and render it in a strykelang HUD overlay with adjustable typography. Click × in the top bar or press Esc to close" },
     "screenshot-full-page": { "description": "Full-page screenshot — scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts)" },
     "dl-paste-url":        { "description": "Download the URL currently on the clipboard via the zpwrchrome segmented downloader" },
