@@ -126,7 +126,25 @@ pub fn exec(req: &RunSpawnRequest) -> Result<RunSpawnResponse, String> {
     for (k, v) in &req.env { cmd.env(k, v); }
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());
 
+    // Put the child in its own process group via setsid(2) so a timeout
+    // kill reaches grandchildren too. Without this, `sh -c "sleep 30"`
+    // would leak the `sleep` process when we SIGKILL the sh wrapper —
+    // sleep inherits the stdout/stderr pipes and keeps them open until it
+    // naturally finishes, blocking our reader threads on EOF.
+    #[cfg(unix)]
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        cmd.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+
     let mut child = cmd.spawn().map_err(|e| format!("spawn {}: {e}", req.argv[0]))?;
+    #[cfg(unix)]
+    let child_pgid = child.id() as libc::pid_t;
     let stdout = child.stdout.take().ok_or_else(|| "no stdout pipe".to_string())?;
     let stderr = child.stderr.take().ok_or_else(|| "no stderr pipe".to_string())?;
 
@@ -144,6 +162,16 @@ pub fn exec(req: &RunSpawnRequest) -> Result<RunSpawnResponse, String> {
             Ok(Some(status)) => break status,
             Ok(None) => {
                 if start.elapsed() >= timeout {
+                    // SIGKILL the entire process group — pid is the group
+                    // leader because pre_exec ran setsid(2). This reaps any
+                    // grandchildren that inherited stdout/stderr pipes (e.g.
+                    // `sh -c "sleep 30"` → sleep), so the reader threads
+                    // hit EOF promptly and the wait() below returns fast.
+                    #[cfg(unix)]
+                    unsafe {
+                        libc::killpg(child_pgid, libc::SIGKILL);
+                    }
+                    #[cfg(not(unix))]
                     let _ = child.kill();
                     killed_by_timeout = true;
                     break child.wait().map_err(|e| format!("wait after kill: {e}"))?;
@@ -155,7 +183,8 @@ pub fn exec(req: &RunSpawnRequest) -> Result<RunSpawnResponse, String> {
     };
 
     // Reader threads exit on EOF once the child's pipes close. join() blocks
-    // briefly; tolerable since the child has already exited.
+    // briefly; tolerable since the child (and on timeout, the whole process
+    // group) has already exited.
     let _ = out_handle.join();
     let _ = err_handle.join();
 
