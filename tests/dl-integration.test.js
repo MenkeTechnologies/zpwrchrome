@@ -495,24 +495,29 @@ test("toolbar badge multiplexes downloads (cyan) and pass match count (magenta) 
   assert.match(bg, /diagPush\("pass\.badge"/);
 });
 
-test("badge composite mode — appends `*` when downloads/tech/pass coexist + tooltip carries the breakdown", () => {
+test("badge composite mode — `t`/`l` letter tags spell out which other counters coexist", () => {
   const fn = bg.match(/async function applyMultiplexedBadge[\s\S]*?\n\}/);
   assert.ok(fn, "applyMultiplexedBadge not found");
-  // Composite priority is dl → tech → pass. The dominant count is the
-  // visible number; the `*` modifier means at least one of the others
-  // is also > 0. After the tech-counter integration the syntax shifted
-  // from `${dl}*` to `String(dl) + (others ? "*" : "")` etc.
+  // Composite priority is dl → tech → pass for the visible number.
+  // Trailing letter tags identify which OTHER counters are > 0:
+  //   t = tech also detected
+  //   l = login (pass) match also present
+  // So 10 downloads + 5 tech + 2 pass renders "10tl"; 5 tech + 2 pass
+  // renders "5l"; 2 pass alone renders "2".
   assert.match(fn[0], /dl > 0/);
   assert.match(fn[0], /tech > 0/);
   assert.match(fn[0], /pass > 0/);
-  assert.match(fn[0], /String\(dl\) \+ \(others\(/,    "dl branch must use the asterisk-modifier helper");
-  assert.match(fn[0], /String\(tech\) \+ \(pass > 0/,  "tech branch must asterisk when pass is set");
+  // The tag helper.
+  assert.match(fn[0], /const tag = \(cond, ch\) => cond \? ch : ""/);
+  // Branch shapes.
+  assert.match(fn[0], /String\(dl\) \+ tag\(tech > 0, "t"\) \+ tag\(pass > 0, "l"\)/,
+    "dl branch must append t-tag for tech then l-tag for pass");
+  assert.match(fn[0], /String\(tech\) \+ tag\(pass > 0, "l"\)/,
+    "tech branch must append l-tag when pass is set");
   // Tooltip is updated via chrome.action.setTitle on every paint so a hover
   // surfaces what the badge text alone can't.
   assert.match(fn[0], /chrome\.action\?\.setTitle/);
-  // The tooltip mentions both counts plus a hint to use the fill shortcut.
   assert.match(fn[0], /pass match.+fill shortcut/);
-  // Tech also appears in the tooltip parts list.
   assert.match(fn[0], /technolog\$\{tech === 1 \? "y" : "ies"\} detected/);
 });
 
