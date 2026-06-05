@@ -1,0 +1,93 @@
+name: Release zpwrchrome-host
+
+# Builds release tarballs for every supported (arch, OS) pair and
+# attaches them to the GitHub Release that triggered the workflow.
+# Trigger: pushing a tag matching `host-v*` (e.g. host-v0.8.0). The
+# Cargo.toml inside `zpwrchrome-host/` must match the tag's semver
+# component; the workflow `cargo build --release`s in that subdir.
+#
+# Tarball naming mirrors the existing MenkeTechnologies tap convention
+# (see lsofrs / awkrs / iftoprs):
+#   zpwrchrome-host-vX.Y.Z-<rust-target>.tar.gz
+
+on:
+  push:
+    tags:
+      - "host-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-13          # last Intel-mac runner
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: true
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compile linker (aarch64 linux only)
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Configure cross-linker
+        if: matrix.cross
+        run: |
+          mkdir -p ~/.cargo
+          cat <<EOF >> ~/.cargo/config.toml
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+
+      - name: Build release binary
+        working-directory: zpwrchrome-host
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Verify binary (skip on cross targets)
+        if: ${{ !matrix.cross && matrix.target != 'x86_64-apple-darwin' }}
+        working-directory: zpwrchrome-host
+        run: ./target/${{ matrix.target }}/release/zpwrchrome-host -version
+
+      - name: Stage tarball
+        id: stage
+        working-directory: zpwrchrome-host
+        run: |
+          VERSION="${GITHUB_REF_NAME#host-v}"
+          STAMP="zpwrchrome-host-v${VERSION}-${{ matrix.target }}"
+          OUT="target/${{ matrix.target }}/release"
+          tar -czf "${STAMP}.tar.gz" -C "${OUT}" zpwrchrome-host
+          shasum -a 256 "${STAMP}.tar.gz" > "${STAMP}.tar.gz.sha256"
+          echo "tarball=${STAMP}.tar.gz" >> $GITHUB_OUTPUT
+          echo "sha=${STAMP}.tar.gz.sha256" >> $GITHUB_OUTPUT
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            zpwrchrome-host/${{ steps.stage.outputs.tarball }}
+            zpwrchrome-host/${{ steps.stage.outputs.sha }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
