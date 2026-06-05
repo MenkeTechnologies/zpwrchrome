@@ -14,9 +14,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use zpwrchrome_host::extensions::dl::{
-    cache_dir, default_download_dir, flush_progress, flush_status, guess_filename,
-    list_all_jobs, next_gid, read_state, sanitize_filename, state_path,
-    unique_dest_path, write_state_atomic, JobState,
+    cache_dir, default_download_dir, flush_progress, flush_status, flush_worker,
+    guess_filename, list_all_jobs, next_gid, read_state, sanitize_filename,
+    state_path, unique_dest_path, write_state_atomic, JobState,
 };
 
 // Single shared lock around env-var mutation across tests (cargo runs tests
@@ -342,6 +342,59 @@ fn flush_status_writes_status_but_preserves_paused_cancelled() {
     assert_eq!(after.status,    "active",  "flush_status should write the worker's transition status");
     assert_eq!(after.cancelled, true,      "flush_status must preserve cancelled=true that dl.cancel wrote");
     assert_eq!(after.done,      50);
+}
+
+#[test]
+fn flush_worker_preserves_paused_cancelled_set_by_dl_handlers() {
+    // The worker's initial status="active" write (top of run_worker) and
+    // post-probe write both go through flush_worker. A dl.pause that
+    // landed between dl.add and the worker's startup must NOT be clobbered
+    // by the worker's full-state write. Pins that contract.
+    let _g = ENV_LOCK.lock().unwrap();
+    let d = isolated_cache("flush-worker");
+    unsafe { std::env::set_var("ZPWRCHROME_DL_CACHE_DIR", &d) };
+
+    // Disk: dl.pause just landed — paused=true, status="paused".
+    let on_disk = JobState {
+        gid: 11, url: "https://x/y".into(), dest: "/tmp/old".into(),
+        total: 0, done: 0, status: "paused".into(), err: None,
+        segments: 4, started_at: 0, elapsed_ms: 0, paused_offset_ms: 0,
+        paused: true, cancelled: false,
+        cookies: String::new(), user_agent: String::new(), worker_pid: 0,
+    };
+    write_state_atomic(&on_disk).unwrap();
+
+    // Worker's stale local state — its in-memory view is the just-spun-up
+    // active+renamed snapshot, oblivious to the user's pause.
+    let local = JobState {
+        gid: 11, url: "https://x/y".into(), dest: "/tmp/renamed.zip".into(),
+        total: 5_000_000, done: 0, status: "active".into(), err: None,
+        segments: 4, started_at: 1_700_000_000, elapsed_ms: 12, paused_offset_ms: 0,
+        paused: false, cancelled: false,
+        cookies: String::new(), user_agent: String::new(), worker_pid: 99999,
+    };
+    flush_worker(&local).unwrap();
+
+    let after = read_state(11).unwrap();
+    assert_eq!(after.paused,    true,        "dl.pause's paused=true must survive worker's full-state flush");
+    assert_eq!(after.status,    "active",    "worker still owns status here — it should write 'active'");
+    assert_eq!(after.dest,      "/tmp/renamed.zip", "worker-owned field (dest) updates");
+    assert_eq!(after.total,     5_000_000,   "worker-owned field (total) updates");
+    assert_eq!(after.worker_pid,99999,       "worker-owned field (worker_pid) updates");
+
+    // Same setup but disk now has cancelled=true (dl.cancel just landed).
+    let on_disk_cancel = JobState {
+        gid: 11, paused: false, cancelled: true, status: "cancelled".into(),
+        ..on_disk.clone()
+    };
+    write_state_atomic(&on_disk_cancel).unwrap();
+    flush_worker(&local).unwrap();
+    let after2 = read_state(11).unwrap();
+    assert_eq!(after2.cancelled, true,  "dl.cancel's cancelled=true must survive worker flush");
+    assert_eq!(after2.paused,    false, "paused flag also taken from disk, not local");
+
+    unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
+    let _ = fs::remove_dir_all(&d);
 }
 
 #[test]
