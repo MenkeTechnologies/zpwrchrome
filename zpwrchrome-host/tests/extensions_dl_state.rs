@@ -398,6 +398,61 @@ fn flush_worker_preserves_paused_cancelled_set_by_dl_handlers() {
 }
 
 #[test]
+fn flush_progress_reconciles_stale_pending_to_active() {
+    // dl_resume writes status="pending" any time a paused/failed/cancelled
+    // download is restarted. For SEGMENTED downloads the worker is already
+    // past run_worker's initial transition writes, so nothing else flips
+    // status back to "active" — the UI label would stay "pending" forever
+    // even though bytes are flowing. flush_progress / progress_pump must
+    // reconcile this transparently.
+    let _g = ENV_LOCK.lock().unwrap();
+    let d = isolated_cache("flush-progress-pending");
+    unsafe { std::env::set_var("ZPWRCHROME_DL_CACHE_DIR", &d) };
+
+    // Disk: dl_resume left status="pending" with paused=false.
+    let on_disk = JobState {
+        gid: 21, url: "https://x/y".into(), dest: "/tmp/y".into(),
+        total: 100, done: 10, status: "pending".into(), err: None,
+        segments: 4, started_at: 0, elapsed_ms: 0, paused_offset_ms: 0,
+        paused: false, cancelled: false,
+        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+    };
+    write_state_atomic(&on_disk).unwrap();
+
+    // Worker's local view — its local status is also "pending" because it
+    // just re-read from disk after a paused→resumed cycle. flush_progress
+    // alone has to reconcile.
+    let local = JobState {
+        gid: 21, url: "https://x/y".into(), dest: "/tmp/y".into(),
+        total: 100, done: 55, status: "pending".into(), err: None,
+        segments: 4, started_at: 0, elapsed_ms: 5500, paused_offset_ms: 0,
+        paused: false, cancelled: false,
+        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+    };
+    flush_progress(&local).unwrap();
+
+    let after = read_state(21).unwrap();
+    assert_eq!(after.status, "active",
+        "flush_progress must transition stale pending→active so segmented downloads' UI label tracks reality after a resume");
+    assert_eq!(after.done, 55, "worker-owned progress still updates");
+
+    // And the inverse: a "pending" with paused=true should be left alone —
+    // that's a valid intermediate (dl_resume after a fail) waiting for the
+    // worker to fully restart.
+    let mut paused_pending = on_disk.clone();
+    paused_pending.paused = true;
+    paused_pending.status = "pending".into();
+    write_state_atomic(&paused_pending).unwrap();
+    flush_progress(&local).unwrap();
+    let after2 = read_state(21).unwrap();
+    assert_eq!(after2.status, "pending",
+        "flush_progress must NOT touch status when paused=true on disk");
+
+    unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
+    let _ = fs::remove_dir_all(&d);
+}
+
+#[test]
 fn default_download_dir_uses_env_override() {
     let _g = ENV_LOCK.lock().unwrap();
     let old = std::env::var("ZPWRCHROME_DL_DIR").ok();
