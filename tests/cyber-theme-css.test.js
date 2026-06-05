@@ -107,6 +107,16 @@ test("buildThemeCss: darkMode applies CSS filter inversion on html + re-inverts 
     "gradient inline-styles must NOT trigger re-inversion (Amazon-card regression guard)");
 });
 
+test("buildThemeCss: darkMode html bg is WHITE so inversion paints it dark", () => {
+  // Critical: html bg is itself inverted. A dark color here (e.g. #181a1b)
+  // becomes ~rgb(214,213,212) — visible as a near-white gutter around
+  // fixed-width pages (Amazon, Gmail). White → ~rgb(20,20,20) = dark.
+  const css = buildThemeCss({ darkMode: true });
+  assert.match(css, /html \{[^}]*background-color:\s*white\s*!important/);
+  assert.doesNotMatch(css, /html \{[^}]*background-color:\s*#181a1b/,
+    "html bg must not be a dark color — it gets inverted along with everything else");
+});
+
 test("buildThemeCss: darkMode off → no html filter", () => {
   const css = buildThemeCss({ darkMode: false });
   assert.doesNotMatch(css, /html \{[^}]*filter:/);
