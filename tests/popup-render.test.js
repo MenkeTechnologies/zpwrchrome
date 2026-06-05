@@ -91,14 +91,8 @@ test("popup scene name input maxlength is 48 (matches buildScene cap)", () => {
   assert.match(renderList[0], /maxlength="48"/);
 });
 
-test("popup fmtMb formats sub-100MB as integer megabytes", () => {
-  const fn = popup.match(/function fmtMb\(bytes\)[\s\S]*?\n\}/);
-  assert.match(fn[0], /mb < 100 \? mb\.toFixed\(0\) \+ "M"/);
-});
-
-test("popup fmtMb formats large memory as gigabytes", () => {
-  const fn = popup.match(/function fmtMb\(bytes\)[\s\S]*?\n\}/);
-  assert.match(fn[0], /\(mb \/ 1024\)\.toFixed\(2\) \+ "G"/);
+test("popup fmtMb is removed (chrome.processes integration gone — see processes-handlers.test.js)", () => {
+  assert.doesNotMatch(popup, /\bfunction fmtMb\(/);
 });
 
 test("popup closed tab rows carry sessionId from tab or window session", () => {

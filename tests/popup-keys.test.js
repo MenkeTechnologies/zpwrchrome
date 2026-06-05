@@ -78,13 +78,9 @@ test("popup open-scripts link opens manager.html in a new tab", () => {
   assert.match(popup, /window\.close\(\)/);
 });
 
-test("popup killHeaviest button sends kill-heaviest message", () => {
-  assert.match(popup, /getElementById\("killHeaviest"\)/);
-  assert.match(popup, /kind: "kill-heaviest"/);
-});
-
-test("popup killHeaviest alerts when background returns ok:false", () => {
-  assert.match(popup, /if \(!r\?\.ok\) alert\("kill-heaviest: "/);
+test("popup no longer ships killHeaviest button (chrome.processes removed)", () => {
+  assert.doesNotMatch(popup, /killHeaviest/);
+  assert.doesNotMatch(popup, /kill-heaviest/);
 });
 
 test("popup firstRender selects row after active tab for one-stroke MRU switch", () => {
@@ -97,8 +93,9 @@ test("popup search input resets rowIdx to 0 on filter change", () => {
   assert.match(popup, /state\.rowIdx = 0/);
 });
 
-test("popup render toggles killHeaviest visibility from processes availability", () => {
-  assert.match(popup, /killBtn\.classList\.toggle\("hidden", !state\.proc\.available\)/);
+test("popup render no longer toggles killHeaviest from processes availability", () => {
+  assert.doesNotMatch(popup, /killBtn/);
+  assert.doesNotMatch(popup, /state\.proc\b/);
 });
 
 test("popup history delete filters local state before re-render", () => {

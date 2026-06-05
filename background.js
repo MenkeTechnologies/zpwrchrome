@@ -112,7 +112,6 @@ async function dispatch(command) {
   if (command === "manage-scripts")       return openScriptsManager();
   if (command === "save-scene-prompt")    return chrome.action.openPopup();
   if (command.startsWith("restore-scene-")) return restoreSceneByOrdinal(command);
-  if (command === "kill-heaviest")        return killHeaviestTab();
   if (command === "open-history")         return openHistoryInPopup();
   if (command === "pass-open-popup")      return openPassInPopup();
   if (command === "pass-fill")            return passFillActive();
@@ -2457,20 +2456,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  // --- chrome.processes (dev/canary only) ---
-  if (msg?.kind === "processes-snapshot") {
-    snapshotProcesses()
-      .then((data) => sendResponse(data))
-      .catch((e) => sendResponse({ available: false, error: String(e), perTab: {} }));
-    return true;
-  }
-  if (msg?.kind === "kill-heaviest") {
-    killHeaviestTab()
-      .then((tabId) => sendResponse({ ok: typeof tabId === "number", tabId }))
-      .catch((e) => sendResponse({ ok: false, error: String(e) }));
-    return true;
-  }
-
   // --- Native messaging host: pass + downloads (BP envelope) ---
   if (msg?.kind === "pass.match") {
     bpMatchByHost(String(msg.host || ""))
@@ -2728,67 +2713,6 @@ async function deleteSceneBySlug(slug) {
 }
 
 // ---------------------------------------------------------------------------
-// Processes API — Chrome dev/canary only. `chrome.processes` is gated to
-// non-stable channels and is undefined elsewhere. We feature-detect and
-// return { available: false } so the UI can show a graceful "—".
-
-function processesApiAvailable() {
-  return typeof chrome !== "undefined"
-      && typeof chrome.processes === "object"
-      && typeof chrome.processes.getProcessInfo === "function";
-}
-
-// Returns { available, perTab: { [tabId]: { cpu, memoryBytes } }, error? }
-async function snapshotProcesses() {
-  if (!processesApiAvailable()) {
-    return { available: false, reason: "chrome.processes unavailable on this channel", perTab: {} };
-  }
-  // chrome.processes.getProcessInfo(ids, includeMemory, cb)
-  const info = await new Promise((resolve) => {
-    try {
-      chrome.processes.getProcessInfo([], true, (procs) => resolve(procs || {}));
-    } catch { resolve({}); }
-  });
-  // Aggregate per-tab. Each ProcessInfo.tasks[] is { tabId, title }.
-  const perTab = {};
-  for (const pid of Object.keys(info)) {
-    const p = info[pid];
-    const cpu = typeof p.cpu === "number" ? p.cpu : 0;
-    const mem = typeof p.privateMemory === "number" ? p.privateMemory : 0;
-    for (const task of (p.tasks || [])) {
-      const tid = task.tabId;
-      if (typeof tid !== "number" || tid < 0) continue;
-      const cur = perTab[tid] || { cpu: 0, memoryBytes: 0 };
-      cur.cpu += cpu;
-      cur.memoryBytes += mem;
-      perTab[tid] = cur;
-    }
-  }
-  return { available: true, perTab };
-}
-
-async function killHeaviestTab() {
-  const snap = await snapshotProcesses();
-  if (!snap.available) return undefined;
-  let worst = null;
-  for (const [tid, m] of Object.entries(snap.perTab)) {
-    if (!worst || m.memoryBytes > worst.mem) worst = { tabId: Number(tid), mem: m.memoryBytes };
-  }
-  if (!worst) return undefined;
-  // Refuse to kill the active tab; pick the next-heaviest non-active.
-  const active = await getActive();
-  if (active?.id === worst.tabId) {
-    const ranked = Object.entries(snap.perTab)
-      .map(([tid, m]) => ({ tabId: Number(tid), mem: m.memoryBytes }))
-      .sort((a, b) => b.mem - a.mem)
-      .filter((r) => r.tabId !== active.id);
-    if (!ranked.length) return undefined;
-    worst = ranked[0];
-  }
-  try { await chrome.tabs.remove(worst.tabId); return worst.tabId; }
-  catch { return undefined; }
-}
-
 // ---------------------------------------------------------------------------
 // HTTP basic auth injection via chrome.webRequest.onAuthRequired (asyncBlocking
 // listener). Only fires when (a) the user opted in via pass.settings, (b) the

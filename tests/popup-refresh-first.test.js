@@ -34,9 +34,9 @@ test("refresh chains scenes-list after list response", () => {
   assert.match(rf, /state\.scenes = sd\?\.scenes \|\| \[\]/);
 });
 
-test("refresh chains processes-snapshot after scenes-list", () => {
-  assert.match(rf, /kind: "processes-snapshot"/);
-  assert.match(rf, /state\.proc = pd && pd\.available \? pd : \{ available: false, perTab: \{\} \}/);
+test("refresh no longer chains processes-snapshot (dev/canary-only API removed)", () => {
+  assert.doesNotMatch(rf, /processes-snapshot/);
+  assert.doesNotMatch(rf, /state\.proc\b/);
 });
 
 test("refresh calls loadHistory before render on every refresh path", () => {

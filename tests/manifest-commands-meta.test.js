@@ -48,8 +48,9 @@ test("manage-scripts description mentions userscript or script manager", () => {
   assert.match(commands["manage-scripts"].description, /userscript|script manager|scripts manager/i);
 });
 
-test("kill-heaviest description mentions memory or heaviest", () => {
-  assert.match(commands["kill-heaviest"].description, /memory|heaviest/i);
+test("kill-heaviest command removed (chrome.processes is dev/canary only)", () => {
+  assert.ok(!("kill-heaviest" in commands),
+    "kill-heaviest must not be in manifest.commands");
 });
 
 test("jump-to-1 through jump-to-9 each have descriptions", () => {
