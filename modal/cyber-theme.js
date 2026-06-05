@@ -60,8 +60,10 @@
           filter: invert(0.92) hue-rotate(180deg) contrast(0.95) !important;
         }
         img, video, picture, canvas, iframe, embed, object,
-        svg image, [style*="background-image"], [style*="background:url"],
-        [style*="background: url"], video::-webkit-media-controls {
+        svg image,
+        [style*="background-image:url"], [style*="background-image: url"],
+        [style*="background:url"], [style*="background: url"],
+        video::-webkit-media-controls {
           filter: invert(1) hue-rotate(180deg) !important;
         }
       `);
