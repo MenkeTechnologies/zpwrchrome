@@ -1760,58 +1760,59 @@ const CTX_ACT_SEP3   = "zpc-act-sep3";
 const REPO_URL  = "https://github.com/MenkeTechnologies/zpwrchrome";
 const ISSUE_URL = "https://github.com/MenkeTechnologies/zpwrchrome/issues/new";
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   if (!chrome.contextMenus) return;
-  // Wipe every menu we created in any previous install before adding
-  // the current ones. removeAll is async — the previous version of
-  // this code fired the creates outside the callback, racing the
-  // wipe; some creates would land BEFORE removeAll completed and
-  // collide with stale duplicate IDs, silently failing (we void
-  // chrome.runtime.lastError on every create). Result: missing menu
-  // entries (Full-page screenshot, Reader mode, etc.) after an
-  // update. The fix: queue every create inside removeAll's callback
-  // so they only fire on a clean slate.
-  chrome.contextMenus.removeAll(() => {
-    void chrome.runtime.lastError;
-    const ok = () => void chrome.runtime.lastError;
-    // Link/media menus.
-    chrome.contextMenus.create({ id: CTX_DL_LINK,  title: "Download with zpwrchrome", contexts: ["link"] }, ok);
-    chrome.contextMenus.create({ id: CTX_DL_MEDIA, title: "Download with zpwrchrome", contexts: ["image", "video", "audio"] }, ok);
+  // MV3 service workers terminate as soon as the onInstalled handler
+  // returns. The previous (synchronous) version of this code put the
+  // create() calls inside removeAll's callback — but removeAll resolves
+  // ASYNC, and the SW shut down before the callback fired, dropping
+  // every create silently. Visible symptom: only the menu entries that
+  // happened to persist from a prior version's storage stuck around;
+  // everything new (Full-page screenshot, Lights-off, Reader-mode, …)
+  // vanished after the update.
+  //
+  // Make the handler `async` and await removeAll() — the SW stays
+  // alive through the await, then we synchronously fire every create
+  // on a confirmed-clean slate.
+  await chrome.contextMenus.removeAll();
+  const ok = () => void chrome.runtime.lastError;
+  // Link/media menus.
+  chrome.contextMenus.create({ id: CTX_DL_LINK,  title: "Download with zpwrchrome", contexts: ["link"] }, ok);
+  chrome.contextMenus.create({ id: CTX_DL_MEDIA, title: "Download with zpwrchrome", contexts: ["image", "video", "audio"] }, ok);
 
-    // Page-level sniffers — right-click on page background offers bulk grabs.
-    chrome.contextMenus.create({ id: CTX_PG_LINKS,  title: "zpwrchrome: download all links on page",  contexts: ["page"] }, ok);
-    chrome.contextMenus.create({ id: CTX_PG_IMAGES, title: "zpwrchrome: download all images on page", contexts: ["page"] }, ok);
-    chrome.contextMenus.create({ id: CTX_PG_MEDIA,  title: "zpwrchrome: download all media on page",  contexts: ["page"] }, ok);
+  // Page-level sniffers — right-click on page background offers bulk grabs.
+  chrome.contextMenus.create({ id: CTX_PG_LINKS,  title: "zpwrchrome: download all links on page",  contexts: ["page"] }, ok);
+  chrome.contextMenus.create({ id: CTX_PG_IMAGES, title: "zpwrchrome: download all images on page", contexts: ["page"] }, ok);
+  chrome.contextMenus.create({ id: CTX_PG_MEDIA,  title: "zpwrchrome: download all media on page",  contexts: ["page"] }, ok);
 
-    // Toolbar-icon menu (right-click on the extension's action icon).
-    const act = ["action"];
-    const create = (props) => chrome.contextMenus.create(props, ok);
-    create({ id: CTX_ACT_MGR,    title: "Open download manager",        contexts: act });
-    create({ id: CTX_ACT_SCR,    title: "Open userscript manager",      contexts: act });
-    create({ id: CTX_ACT_PASS,   title: "Open pass manager",            contexts: act });
-    create({ id: CTX_ACT_FIND,   title: "Find in all tabs",             contexts: act });
-    create({ id: CTX_ACT_UA,     title: "User-Agent switcher",          contexts: act });
-    create({ id: CTX_ACT_THEME,  title: "Cyberpunk page theme",         contexts: act });
-    create({ id: CTX_ACT_LIGHTS, title: "Turn off the lights (this tab)", contexts: act });
-    create({ id: CTX_ACT_LIGHTSCFG, title: "Lights-off settings…",       contexts: act });
-    create({ id: CTX_ACT_READER, title: "Reader mode (this tab)",        contexts: act });
-    create({ id: CTX_ACT_READERCFG, title: "Reader-mode settings…",      contexts: act });
-    create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
-    create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
-    create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
-    create({ id: CTX_ACT_SET,    title: "Settings — General",           contexts: act });
-    create({ id: CTX_ACT_IFACE,  title: "Settings — Interface",         contexts: act });
-    create({ id: CTX_ACT_EXTFLT, title: "Settings — Extension Filter",  contexts: act });
-    create({ id: CTX_ACT_RULES,  title: "Settings — Rule System",       contexts: act });
-    create({ id: CTX_ACT_FOLD,   title: "Change downloads folder…",     contexts: act });
-    create({ id: CTX_ACT_SEP2,   type: "separator",                     contexts: act });
-    create({ id: CTX_ACT_HELP,   title: "Help",                         contexts: act });
-    create({ id: CTX_ACT_ABOUT,  title: "About zpwrchrome",             contexts: act });
-    create({ id: CTX_ACT_EXTPG,  title: "Manage this extension",        contexts: act });
-    create({ id: CTX_ACT_SEP3,   type: "separator",                     contexts: act });
-    create({ id: CTX_ACT_ISSUE,  title: "Report an issue",              contexts: act });
-    create({ id: CTX_ACT_REPO,   title: "View source on GitHub",        contexts: act });
-  });
+  // Toolbar-icon menu (right-click on the extension's action icon).
+  const act = ["action"];
+  const create = (props) => chrome.contextMenus.create(props, ok);
+  create({ id: CTX_ACT_MGR,    title: "Open download manager",        contexts: act });
+  create({ id: CTX_ACT_SCR,    title: "Open userscript manager",      contexts: act });
+  create({ id: CTX_ACT_PASS,   title: "Open pass manager",            contexts: act });
+  create({ id: CTX_ACT_FIND,   title: "Find in all tabs",             contexts: act });
+  create({ id: CTX_ACT_UA,     title: "User-Agent switcher",          contexts: act });
+  create({ id: CTX_ACT_THEME,  title: "Cyberpunk page theme",         contexts: act });
+  create({ id: CTX_ACT_LIGHTS, title: "Turn off the lights (this tab)", contexts: act });
+  create({ id: CTX_ACT_LIGHTSCFG, title: "Lights-off settings…",       contexts: act });
+  create({ id: CTX_ACT_READER, title: "Reader mode (this tab)",        contexts: act });
+  create({ id: CTX_ACT_READERCFG, title: "Reader-mode settings…",      contexts: act });
+  create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
+  create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
+  create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
+  create({ id: CTX_ACT_SET,    title: "Settings — General",           contexts: act });
+  create({ id: CTX_ACT_IFACE,  title: "Settings — Interface",         contexts: act });
+  create({ id: CTX_ACT_EXTFLT, title: "Settings — Extension Filter",  contexts: act });
+  create({ id: CTX_ACT_RULES,  title: "Settings — Rule System",       contexts: act });
+  create({ id: CTX_ACT_FOLD,   title: "Change downloads folder…",     contexts: act });
+  create({ id: CTX_ACT_SEP2,   type: "separator",                     contexts: act });
+  create({ id: CTX_ACT_HELP,   title: "Help",                         contexts: act });
+  create({ id: CTX_ACT_ABOUT,  title: "About zpwrchrome",             contexts: act });
+  create({ id: CTX_ACT_EXTPG,  title: "Manage this extension",        contexts: act });
+  create({ id: CTX_ACT_SEP3,   type: "separator",                     contexts: act });
+  create({ id: CTX_ACT_ISSUE,  title: "Report an issue",              contexts: act });
+  create({ id: CTX_ACT_REPO,   title: "View source on GitHub",        contexts: act });
 });
 
 if (chrome.contextMenus) {
