@@ -55,16 +55,42 @@
 
     if (darkMode) {
       parts.push(`
-        html {
-          background-color: white !important;
-          filter: invert(0.92) hue-rotate(180deg) contrast(0.95) !important;
+        html { color-scheme: dark !important; }
+        [class*="card"], [class*="panel"], [class*="widget"],
+        [class*="box"]:not(html):not(body) {
+          background-color: ${t.bgCard} !important;
+          color: ${t.text} !important;
+          border-color: ${t.border} !important;
         }
-        img, video, picture, canvas, iframe, embed, object,
-        svg image,
-        [style*="background-image:url"], [style*="background-image: url"],
-        [style*="background:url"], [style*="background: url"],
-        video::-webkit-media-controls {
-          filter: invert(1) hue-rotate(180deg) !important;
+        .a-box, .a-box-inner, .a-popover-wrapper, .a-popover-inner,
+        .a-section.a-spacing-medium, .order-header, .delivery-box,
+        .item-box, .a-color-offset-background,
+        .bia-content, .celwidget {
+          background-color: ${t.bgCard} !important;
+          color: ${t.text} !important;
+        }
+        .a-color-base, .a-color-state { color: ${t.text} !important; }
+        .a-color-secondary, .a-color-tertiary { color: ${t.textDim} !important; }
+        .a-color-link, .a-link-normal { color: ${t.cyan} !important; }
+        [style*="background-color: white"],
+        [style*="background-color:white"],
+        [style*="background-color: #fff"],
+        [style*="background-color:#fff"],
+        [style*="background-color: #ffffff"],
+        [style*="background-color:#ffffff"],
+        [style*="background-color: rgb(255, 255, 255)"],
+        [style*="background-color: rgb(251, 251, 251)"],
+        [style*="background: white"],
+        [style*="background:#fff"],
+        [style*="background: #fff"] {
+          background-color: ${t.bgCard} !important;
+        }
+        [role="dialog"], [role="alertdialog"], [role="tooltip"],
+        [role="menu"], [role="listbox"],
+        dialog, [popover] {
+          background-color: ${t.bgCard} !important;
+          color: ${t.text} !important;
+          border-color: ${t.border} !important;
         }
       `);
     }
@@ -108,7 +134,7 @@
       `);
     }
     if (forceMono) {
-      parts.push(`*:not(code):not(pre):not(kbd):not(samp):not(tt) { font-family: ${t.fontStack} !important; }`);
+      parts.push(`*:not(code):not(pre):not(kbd):not(samp):not(tt):not(i):not(svg):not(svg *):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material-icons"]):not([class*="lucide"]):not([data-icon]) { font-family: ${t.fontStack} !important; }`);
     }
     if (scanlines) {
       parts.push(`

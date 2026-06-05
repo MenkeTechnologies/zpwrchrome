@@ -70,6 +70,27 @@ test("buildThemeCss: forceMono adds the Share Tech Mono font override", () => {
   assert.match(css, /\*:not\(code\)/);
 });
 
+test("buildThemeCss: forceMono excludes icon-font carriers (no tofu glyphs)", () => {
+  const css = buildThemeCss({ forceMono: true });
+  // The selector that paints the override must exclude common icon-
+  // font carriers so `<i class="icon-foo">` / Font Awesome / Material
+  // Icons / Lucide / inline SVG keep their original font and render
+  // their glyphs instead of `[]` boxes (PUA codepoints with no glyph
+  // in Share Tech Mono).
+  for (const exclusion of [
+    ":not(i)",
+    ":not(svg)",
+    ':not([class*="icon"])',
+    ':not([class*="fa-"])',
+    ':not([class*="material-icons"])',
+    ':not([class*="lucide"])',
+    ":not([data-icon])",
+  ]) {
+    assert.ok(css.includes(exclusion),
+      `forceMono must include exclusion ${exclusion} to avoid icon-font tofu`);
+  }
+});
+
 test("buildThemeCss: forceMono off → no font override", () => {
   const css = buildThemeCss({ forceMono: false });
   assert.doesNotMatch(css, /\*:not\(code\)/);
@@ -87,49 +108,76 @@ test("buildThemeCss: scanlines off → no body::after rule", () => {
   assert.doesNotMatch(css, /body::after/);
 });
 
-test("buildThemeCss: darkMode applies CSS filter inversion on html + re-inverts media", () => {
+test("buildThemeCss: darkMode does NOT use CSS filter inversion", () => {
+  // The old approach (`filter: invert(0.92)` on html) inverted EVERY
+  // page including already-dark ones. We deliberately don't emit any
+  // filter rule from the darkMode block now — already-dark sites stay
+  // dark, light cards get overlaid with our dark palette.
   const css = buildThemeCss({ darkMode: true });
-  // <html> gets the inversion filter — this is what makes Amazon-like
-  // pages actually look dark instead of just having recolored links.
-  assert.match(css, /html \{[^}]*filter:\s*invert\(0\.92\)/);
-  assert.match(css, /hue-rotate\(180deg\)/);
-  // Media elements (img/video/picture/canvas/iframe/svg image/bg-image
-  // inline styles) get the inversion re-applied so they keep their
-  // original colors.
-  assert.match(css, /img, video, picture, canvas, iframe/);
-  // Inline bg-image selectors must require a `url(...)` — matching the
-  // bare `background-image` substring was the bug that left Amazon
-  // gradient-backed cards white because the re-inversion stole them
-  // back from the html-level filter.
-  assert.match(css, /\[style\*="background-image:url"\]/);
-  assert.match(css, /\[style\*="background-image: url"\]/);
-  assert.doesNotMatch(css, /\[style\*="background-image"\][^:]/,
-    "gradient inline-styles must NOT trigger re-inversion (Amazon-card regression guard)");
+  assert.doesNotMatch(css, /html \{[^}]*filter:\s*invert/,
+    "darkMode must not invert html — that breaks already-dark pages");
+  assert.doesNotMatch(css, /hue-rotate\(180deg\)/,
+    "darkMode must not hue-rotate — relic of the inversion approach");
 });
 
-test("buildThemeCss: darkMode html bg is WHITE so inversion paints it dark", () => {
-  // Critical: html bg is itself inverted. A dark color here (e.g. #181a1b)
-  // becomes ~rgb(214,213,212) — visible as a near-white gutter around
-  // fixed-width pages (Amazon, Gmail). White → ~rgb(20,20,20) = dark.
+test("buildThemeCss: darkMode sets color-scheme: dark on html", () => {
   const css = buildThemeCss({ darkMode: true });
-  assert.match(css, /html \{[^}]*background-color:\s*white\s*!important/);
-  assert.doesNotMatch(css, /html \{[^}]*background-color:\s*#181a1b/,
-    "html bg must not be a dark color — it gets inverted along with everything else");
+  assert.match(css, /html \{[^}]*color-scheme:\s*dark/);
 });
 
-test("buildThemeCss: darkMode off → no html filter", () => {
+test("buildThemeCss: darkMode targets generic light-card class patterns", () => {
+  const css = buildThemeCss({ darkMode: true });
+  for (const pat of [/\[class\*="card"\]/, /\[class\*="panel"\]/, /\[class\*="widget"\]/]) {
+    assert.match(css, pat, `darkMode must target ${pat}`);
+  }
+  // [class*="box"] must exclude html/body so we don't accidentally paint
+  // the entire viewport (since the medium-intensity html, body rule may
+  // have its own color, but [class*="box"] could match e.g. body.box-).
+  assert.match(css, /\[class\*="box"\]:not\(html\):not\(body\)/);
+});
+
+test("buildThemeCss: darkMode targets Amazon AUI .a-box family + color utility classes", () => {
+  const css = buildThemeCss({ darkMode: true });
+  // .a-box family (the actual Amazon order-card containers).
+  assert.match(css, /\.a-box[,\s]/);
+  assert.match(css, /\.a-box-inner/);
+  assert.match(css, /\.order-header/);
+  assert.match(css, /\.delivery-box/);
+  assert.match(css, /\.bia-content/);   // right-rail "Your regulars" widget
+  // Color utility classes — flip Amazon's near-black text to our palette.
+  assert.match(css, /\.a-color-base/);
+  assert.match(css, /\.a-color-secondary/);
+  assert.match(css, /\.a-color-link/);
+});
+
+test("buildThemeCss: darkMode catches inline white/near-white backgrounds", () => {
+  const css = buildThemeCss({ darkMode: true });
+  // Common variants of `background-color: white` in inline style attrs.
+  assert.match(css, /\[style\*="background-color: white"\]/);
+  assert.match(css, /\[style\*="background-color: #fff"\]/);
+  assert.match(css, /\[style\*="background-color: rgb\(255, 255, 255\)"\]/);
+  // The specific rgb(251,251,251) Amazon's Rufus side panel uses.
+  assert.match(css, /\[style\*="background-color: rgb\(251, 251, 251\)"\]/);
+});
+
+test("buildThemeCss: darkMode handles ARIA dialogs + native dialog + popover API", () => {
+  const css = buildThemeCss({ darkMode: true });
+  assert.match(css, /\[role="dialog"\]/);
+  assert.match(css, /\[role="alertdialog"\]/);
+  assert.match(css, /\[role="tooltip"\]/);
+  assert.match(css, /\bdialog\b/);
+  assert.match(css, /\[popover\]/);
+});
+
+test("buildThemeCss: darkMode off → no dark-mode block emitted", () => {
   const css = buildThemeCss({ darkMode: false });
-  assert.doesNotMatch(css, /html \{[^}]*filter:/);
-});
-
-test("buildThemeCss: darkMode layers UNDER intensity rules (filter declared first)", () => {
-  const css = buildThemeCss({ darkMode: true, intensity: "medium" });
-  // The inversion block must appear before the body-bg block so any
-  // subsequent body recolor sits on top of the filtered base.
-  const filterIdx = css.indexOf("filter: invert(0.92)");
-  const bodyIdx   = css.indexOf("html, body");
-  assert.ok(filterIdx >= 0 && bodyIdx > filterIdx,
-    "darkMode filter block must precede the intensity-medium body rule");
+  // None of the darkMode-specific selectors should appear. (Note:
+  // `color-scheme: dark` is also emitted unconditionally by the
+  // subtle layer, so we don't assert its absence here.)
+  assert.doesNotMatch(css, /\.a-color-base/);
+  assert.doesNotMatch(css, /\.a-box-inner/);
+  assert.doesNotMatch(css, /\[role="alertdialog"\]/);
+  assert.doesNotMatch(css, /\.bia-content/);
 });
 
 test("buildThemeCss: every property uses !important so site styles can't override", () => {
