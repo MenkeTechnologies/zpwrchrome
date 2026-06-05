@@ -200,3 +200,80 @@ test("expandFieldValue: country-name falls back to country", () => {
   assert.equal(expandFieldValue("country-name", { country: "United States" }), "United States");
   assert.equal(expandFieldValue("country-name", {}), null);
 });
+
+// ─── Friendly-name lookup in the pass entry ────────────────────────
+// The pass entry can use either canonical autocomplete tokens
+// (`address-level2`) or friendly synonyms (`city`, `state`, `zipcode`)
+// as keys; both work because expandFieldValue scans the synonym list
+// when direct lookup misses.
+
+test("expandFieldValue: address-level2 resolves from `city`", () => {
+  assert.equal(expandFieldValue("address-level2", { city: "Springfield" }), "Springfield");
+});
+
+test("expandFieldValue: address-level1 resolves from `state` / `province` / `region`", () => {
+  assert.equal(expandFieldValue("address-level1", { state:    "IL" }), "IL");
+  assert.equal(expandFieldValue("address-level1", { province: "ON" }), "ON");
+  assert.equal(expandFieldValue("address-level1", { region:   "Lazio" }), "Lazio");
+});
+
+test("expandFieldValue: postal-code resolves from `zip` / `zipcode` / `postcode`", () => {
+  assert.equal(expandFieldValue("postal-code", { zip:       "62701" }), "62701");
+  assert.equal(expandFieldValue("postal-code", { zipcode:   "62701" }), "62701");
+  assert.equal(expandFieldValue("postal-code", { postcode:  "EC1A1BB" }), "EC1A1BB");
+});
+
+test("expandFieldValue: tel resolves from `phone` / `telephone` / `mobile`", () => {
+  assert.equal(expandFieldValue("tel", { phone:     "+15551234" }), "+15551234");
+  assert.equal(expandFieldValue("tel", { telephone: "+15551234" }), "+15551234");
+  assert.equal(expandFieldValue("tel", { mobile:    "+15551234" }), "+15551234");
+});
+
+test("expandFieldValue: cc-csc resolves from `cvv` / `cvc` / `csc`", () => {
+  assert.equal(expandFieldValue("cc-csc", { cvv: "123" }), "123");
+  assert.equal(expandFieldValue("cc-csc", { cvc: "456" }), "456");
+  assert.equal(expandFieldValue("cc-csc", { csc: "789" }), "789");
+});
+
+test("expandFieldValue: direct token wins over a present synonym", () => {
+  // If both keys exist, the canonical token is authoritative — the
+  // synonym is the fallback, not an override.
+  assert.equal(expandFieldValue("address-level2", {
+    "address-level2": "Springfield", city: "OTHER",
+  }), "Springfield");
+});
+
+test("expandFieldValue: street-address resolves from `address`", () => {
+  assert.equal(expandFieldValue("street-address", { address: "123 Main St" }), "123 Main St");
+});
+
+test("expandFieldValue: realistic profile entry with friendly names round-trips", () => {
+  // This is the example in the README — every token the page form asks
+  // for must resolve from the friendly-named entry.
+  const friendly = {
+    "given-name":  "Jane",
+    "family-name": "Doe",
+    email:         "jane.doe@example.com",
+    phone:         "+15551234",
+    address:       "123 Main St",
+    city:          "Springfield",
+    state:         "IL",
+    zipcode:       "62701",
+    country:       "US",
+  };
+  assert.equal(expandFieldValue("given-name",     friendly), "Jane");
+  assert.equal(expandFieldValue("family-name",    friendly), "Doe");
+  assert.equal(expandFieldValue("email",          friendly), "jane.doe@example.com");
+  assert.equal(expandFieldValue("tel",            friendly), "+15551234");
+  assert.equal(expandFieldValue("street-address", friendly), "123 Main St");
+  assert.equal(expandFieldValue("address-level2", friendly), "Springfield");
+  assert.equal(expandFieldValue("address-level1", friendly), "IL");
+  assert.equal(expandFieldValue("postal-code",    friendly), "62701");
+  assert.equal(expandFieldValue("country",        friendly), "US");
+  assert.equal(expandFieldValue("country-name",   friendly), "US");
+  // The recognizer's autocomplete=street-address tokens also resolve.
+  assert.equal(expandFieldValue("street-address", friendly), "123 Main St");
+  // Composite name still works via alias chain even with no explicit
+  // `name` key in the entry.
+  assert.equal(expandFieldValue("name", friendly), "Jane Doe");
+});

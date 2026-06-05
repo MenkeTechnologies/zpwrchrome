@@ -194,7 +194,32 @@ A Chrome MV3 extension that bundles four daily-driver tools into one toolbar ico
 - **Cmd+Y / Ctrl+Y history** — replaces Chrome’s built-in chrome://history page with an fzf-fuzzy search over up to ${5000} entries, Backspace deletes the highlighted URL from history
 - **UNIX \`pass\` integration** — replaces browserpass via a vendored Rust native-messaging host that walks \`~/.password-store\` with eTLD+1 + multi-label PSL matching, shells to \`pass show\`/\`pass otp\`, returns credentials over a length-prefixed JSON port. PASS popup category with fill / user / pw / otp buttons. Hotkeys: \`pass-fill\` autofills the active tab via injected \`HTMLInputElement.value\` setter (React/Vue safe) + input/change dispatch; \`pass-copy-{pw,user,otp}\` write to clipboard with 45 s auto-clear matching \`pass -c\`
 - **Full-page pass manager** — \`scripts-manager/pass.html\` (toolbar right-click → "Open pass manager" or popup → \`pass ▸\`). Two-pane CRUD on \`~/.password-store\`: store tree (left, filter + ↑↓/Enter) + entry editor (right) with show/hide password, password generator, copy buttons per row, OTP-code copy via host, fill-active-tab, k/v list for non-synonym fields, free-form notes, delete with confirm scrim. \`⚙ raw\` toggle drops to a verbatim file-bytes textarea — escape hatch for entries with non-standard schemas. URL row auto-derives from the first path segment (\`adobe.com/jmenke@wccnet.edu\` → \`adobe.com\`) when no explicit \`url:\` key is present
-- **Profile + credit-card autofill from \`pass\`** — two new commands: \`pass-fill-profile\` fills name / address / email / phone / etc. on the active tab from \`profile/<name>\` entries; \`pass-fill-cc\` fills \`cc-number\` / \`cc-exp\` / \`cc-csc\` / cardholder from \`creditcard/<name>\` entries. Keys in the GPG entry use WHATWG HTML autocomplete tokens directly (\`given-name\`, \`street-address\`, \`postal-code\`, \`cc-exp-month\`, …), so the store IS the schema. Field recognition: \`<input autocomplete=…>\` wins outright (composite forms like \`shipping street-address\` supported), then longest-synonym substring across name+id+label+placeholder (cvv/cvc/csc → cc-csc, first-name/fname → given-name, zip/postcode → postal-code), then \`<input type="email|tel">\`. Alias chains backfill: \`cc-exp\` ← month/year, \`name\` ← given+family, given/family ← split of \`name\`, \`street-address\` ← line1+line2+line3. Multi-entry stores get an in-tab shadow-DOM picker (filter input, last-used cached per host)
+- **Profile + credit-card autofill from \`pass\`** — two new commands: \`pass-fill-profile\` fills name / address / email / phone / etc. on the active tab from \`profile/<name>\` entries; \`pass-fill-cc\` fills card-number / exp / csc / cardholder from \`creditcard/<name>\` entries. Entry keys can be either the WHATWG HTML autocomplete tokens (\`given-name\`, \`street-address\`, \`postal-code\`, \`cc-exp-month\`, …) **or** friendly synonyms (\`first-name\`, \`address\`, \`city\`, \`state\`, \`zipcode\`, \`cvv\`, …) — both resolve to the same field. Field recognition: \`<input autocomplete=…>\` wins outright (composite forms like \`shipping street-address\` supported), then longest-synonym substring across name+id+label+placeholder (cvv/cvc/csc → cc-csc, first-name/fname → given-name, zip/postcode → postal-code), then \`<input type="email|tel">\`. Alias chains backfill: \`cc-exp\` ← month/year, \`name\` ← given+family, given/family ← split of \`name\`, \`street-address\` ← line1+line2+line3. Multi-entry stores get an in-tab shadow-DOM picker (filter input, last-used cached per host). Example \`profile/personal.gpg\` body — first line is a free-form label, the rest are friendly key:value pairs:
+
+\`\`\`text
+personal
+given-name: Jacob
+family-name: Menke
+email: jane.doe@example.com
+phone: +15551234
+address: 123 Main St
+city: Springfield
+state: IL
+zipcode: 62701
+country: US
+\`\`\`
+
+And \`creditcard/visa.gpg\`:
+
+\`\`\`text
+visa
+cc-name: Jane Doe
+cc-number: 4111 1111 1111 1111
+cc-exp-month: 09
+cc-exp-year: 2031
+cvv: 123
+\`\`\`
+
 - **Segmented download manager** — same Rust host vendors a multi-connection downloader (HEAD probe → N parallel \`Range\` segments, default 4, pre-allocated dest file). Cookie + User-Agent forwarded from \`chrome.cookies.getAll\` so logged-in downloads work; transient errors retry with 200 ms × 3ⁿ backoff and resume via \`Range\` from the segment-local offset; queue mirrored to \`chrome.storage.local\` so the UI paints instantly across service-worker restarts. Right-click \`Download with zpwrchrome\` on links / images / video / audio; \`dl-paste-url\` reads the clipboard via injected \`navigator.clipboard.readText\`. Live queue UI at \`scripts-manager/downloads.html\` subscribes to host push events. Filename collisions auto-rename \`foo.zip\` → \`foo (1).zip\`. Pure-Rust, vendorable TLS (\`ureq\`+rustls), no \`aria2\` or other runtime binary
 - **${userBound} user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at \`chrome://extensions/shortcuts\` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
 - **Sub-popup live filter** — type to filter open + closed tabs; \`↑\`/\`↓\`/\`Enter\`/\`Delete\`/\`Esc\` nav

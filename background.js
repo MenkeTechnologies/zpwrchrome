@@ -479,6 +479,17 @@ function fillIdentityForm(fields, synonyms, knownTokens) {
   function expand(token) {
     const direct = fields[token];
     if (direct != null && direct !== "") return String(direct);
+    // Synonym lookup — friendly names (city, state, zipcode, …) in the
+    // pass entry resolve to the canonical autocomplete token the form
+    // expects. Mirrors lib/identity-tokens.js#expandFieldValue.
+    const syns = synonyms[token];
+    if (syns) {
+      for (const syn of syns) {
+        if (syn === token) continue;
+        const v = fields[syn];
+        if (v != null && v !== "") return String(v);
+      }
+    }
     if (token === "cc-exp" && fields["cc-exp-month"] && fields["cc-exp-year"]) {
       const m = String(fields["cc-exp-month"]);
       const y = String(fields["cc-exp-year"]);
