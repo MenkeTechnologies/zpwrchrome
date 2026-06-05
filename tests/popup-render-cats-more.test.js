@@ -41,11 +41,11 @@ test("renderCats wires click listener on each cat element", () => {
   assert.match(rc, /addEventListener\("click"/);
 });
 
-test("popup CATEGORIES includes all eleven category ids (10 tab views + pass)", () => {
+test("popup CATEGORIES includes all twelve category ids (10 tab views + pass + tech)", () => {
   const block = popup.match(/const CATEGORIES = \[([\s\S]*?)\];/);
   const ids = [...block[1].matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
   assert.deepEqual(ids.sort(), [
-    "all", "audible", "closed", "current", "history", "minimap", "muted", "pass", "pinned", "scenes", "tree",
+    "all", "audible", "closed", "current", "history", "minimap", "muted", "pass", "pinned", "scenes", "tech", "tree",
   ].sort());
 });
 
