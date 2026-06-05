@@ -290,9 +290,25 @@ async function passFillIdentityCombinedActive() {
     return;
   }
   const host = hostnameOf(t.url || "");
+  // Pre-scan the page so we only invoke pickers for categories that
+  // actually have inputs to fill. Without this, a profile-only address
+  // page would still pop the creditcard picker (user has multiple cards)
+  // before injecting fields that nothing on the page recognizes.
+  let detected;
+  try {
+    detected = await detectIdentityCategoriesOnPage(t.id);
+  } catch (e) {
+    diagPush("pass.identity.fill.combined.detect_err", { err: String(e?.message || e) });
+    detected = { profile: true, creditcard: true };  // fall through to both
+  }
+  diagPush("pass.identity.fill.combined.detected", detected);
   const merged = {};
   const usedKinds = [];
   for (const kind of ["profile", "creditcard"]) {
+    if (!detected[kind]) {
+      diagPush("pass.identity.fill.combined.skip_kind", { kind, reason: "no_fields_on_page" });
+      continue;
+    }
     let paths;
     try {
       paths = await bpListEntriesUnderPrefix(`${kind}/`);
@@ -310,11 +326,100 @@ async function passFillIdentityCombinedActive() {
   if (!usedKinds.length) {
     notify({
       title: "zpwrchrome — pass identity fill",
-      message: "No `profile/*` or `creditcard/*` entries in the pass store. Add one in the pass manager (toolbar right-click → Open pass manager).",
+      message: !detected.profile && !detected.creditcard
+        ? "No recognized profile or credit-card fields on this page."
+        : "No matching `profile/*` or `creditcard/*` entries in the pass store. Add one in the pass manager.",
     });
     return;
   }
   await injectIdentityFill(t.id, merged, { kinds: usedKinds });
+}
+
+// Page-side scan: walk every visible <input>/<select>/<textarea>, run
+// the same recognizer used by fillIdentityForm, return which token
+// categories appear. Lets the orchestrator skip the picker for
+// categories not present on the page.
+async function detectIdentityCategoriesOnPage(tabId) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    func: scanIdentityCategories,
+    args: [TOKEN_SYNONYMS, [...PROFILE_TOKENS, ...CC_TOKENS], [...PROFILE_TOKENS], [...CC_TOKENS]],
+  });
+  const out = { profile: false, creditcard: false };
+  for (const r of (results || [])) {
+    if (r?.result?.profile)    out.profile    = true;
+    if (r?.result?.creditcard) out.creditcard = true;
+  }
+  return out;
+}
+
+function scanIdentityCategories(synonyms, knownTokens, profileTokens, ccTokens) {
+  const known = new Set(knownTokens);
+  const profileSet = new Set(profileTokens);
+  const ccSet      = new Set(ccTokens);
+  function normalize(s) { return String(s || "").toLowerCase().replace(/[_\s]+/g, "-"); }
+  function visible(el) {
+    if (!el || el.disabled || el.readOnly) return false;
+    const t = String(el.type || "").toLowerCase();
+    if (t === "hidden" || t === "submit" || t === "button" || t === "reset" ||
+        t === "image"  || t === "file"   || t === "checkbox" || t === "radio" || t === "password") return false;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const cs = el.ownerDocument.defaultView.getComputedStyle(el);
+    if (cs.visibility === "hidden" || cs.display === "none") return false;
+    return true;
+  }
+  function labelText(el) {
+    const doc = el.ownerDocument;
+    if (el.id) {
+      try {
+        const lab = doc.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (lab) return lab.textContent || "";
+      } catch {}
+    }
+    let p = el.parentElement;
+    while (p) { if (p.tagName === "LABEL") return p.textContent || ""; p = p.parentElement; }
+    return "";
+  }
+  function recognize(spec) {
+    const ac = String(spec.autocomplete || "").trim().toLowerCase();
+    if (ac) {
+      if (known.has(ac)) return ac;
+      for (const t of ac.split(/\s+/)) if (known.has(t)) return t;
+      if (ac === "off" || ac === "current-password" || ac === "new-password") return null;
+    }
+    const hay = [spec.name, spec.id, spec.label, spec.placeholder].map(normalize).join(" ");
+    let best = null, bestLen = 0;
+    for (const token in synonyms) {
+      for (const syn of synonyms[token]) {
+        const sn = normalize(syn);
+        if (hay.includes(sn) && sn.length > bestLen) { best = token; bestLen = sn.length; }
+      }
+    }
+    if (best) return best;
+    const tp = String(spec.type || "").toLowerCase();
+    if (tp === "email") return "email";
+    if (tp === "tel")   return "tel";
+    return null;
+  }
+  let hasProfile = false;
+  let hasCC = false;
+  for (const el of document.querySelectorAll("input, select, textarea")) {
+    if (!visible(el)) continue;
+    const token = recognize({
+      autocomplete: el.autocomplete || "",
+      name:         el.name         || "",
+      id:           el.id           || "",
+      label:        labelText(el),
+      placeholder:  el.placeholder  || "",
+      type:         el.type         || "",
+    });
+    if (!token) continue;
+    if (ccSet.has(token))      hasCC      = true;
+    else if (profileSet.has(token)) hasProfile = true;
+    if (hasProfile && hasCC) break;
+  }
+  return { profile: hasProfile, creditcard: hasCC };
 }
 
 // Shared pick + fetch: list entries under `${kind}/` (or use the
@@ -772,7 +877,11 @@ async function passFillFromPath(path, _store) {
       func: fillLoginForm,
       args: [String(entry.username || ""), String(entry.password || ""), autoSubmit],
     });
-    return Array.isArray(results) && results.some((r) => r?.result?.filled === true);
+    // Success = any frame filled at least ONE of password / username
+    // (browserpass parity — 2-step login pages fill only one per step).
+    return Array.isArray(results) && results.some(
+      (r) => r?.result?.pwFilled === true || r?.result?.userFilled === true || r?.result?.filled === true,
+    );
   } catch (e) {
     console.warn("[zpwrchrome] pass.fill inject:", e?.message || e);
     return false;
@@ -824,13 +933,14 @@ async function passFillActive() {
       args: [String(entry.username || ""), String(entry.password || ""), autoSubmit],
     });
     const summary = (results || []).map((r) => ({
-      origin:  r?.result?.origin,
-      filled:  !!r?.result?.filled,
-      reason:  r?.result?.reason,
-      userFilled: !!r?.result?.userFilled,
-      submitted:  !!r?.result?.submitted,
+      origin:    r?.result?.origin,
+      pwFilled:  !!(r?.result?.pwFilled || r?.result?.filled),
+      userFilled:!!r?.result?.userFilled,
+      reason:    r?.result?.reason,
+      submitted: !!r?.result?.submitted,
     }));
-    const filledCount = summary.filter((s) => s.filled).length;
+    // Either field counts as filled — covers the 2-step login case.
+    const filledCount = summary.filter((s) => s.pwFilled || s.userFilled).length;
     diagPush("pass.fill.injected", {
       frames:      summary.length,
       filled:      filledCount,
@@ -875,29 +985,70 @@ function fillLoginForm(username, password, autoSubmit) {
     if (cs.visibility === "hidden" || cs.display === "none") return false;
     return true;
   }
-  const pw = [...document.querySelectorAll('input[type="password"]')].find(visible);
-  if (!pw) {
-    return { filled: false, reason: "no_visible_password_field", origin: location?.origin || "" };
+  // Heuristic: does an <input> look like a username/email field even when
+  // no password field is anchored next to it? Used on pages that split
+  // login into two steps (Google / Microsoft / Okta) — the first step
+  // is username-only, the second is password-only. Browserpass fills
+  // whichever step you're on; we needed to match that.
+  function looksLikeUsername(el) {
+    const t = String(el.type || "").toLowerCase();
+    if (t === "email") return true;
+    const ac = String(el.autocomplete || "").toLowerCase();
+    if (ac.includes("username") || ac === "email") return true;
+    const blob = `${el.name || ""} ${el.id || ""} ${el.placeholder || ""}`.toLowerCase();
+    return /\b(user(name)?|email|e-?mail|login|account|signin|userid|user-id)\b/.test(blob);
   }
-  if (password) nativeSet(pw, password);
-  let userFilled = false;
-  if (username) {
+  function findUsernameAnchoredOnPassword(pwEl) {
+    // Same form (preferred) or whole document; pick the visible text-like
+    // input immediately preceding the password in document order.
     const sel = 'input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="reset"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="image"])';
-    const all = pw.form
-      ? [...pw.form.querySelectorAll(sel)]
+    const all = pwEl.form
+      ? [...pwEl.form.querySelectorAll(sel)]
       : [...document.querySelectorAll(sel)];
     const visibleAll = all.filter(visible);
-    const before = visibleAll.filter((c) => pw.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING);
-    const target = before.length ? before[before.length - 1] : visibleAll[0];
-    if (target) { nativeSet(target, username); userFilled = true; }
+    const before = visibleAll.filter((c) => pwEl.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING);
+    return before.length ? before[before.length - 1] : visibleAll[0] || null;
   }
-  pw.focus();
+  function findStandaloneUsername() {
+    // No password on the page — find the most likely username field by
+    // type=email, autocomplete=username/email, or name/id/placeholder
+    // matching a username-ish keyword.
+    const all = [...document.querySelectorAll('input')].filter(visible);
+    return all.find(looksLikeUsername) || null;
+  }
+
+  const pw = [...document.querySelectorAll('input[type="password"]')].find(visible);
+
+  let userEl = null;
+  let userFilled = false;
+  if (username) {
+    userEl = pw ? findUsernameAnchoredOnPassword(pw) : findStandaloneUsername();
+    if (userEl) { nativeSet(userEl, username); userFilled = true; }
+  }
+
+  let pwFilled = false;
+  if (pw && password) { nativeSet(pw, password); pwFilled = true; }
+
+  if (!userFilled && !pwFilled) {
+    return {
+      filled:  false,
+      reason:  pw ? "no_visible_username_field" : "no_visible_login_or_password_field",
+      origin:  location?.origin || "",
+    };
+  }
+
+  // Focus order: password if we filled it (lets the user submit by hitting
+  // Enter); else the username (e.g. for the first step of a 2-step login).
+  if (pw && pwFilled) pw.focus();
+  else if (userEl)    userEl.focus();
+
   let submitted = false;
   if (autoSubmit) {
     // Walk up to the enclosing form, then prefer an explicit submit button
     // (so onClick handlers run); fall back to form.submit() if no button is
-    // present.
-    const form = pw.form;
+    // present. The form may belong to either the password field (preferred)
+    // or the standalone username field on a 2-step login page.
+    const form = (pw && pw.form) || (userEl && userEl.form) || null;
     if (form) {
       const submitBtn =
         form.querySelector('button[type="submit"]') ||
@@ -911,7 +1062,10 @@ function fillLoginForm(username, password, autoSubmit) {
       }
     }
   }
-  return { filled: !!password, userFilled, submitted, origin: location?.origin || "" };
+  // Backward-compat: `filled` historically meant "password filled". Keep
+  // that for downstream telemetry, but expose the new `pwFilled` /
+  // `userFilled` granularly too so callers can tell the cases apart.
+  return { filled: pwFilled, pwFilled, userFilled, submitted, origin: location?.origin || "" };
 }
 
 // Inject a content script into the active tab that enumerates URLs by
