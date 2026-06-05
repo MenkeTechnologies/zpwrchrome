@@ -74,21 +74,12 @@ test("renderMinimap resolves item index via items.indexOf for click routing", ()
   assert.match(fn[0], /data-idx="\$\{items\.indexOf\(t\)\}"/);
 });
 
-test("popup killHeaviest button hidden when processes API unavailable", () => {
-  assert.match(popup, /killBtn\.classList\.toggle\("hidden", !state\.proc\.available\)/);
-});
-
-test("popup killHeaviest click sends kill-heaviest message then refresh", () => {
-  assert.match(popup, /getElementById\("killHeaviest"\)/);
-  assert.match(popup, /kind: "kill-heaviest"/);
-  assert.match(popup, /refresh\(\)/);
-});
-
-test("popup killHeaviest alerts when background returns ok:false", () => {
-  assert.match(popup, /if \(!r\?\.ok\) alert\("kill-heaviest: "/);
-});
-
-test("popup refresh stores processes snapshot in state.proc", () => {
-  const refresh = popup.match(/function refresh\(\)[\s\S]*?\n\}/);
-  assert.match(refresh[0], /state\.proc = pd && pd\.available \? pd : \{ available: false, perTab: \{\} \}/);
+test("popup no longer ships killHeaviest button or state.proc bag (chrome.processes removed)", () => {
+  // chrome.processes is dev/canary-only and was emitting a stable-channel
+  // permission warning. See tests/processes-handlers.test.js for the full
+  // removal-pin set.
+  assert.doesNotMatch(popup, /killHeaviest/);
+  assert.doesNotMatch(popup, /kill-heaviest/);
+  assert.doesNotMatch(popup, /state\.proc\b/);
+  assert.doesNotMatch(popup, /processes-snapshot/);
 });

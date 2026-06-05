@@ -300,15 +300,6 @@ mark.fzf-hl {
 .tree-toggle:hover:not(.ghost) { color: var(--accent); text-shadow: 0 0 4px var(--accent-glow); }
 .row.tree-row { /* padding-left set inline per depth */ }
 
-/* ----- processes column (dev/canary only) ----- */
-.proc-col {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px; color: var(--text-dim);
-  text-align: right; min-width: 56px;
-  padding: 0 6px; line-height: 1.2;
-}
-.proc-col .muted { color: var(--text-muted); }
-
 /* ----- minimap (all tabs across all windows as a colored grid) ----- */
 .minimap {
   display: flex; flex-direction: column; gap: 10px;
@@ -343,24 +334,6 @@ mark.fzf-hl {
 }
 .mm-pinned { border-color: var(--cyan); border-width: 2px; }
 .mm-active { box-shadow: 0 0 6px var(--accent-glow); border-color: var(--accent); }
-
-/* ----- kill-heaviest button (header, dev/canary only) ----- */
-.kill-heaviest {
-  background: transparent;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  padding: 3px 8px;
-  font-family: inherit; font-size: 10px;
-  text-transform: uppercase; letter-spacing: 1px;
-  cursor: pointer;
-  margin-right: 8px;
-}
-.kill-heaviest:hover {
-  background: var(--accent); color: var(--bg-primary);
-  box-shadow: 0 0 8px var(--accent-glow);
-}
-.kill-heaviest.hidden { display: none; }
 
 /* ── downloads bottom strip — always visible above the keybinding bar
       so the user can glance at active/recent downloads without leaving

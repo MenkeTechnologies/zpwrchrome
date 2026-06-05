@@ -70,10 +70,10 @@ test("popup tree rows indent by 14px per depth level", () => {
   assert.match(popup, /padding-left:\$\{8 \+ t\._depth \* 14\}px/);
 });
 
-test("popup proc column shows memory and CPU when processes API available", () => {
-  assert.match(popup, /class="proc-col"/);
-  assert.match(popup, /fmtMb\(proc\.memoryBytes\)/);
-  assert.match(popup, /proc\.cpu\.toFixed\(1\)/);
+test("popup no longer renders per-row proc column (chrome.processes removed)", () => {
+  assert.doesNotMatch(popup, /class="proc-col"/);
+  assert.doesNotMatch(popup, /fmtMb\(/);
+  assert.doesNotMatch(popup, /proc\.cpu\.toFixed/);
 });
 
 test("popup host() helper returns empty string for bad URLs", () => {

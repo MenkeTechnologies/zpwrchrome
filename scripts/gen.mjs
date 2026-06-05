@@ -808,7 +808,7 @@ const subsystems = [
   {
     name: "Service worker",
     files: ["background.js"],
-    role: "MV3 SW. Cross-window MRU tracker, command dispatcher, popup/modal message API, userscript registration, scenes, history, chrome.processes snapshot.",
+    role: "MV3 SW. Cross-window MRU tracker, command dispatcher, popup/modal message API, userscript registration, scenes, history, pass + identity fill, segmented downloads, full-page screenshot.",
   },
   {
     name: "Popup",
@@ -850,7 +850,6 @@ const families = [
   { label: "Batch tab ops",         match: /^(close-(others|right|duplicates)|reload-all|sort-by-url|group-by-domain|restore-last-closed)$/ },
   { label: "Scenes",                match: /^(save-scene-prompt|restore-scene-)/ },
   { label: "Userscripts",           match: /^manage-scripts$/ },
-  { label: "Chrome dev/canary",     match: /^kill-heaviest$/ },
 ];
 const familyCounts = families.map((f) => ({
   ...f,
@@ -902,8 +901,6 @@ const messageRoles = {
   "scenes-delete":       "popup/modal → SW. Drop a scene by slug.",
   "history-list":        "popup/modal → SW. chrome.history.search up to 5000 results, frecency-sorted before return.",
   "history-delete":      "popup/modal → SW. chrome.history.deleteUrl for every visit of a URL.",
-  "processes-snapshot":  "popup → SW. chrome.processes.getProcessInfo aggregation per tabId (dev/canary only).",
-  "kill-heaviest":       "popup → SW. Close the heaviest non-active tab by privateMemory.",
 };
 
 const designDecisions = [
@@ -1243,7 +1240,7 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
         <text class="sub"  x="332" y="120">downloads / contextMenus</text>
         <text class="sub"  x="332" y="136">notifications / sessions</text>
         <text class="sub"  x="332" y="152">history / commands</text>
-        <text class="sub"  x="332" y="168">cookies / processes</text>
+        <text class="sub"  x="332" y="168">cookies</text>
         <text class="sub"  x="332" y="184">webRequest · userScripts</text>
         <text class="sub"  x="332" y="200">action.setBadgeText</text>
         <text class="sub"  x="332" y="216">runtime.sendNativeMessage</text>

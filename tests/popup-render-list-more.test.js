@@ -11,7 +11,9 @@ const ROOT = resolve(__dirname, "..");
 const popup = readFileSync(join(ROOT, "popup.js"), "utf8");
 
 const rlStart = popup.indexOf("function renderList()");
-const rlEnd = popup.indexOf("function fmtMb(");
+// fmtMb used to mark renderList's end; it got deleted with the
+// chrome.processes integration. Next sibling function is loadPass().
+const rlEnd = popup.indexOf("function loadPass(");
 assert.ok(rlStart >= 0 && rlEnd > rlStart, "renderList missing");
 const rl = popup.slice(rlStart, rlEnd);
 
@@ -63,9 +65,10 @@ test("renderList tree rows indent by depth and show expand collapse toggle", () 
   assert.match(rl, /t\._collapsed \? "expand" : "collapse"/);
 });
 
-test("renderList proc column hidden unless processes snapshot is available", () => {
-  assert.match(rl, /state\.proc\.available/);
-  assert.match(rl, /fmtMb\(proc\.memoryBytes\)/);
+test("renderList no longer renders proc column (chrome.processes removed)", () => {
+  assert.doesNotMatch(rl, /state\.proc/);
+  assert.doesNotMatch(rl, /fmtMb\(/);
+  assert.doesNotMatch(rl, /class="proc-col"/);
 });
 
 test("renderList hides broken favicons on img error event", () => {

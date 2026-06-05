@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 52 keyboard commands, 11 popup categories, 21 message kinds, 6,261 JS lines, 2,849 tests. Cyberpunk HUD by MenkeTechnologies.">
+  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 51 keyboard commands, 11 popup categories, 19 message kinds, 6,158 JS lines, 2,803 tests. Cyberpunk HUD by MenkeTechnologies.">
   <title>zpwrchrome &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -180,7 +180,7 @@
         <a href="https://github.com/MenkeTechnologies/zpwrchrome">GitHub</a>
       </nav>
       <p class="tagline">
-        Manifest V3 Chrome extension &middot; cross-window MRU &middot; 52 keyboard commands &middot; 11-category fzf-scored popup &middot; <code>chrome.userScripts</code> Tampermonkey-equivalent &middot; frecency-ranked history search
+        Manifest V3 Chrome extension &middot; cross-window MRU &middot; 51 keyboard commands &middot; 11-category fzf-scored popup &middot; <code>chrome.userScripts</code> Tampermonkey-equivalent &middot; frecency-ranked history search
       </p>
     </div>
   </header>
@@ -198,27 +198,27 @@
       <code>chrome.userScripts</code>; and a frecency-ranked
       <code>chrome.history</code> search replaces Chrome's built-in
       <code>chrome://history</code> page on <code>Cmd+Y</code>.
-      <strong>6,261 JS lines + 1,091 CSS lines + 21,516 test lines &middot; 52 commands &middot; 21 message handlers &middot; 2849 tests passing</strong>.
+      <strong>6,158 JS lines + 1,064 CSS lines + 21,312 test lines &middot; 51 commands &middot; 19 message handlers &middot; 2803 tests passing</strong>.
     </p>
 
     <div class="stat-grid">
-      <div class="stat-card"><div class="v">6,261</div><div class="l">JS Lines</div></div>
-      <div class="stat-card"><div class="v">1,091</div><div class="l">CSS Lines</div></div>
-      <div class="stat-card"><div class="v a">52</div><div class="l">Keyboard Commands</div></div>
-      <div class="stat-card"><div class="v g">2849</div><div class="l">Tests Passing</div></div>
+      <div class="stat-card"><div class="v">6,158</div><div class="l">JS Lines</div></div>
+      <div class="stat-card"><div class="v">1,064</div><div class="l">CSS Lines</div></div>
+      <div class="stat-card"><div class="v a">51</div><div class="l">Keyboard Commands</div></div>
+      <div class="stat-card"><div class="v g">2803</div><div class="l">Tests Passing</div></div>
       <div class="stat-card"><div class="v">11</div><div class="l">Popup Categories</div></div>
-      <div class="stat-card"><div class="v m">21</div><div class="l">Message Kinds</div></div>
-      <div class="stat-card"><div class="v">37</div><div class="l">Dispatch Handlers</div></div>
+      <div class="stat-card"><div class="v m">19</div><div class="l">Message Kinds</div></div>
+      <div class="stat-card"><div class="v">36</div><div class="l">Dispatch Handlers</div></div>
       <div class="stat-card"><div class="v">17</div><div class="l">Permissions</div></div>
       <div class="stat-card"><div class="v">15</div><div class="l">Pure Helpers</div></div>
       <div class="stat-card"><div class="v">309</div><div class="l">Repo Files</div></div>
       <div class="stat-card"><div class="v y">4</div><div class="l">Default-Keyed</div></div>
-      <div class="stat-card"><div class="v">v0.12.13</div><div class="l">Version</div></div>
+      <div class="stat-card"><div class="v">v0.13.0</div><div class="l">Version</div></div>
     </div>
 
     <div>
-      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 29,159 total lines</p>
-      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:21.5%;"></div><span class="bar-label">JS &middot; 6,261 lines &middot; 21.5%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:73.8%;"></div><span class="bar-label">Tests &middot; 21,516 lines &middot; 73.8%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.7%;"></div><span class="bar-label">CSS &middot; 1,091 lines &middot; 3.7%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:1.0%;"></div><span class="bar-label">HTML &middot; 291 lines &middot; 1.0%</span></div>
+      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 28,823 total lines</p>
+      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:21.4%;"></div><span class="bar-label">JS &middot; 6,158 lines &middot; 21.4%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:73.9%;"></div><span class="bar-label">Tests &middot; 21,312 lines &middot; 73.9%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.7%;"></div><span class="bar-label">CSS &middot; 1,064 lines &middot; 3.7%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:1.0%;"></div><span class="bar-label">HTML &middot; 289 lines &middot; 1.0%</span></div>
     </div>
 
     <h2 class="section"><span class="hash">~</span>SUBSYSTEM BREAKDOWN</h2>
@@ -226,12 +226,12 @@
     <div class="subsystems">
         <div class="card">
           <h3>Service worker</h3>
-          <ul class="files"><li><code>background.js</code> &mdash; 3,176 lines</li></ul>
-          <p>MV3 SW. Cross-window MRU tracker, command dispatcher, popup/modal message API, userscript registration, scenes, history, chrome.processes snapshot.</p>
+          <ul class="files"><li><code>background.js</code> &mdash; 3,100 lines</li></ul>
+          <p>MV3 SW. Cross-window MRU tracker, command dispatcher, popup/modal message API, userscript registration, scenes, history, pass + identity fill, segmented downloads, full-page screenshot.</p>
         </div>
         <div class="card">
           <h3>Popup</h3>
-          <ul class="files"><li><code>popup.html</code> &mdash; 47 lines</li><li><code>popup.css</code> &mdash; 588 lines</li><li><code>popup.js</code> &mdash; 1,074 lines</li></ul>
+          <ul class="files"><li><code>popup.html</code> &mdash; 45 lines</li><li><code>popup.css</code> &mdash; 561 lines</li><li><code>popup.js</code> &mdash; 1,047 lines</li></ul>
           <p>Cyberpunk HUD toolbar action. 11 categories (incl. PASS), fzf filter, keyboard nav, opens via Alt+T / Cmd+Y (history) / Alt+P-bindable (pass).</p>
         </div>
         <div class="card">
@@ -266,11 +266,11 @@
     <table class="file-table">
       <thead><tr><th>Path</th><th class="num">Lines</th><th class="num">Bytes</th></tr></thead>
       <tbody>
-        <tr><td><code>background.js</code></td><td class="num">3,176</td><td class="num">128,836</td></tr>
-        <tr><td><code>popup.js</code></td><td class="num">1,074</td><td class="num">44,384</td></tr>
+        <tr><td><code>background.js</code></td><td class="num">3,100</td><td class="num">125,934</td></tr>
+        <tr><td><code>popup.js</code></td><td class="num">1,047</td><td class="num">43,069</td></tr>
         <tr><td><code>tests/dl-integration.test.js</code></td><td class="num">998</td><td class="num">51,348</td></tr>
         <tr><td><code>modal/content.template.js</code></td><td class="num">930</td><td class="num">37,419</td></tr>
-        <tr><td><code>popup.css</code></td><td class="num">588</td><td class="num">18,212</td></tr>
+        <tr><td><code>popup.css</code></td><td class="num">561</td><td class="num">17,428</td></tr>
         <tr><td><code>tests/static.test.js</code></td><td class="num">560</td><td class="num">26,163</td></tr>
         <tr><td><code>tests/logic.test.js</code></td><td class="num">555</td><td class="num">22,613</td></tr>
         <tr><td><code>scripts-manager/manager.css</code></td><td class="num">503</td><td class="num">16,708</td></tr>
@@ -357,7 +357,7 @@
         <text class="sub"  x="332" y="120">downloads / contextMenus</text>
         <text class="sub"  x="332" y="136">notifications / sessions</text>
         <text class="sub"  x="332" y="152">history / commands</text>
-        <text class="sub"  x="332" y="168">cookies / processes</text>
+        <text class="sub"  x="332" y="168">cookies</text>
         <text class="sub"  x="332" y="184">webRequest · userScripts</text>
         <text class="sub"  x="332" y="200">action.setBadgeText</text>
         <text class="sub"  x="332" y="216">runtime.sendNativeMessage</text>
@@ -498,7 +498,7 @@
 </pre>
 
     <h2 class="section"><span class="hash">&amp;</span>MESSAGE PROTOCOL</h2>
-    <p class="subtitle"><strong>21</strong> message kinds handled by the service worker. Popup sends <strong>19</strong> kinds; modal sends <strong>19</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
+    <p class="subtitle"><strong>19</strong> message kinds handled by the service worker. Popup sends <strong>17</strong> kinds; modal sends <strong>19</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
     <ul class="kinds">
 
         <li><code>activate</code><span>popup/modal → SW. Switch to a tab by id + focus its window.</span></li>
@@ -513,10 +513,8 @@
         <li><code>gm:setValue</code><span>userscript shim → SW. Per-script chrome.storage.local bag write.</span></li>
         <li><code>history-delete</code><span>popup/modal → SW. chrome.history.deleteUrl for every visit of a URL.</span></li>
         <li><code>history-list</code><span>popup/modal → SW. chrome.history.search up to 5000 results, frecency-sorted before return.</span></li>
-        <li><code>kill-heaviest</code><span>popup → SW. Close the heaviest non-active tab by privateMemory.</span></li>
         <li><code>list</code><span>popup/modal → SW. Returns MRU tab list + 25 most-recently-closed sessions.</span></li>
         <li><code>open-scripts-manager</code><span>modal → SW. Opens scripts-manager/manager.html in a new tab.</span></li>
-        <li><code>processes-snapshot</code><span>popup → SW. chrome.processes.getProcessInfo aggregation per tabId (dev/canary only).</span></li>
         <li><code>restore</code><span>popup/modal → SW. Restore a closed session by sessionId.</span></li>
         <li><code>scenes-delete</code><span>popup/modal → SW. Drop a scene by slug.</span></li>
         <li><code>scenes-list</code><span>popup/modal → SW. Returns persisted scenes from chrome.storage.local.</span></li>
@@ -525,7 +523,7 @@
     </ul>
 
     <h2 class="section"><span class="hash">$</span>KEYBOARD COMMANDS</h2>
-    <p class="subtitle">Chrome MV3 caps commands with default-suggested keys at <strong>4</strong>; everything else is user-bound at <code>chrome://extensions/shortcuts</code>. Currently <strong>4</strong> default-keyed (<code>_execute_action=Alt+T</code>, <code>switch-previous-tab=Command+E</code>, <code>open-history=Command+Y</code>, <code>pass-fill=Command+Shift+L</code>), <strong>48</strong> user-bound, <strong>52</strong> total.</p>
+    <p class="subtitle">Chrome MV3 caps commands with default-suggested keys at <strong>4</strong>; everything else is user-bound at <code>chrome://extensions/shortcuts</code>. Currently <strong>4</strong> default-keyed (<code>_execute_action=Alt+T</code>, <code>switch-previous-tab=Command+E</code>, <code>open-history=Command+Y</code>, <code>pass-fill=Command+Shift+L</code>), <strong>47</strong> user-bound, <strong>51</strong> total.</p>
     <div class="stat-grid">
       <div class="stat-card"><div class="v">7</div><div class="l">Switching / popup</div></div>
       <div class="stat-card"><div class="v">9</div><div class="l">Jump</div></div>
@@ -533,7 +531,6 @@
       <div class="stat-card"><div class="v">7</div><div class="l">Batch tab ops</div></div>
       <div class="stat-card"><div class="v">6</div><div class="l">Scenes</div></div>
       <div class="stat-card"><div class="v">1</div><div class="l">Userscripts</div></div>
-      <div class="stat-card"><div class="v">1</div><div class="l">Chrome dev/canary</div></div>
     </div>
 
     <h2 class="section"><span class="hash">%</span>POPUP CATEGORIES</h2>
@@ -585,22 +582,22 @@
       <span class="perm-pill">webRequest</span>
       <span class="perm-pill">webRequestAuthProvider</span>
       <span class="perm-pill">downloads</span>
-      <span class="perm-pill opt" title="optional_permissions — not requested at install">processes</span>
+
     </div>
 
     <h2 class="section"><span class="hash">*</span>TESTS</h2>
-    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>2849</strong> cases across <strong>173</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
+    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>2803</strong> cases across <strong>173</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
     <table class="file-table">
       <thead><tr><th>File</th><th class="num">Tests</th><th class="num">Lines</th></tr></thead>
       <tbody>
-        <tr><td><code>tests/background.test.js</code></td><td class="num">29</td><td class="num">207</td></tr>
+        <tr><td><code>tests/background.test.js</code></td><td class="num">28</td><td class="num">203</td></tr>
         <tr><td><code>tests/build-scene-restorable.test.js</code></td><td class="num">12</td><td class="num">76</td></tr>
         <tr><td><code>tests/build.test.js</code></td><td class="num">21</td><td class="num">143</td></tr>
         <tr><td><code>tests/buildscene-slugify-edge.test.js</code></td><td class="num">15</td><td class="num">88</td></tr>
         <tr><td><code>tests/buildscene-timing.test.js</code></td><td class="num">11</td><td class="num">98</td></tr>
         <tr><td><code>tests/ci.test.js</code></td><td class="num">11</td><td class="num">73</td></tr>
         <tr><td><code>tests/close-tabs-more.test.js</code></td><td class="num">16</td><td class="num">98</td></tr>
-        <tr><td><code>tests/commands.test.js</code></td><td class="num">22</td><td class="num">160</td></tr>
+        <tr><td><code>tests/commands.test.js</code></td><td class="num">22</td><td class="num">161</td></tr>
         <tr><td><code>tests/configure-world.test.js</code></td><td class="num">12</td><td class="num">93</td></tr>
         <tr><td><code>tests/copy-helpers.test.js</code></td><td class="num">14</td><td class="num">87</td></tr>
         <tr><td><code>tests/dispatch-popup.test.js</code></td><td class="num">16</td><td class="num">97</td></tr>
@@ -635,7 +632,7 @@
         <tr><td><code>tests/gm-shim-aliases.test.js</code></td><td class="num">14</td><td class="num">125</td></tr>
         <tr><td><code>tests/gm-shim-open-tab.test.js</code></td><td class="num">12</td><td class="num">55</td></tr>
         <tr><td><code>tests/gm-shim.test.js</code></td><td class="num">18</td><td class="num">108</td></tr>
-        <tr><td><code>tests/handlers-async.test.js</code></td><td class="num">2</td><td class="num">67</td></tr>
+        <tr><td><code>tests/handlers-async.test.js</code></td><td class="num">2</td><td class="num">65</td></tr>
         <tr><td><code>tests/highlight-bounds.test.js</code></td><td class="num">11</td><td class="num">91</td></tr>
         <tr><td><code>tests/history-handlers.test.js</code></td><td class="num">17</td><td class="num">105</td></tr>
         <tr><td><code>tests/identity-tokens.test.js</code></td><td class="num">35</td><td class="num">280</td></tr>
@@ -663,10 +660,10 @@
         <tr><td><code>tests/manager-table.test.js</code></td><td class="num">18</td><td class="num">107</td></tr>
         <tr><td><code>tests/manager-utilities.test.js</code></td><td class="num">17</td><td class="num">94</td></tr>
         <tr><td><code>tests/manager.test.js</code></td><td class="num">36</td><td class="num">223</td></tr>
-        <tr><td><code>tests/manifest-commands-meta.test.js</code></td><td class="num">18</td><td class="num">116</td></tr>
+        <tr><td><code>tests/manifest-commands-meta.test.js</code></td><td class="num">18</td><td class="num">117</td></tr>
         <tr><td><code>tests/manifest-extended.test.js</code></td><td class="num">19</td><td class="num">106</td></tr>
         <tr><td><code>tests/manifest-icons-commands.test.js</code></td><td class="num">14</td><td class="num">97</td></tr>
-        <tr><td><code>tests/manifest-permissions-more.test.js</code></td><td class="num">15</td><td class="num">80</td></tr>
+        <tr><td><code>tests/manifest-permissions-more.test.js</code></td><td class="num">15</td><td class="num">83</td></tr>
         <tr><td><code>tests/match-pattern-flow.test.js</code></td><td class="num">10</td><td class="num">124</td></tr>
         <tr><td><code>tests/match-pattern-unit.test.js</code></td><td class="num">15</td><td class="num">84</td></tr>
         <tr><td><code>tests/matchPatternToRegex-schemes.test.js</code></td><td class="num">15</td><td class="num">111</td></tr>
@@ -698,29 +695,29 @@
         <tr><td><code>tests/pass-entry-format.test.js</code></td><td class="num">50</td><td class="num">409</td></tr>
         <tr><td><code>tests/pass-integration.test.js</code></td><td class="num">35</td><td class="num">355</td></tr>
         <tr><td><code>tests/popup-activate.test.js</code></td><td class="num">18</td><td class="num">103</td></tr>
-        <tr><td><code>tests/popup-css.test.js</code></td><td class="num">19</td><td class="num">108</td></tr>
+        <tr><td><code>tests/popup-css.test.js</code></td><td class="num">18</td><td class="num">105</td></tr>
         <tr><td><code>tests/popup-escape-html.test.js</code></td><td class="num">6</td><td class="num">64</td></tr>
         <tr><td><code>tests/popup-history-delete-key.test.js</code></td><td class="num">12</td><td class="num">69</td></tr>
-        <tr><td><code>tests/popup-html.test.js</code></td><td class="num">14</td><td class="num">80</td></tr>
-        <tr><td><code>tests/popup-interaction.test.js</code></td><td class="num">18</td><td class="num">99</td></tr>
-        <tr><td><code>tests/popup-keys.test.js</code></td><td class="num">22</td><td class="num">125</td></tr>
-        <tr><td><code>tests/popup-lifecycle.test.js</code></td><td class="num">15</td><td class="num">92</td></tr>
+        <tr><td><code>tests/popup-html.test.js</code></td><td class="num">13</td><td class="num">77</td></tr>
+        <tr><td><code>tests/popup-interaction.test.js</code></td><td class="num">18</td><td class="num">100</td></tr>
+        <tr><td><code>tests/popup-keys.test.js</code></td><td class="num">21</td><td class="num">122</td></tr>
+        <tr><td><code>tests/popup-lifecycle.test.js</code></td><td class="num">15</td><td class="num">93</td></tr>
         <tr><td><code>tests/popup-list.test.js</code></td><td class="num">18</td><td class="num">104</td></tr>
         <tr><td><code>tests/popup-minimap-render.test.js</code></td><td class="num">14</td><td class="num">77</td></tr>
-        <tr><td><code>tests/popup-minimap.test.js</code></td><td class="num">18</td><td class="num">95</td></tr>
+        <tr><td><code>tests/popup-minimap.test.js</code></td><td class="num">15</td><td class="num">86</td></tr>
         <tr><td><code>tests/popup-refresh-first.test.js</code></td><td class="num">14</td><td class="num">82</td></tr>
         <tr><td><code>tests/popup-render-cats-more.test.js</code></td><td class="num">12</td><td class="num">71</td></tr>
-        <tr><td><code>tests/popup-render-list-more.test.js</code></td><td class="num">18</td><td class="num">106</td></tr>
-        <tr><td><code>tests/popup-render.test.js</code></td><td class="num">22</td><td class="num">117</td></tr>
+        <tr><td><code>tests/popup-render-list-more.test.js</code></td><td class="num">18</td><td class="num">109</td></tr>
+        <tr><td><code>tests/popup-render.test.js</code></td><td class="num">21</td><td class="num">111</td></tr>
         <tr><td><code>tests/popup-scene-form-more.test.js</code></td><td class="num">11</td><td class="num">62</td></tr>
-        <tr><td><code>tests/popup-time-fmt-behavior.test.js</code></td><td class="num">5</td><td class="num">69</td></tr>
-        <tr><td><code>tests/popup-time-static.test.js</code></td><td class="num">14</td><td class="num">81</td></tr>
-        <tr><td><code>tests/popup-tree-kill.test.js</code></td><td class="num">14</td><td class="num">79</td></tr>
-        <tr><td><code>tests/popup-ui.test.js</code></td><td class="num">30</td><td class="num">163</td></tr>
+        <tr><td><code>tests/popup-time-fmt-behavior.test.js</code></td><td class="num">3</td><td class="num">52</td></tr>
+        <tr><td><code>tests/popup-time-static.test.js</code></td><td class="num">12</td><td class="num">75</td></tr>
+        <tr><td><code>tests/popup-tree-kill.test.js</code></td><td class="num">10</td><td class="num">64</td></tr>
+        <tr><td><code>tests/popup-ui.test.js</code></td><td class="num">28</td><td class="num">157</td></tr>
         <tr><td><code>tests/popup.test.js</code></td><td class="num">20</td><td class="num">123</td></tr>
-        <tr><td><code>tests/processes-api-detect.test.js</code></td><td class="num">12</td><td class="num">83</td></tr>
-        <tr><td><code>tests/processes-handlers.test.js</code></td><td class="num">15</td><td class="num">101</td></tr>
-        <tr><td><code>tests/processes.test.js</code></td><td class="num">14</td><td class="num">97</td></tr>
+        <tr><td><code>tests/processes-api-detect.test.js</code></td><td class="num">3</td><td class="num">31</td></tr>
+        <tr><td><code>tests/processes-handlers.test.js</code></td><td class="num">6</td><td class="num">68</td></tr>
+        <tr><td><code>tests/processes.test.js</code></td><td class="num">4</td><td class="num">41</td></tr>
         <tr><td><code>tests/protocol-extended.test.js</code></td><td class="num">18</td><td class="num">116</td></tr>
         <tr><td><code>tests/protocol.test.js</code></td><td class="num">7</td><td class="num">89</td></tr>
         <tr><td><code>tests/quality.test.js</code></td><td class="num">17</td><td class="num">352</td></tr>
@@ -736,7 +733,7 @@
         <tr><td><code>tests/scripts-storage.test.js</code></td><td class="num">16</td><td class="num">103</td></tr>
         <tr><td><code>tests/scripts-toggle-storage.test.js</code></td><td class="num">13</td><td class="num">83</td></tr>
         <tr><td><code>tests/sessions-restore.test.js</code></td><td class="num">14</td><td class="num">95</td></tr>
-        <tr><td><code>tests/single-tab-ops.test.js</code></td><td class="num">19</td><td class="num">104</td></tr>
+        <tr><td><code>tests/single-tab-ops.test.js</code></td><td class="num">19</td><td class="num">105</td></tr>
         <tr><td><code>tests/static.test.js</code></td><td class="num">41</td><td class="num">560</td></tr>
         <tr><td><code>tests/stress-memory-scale.test.js</code></td><td class="num">11</td><td class="num">170</td></tr>
         <tr><td><code>tests/stress-pathological-fzf.test.js</code></td><td class="num">15</td><td class="num">139</td></tr>
@@ -766,7 +763,7 @@
         <tr><td><code>tests/util-large-scale.test.js</code></td><td class="num">10</td><td class="num">128</td></tr>
         <tr><td><code>tests/util-mru-cap-edge.test.js</code></td><td class="num">10</td><td class="num">63</td></tr>
         <tr><td><code>tests/validate-userscript-unit.test.js</code></td><td class="num">13</td><td class="num">87</td></tr>
-        <tr><td><code>TOTAL</code></td><td class="num"><strong>2849</strong></td><td class="num"><strong>21,516</strong></td></tr>
+        <tr><td><code>TOTAL</code></td><td class="num"><strong>2803</strong></td><td class="num"><strong>21,312</strong></td></tr>
       </tbody>
     </table>
 
@@ -791,7 +788,7 @@
   </main>
 
   <footer>
-    zpwrchrome v0.12.13 &middot; MIT &middot; MenkeTechnologies &middot;
+    zpwrchrome v0.13.0 &middot; MIT &middot; MenkeTechnologies &middot;
     <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a> &middot;
     regenerate via <code>scripts/gen.sh</code>
   </footer>

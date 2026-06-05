@@ -85,18 +85,12 @@ test("popup.js history rows show timeAgo from lastVisitTime", () => {
   assert.match(popup, /timeAgo\(t\.lastVisitTime\)/);
 });
 
-test("popup.js fmtMb formats memory for kill-heaviest display", () => {
-  assert.match(popup, /function fmtMb\(bytes\)/);
-  assert.match(popup, /bytes \/ \(1024 \* 1024\)/);
-});
-
-test("popup.js kill-heaviest button calls background kill-heaviest handler", () => {
-  assert.match(popup, /getElementById\("killHeaviest"\)/);
-  assert.match(popup, /kind: "kill-heaviest"/);
-});
-
-test("popup.js processes-snapshot fetched lazily on refresh", () => {
-  assert.match(popup, /kind: "processes-snapshot"/);
+test("popup.js no longer ships chrome.processes integration (kill-heaviest + fmtMb + proc-col gone)", () => {
+  assert.doesNotMatch(popup, /\bfunction fmtMb\(/);
+  assert.doesNotMatch(popup, /\bfmtMb\(/);
+  assert.doesNotMatch(popup, /killHeaviest/);
+  assert.doesNotMatch(popup, /kill-heaviest/);
+  assert.doesNotMatch(popup, /processes-snapshot/);
 });
 
 test("popup.js open-scripts opens manager.html via chrome.runtime.getURL", () => {
@@ -104,12 +98,12 @@ test("popup.js open-scripts opens manager.html via chrome.runtime.getURL", () =>
   assert.match(popup, /getURL\("scripts-manager\/manager\.html"\)/);
 });
 
-test("popup.js refresh() chains list → scenes-list → processes-snapshot", () => {
+test("popup.js refresh() chains list → scenes-list (no processes-snapshot any more)", () => {
   const fn = popup.match(/function refresh\([\s\S]*?\n\}/);
   assert.ok(fn);
   assert.match(fn[0], /kind: "list"/);
   assert.match(fn[0], /kind: "scenes-list"/);
-  assert.match(fn[0], /kind: "processes-snapshot"/);
+  assert.doesNotMatch(fn[0], /processes-snapshot/);
 });
 
 test("popup.js loadHistory is deferred until History category selected", () => {
@@ -156,7 +150,7 @@ test("popup.css styles tree rows with indent support", () => {
   assert.match(css, /\.tree-toggle/);
 });
 
-test("popup.js kill-heaviest button toggles hidden based on proc.available", () => {
-  assert.match(popup, /getElementById\("killHeaviest"\)/);
-  assert.match(popup, /classList\.toggle\("hidden", !state\.proc\.available\)/);
+test("popup.js render() no longer touches killHeaviest visibility (chrome.processes removed)", () => {
+  assert.doesNotMatch(popup, /killHeaviest/);
+  assert.doesNotMatch(popup, /state\.proc\b/);
 });

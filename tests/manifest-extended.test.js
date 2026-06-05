@@ -31,8 +31,8 @@ test("manifest includes userScripts permission for native Tampermonkey mode", ()
   assert.ok(manifest.permissions.includes("userScripts"));
 });
 
-test("manifest lists processes as optional permission", () => {
-  assert.deepEqual(manifest.optional_permissions, ["processes"]);
+test("manifest does not list `processes` (dev/canary-only API was removed)", () => {
+  assert.ok(!(manifest.optional_permissions || []).includes("processes"));
 });
 
 test("manifest host_permissions grants <all_urls> for content script injection", () => {

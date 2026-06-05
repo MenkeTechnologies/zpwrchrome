@@ -137,8 +137,9 @@ test("manifest minimum_chrome_version is at least 120 (userScripts era)", () => 
   assert.ok(min >= 120, `minimum_chrome_version ${min} is too low for userScripts`);
 });
 
-test("manifest declares optional_permissions processes for kill-heaviest", () => {
-  assert.ok(manifest.optional_permissions.includes("processes"));
+test("manifest no longer declares `processes` (chrome.processes is dev/canary-only)", () => {
+  assert.ok(!(manifest.optional_permissions || []).includes("processes"));
+  assert.ok(!(manifest.permissions || []).includes("processes"));
 });
 
 test("manifest declares host_permissions <all_urls> for content script + scripting", () => {

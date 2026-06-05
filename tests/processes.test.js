@@ -1,4 +1,6 @@
-// chrome.processes API invariants — dev/canary kill-heaviest feature.
+// chrome.processes / kill-heaviest REMOVED — the API is dev/canary only
+// and emits "'processes' requires dev channel or newer" on stable.
+// See tests/processes-handlers.test.js for the consolidated removal pins.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,89 +10,31 @@ import { dirname, resolve, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
-const bg = readFileSync(join(ROOT, "background.js"), "utf8");
+const read = (p) => readFileSync(join(ROOT, p), "utf8");
+const bg = read("background.js");
+const popup = read("popup.js");
+const manifest = JSON.parse(read("manifest.json"));
 
-function fnBody(name) {
-  const m = bg.match(new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\n\\}`));
-  assert.ok(m, `${name} not found`);
-  return m[0];
-}
-
-test("processesApiAvailable checks chrome.processes.getProcessInfo exists", () => {
-  const fn = fnBody("processesApiAvailable");
-  assert.match(fn, /typeof chrome\.processes === "object"/);
-  assert.match(fn, /typeof chrome\.processes\.getProcessInfo === "function"/);
+test("chrome.processes integration is fully removed from background.js", () => {
+  for (const fn of ["processesApiAvailable", "snapshotProcesses", "killHeaviestTab"]) {
+    assert.doesNotMatch(bg, new RegExp(`\\bfunction ${fn}\\b`), `${fn} must not exist`);
+  }
+  assert.doesNotMatch(bg, /chrome\.processes/);
+  assert.doesNotMatch(bg, /"processes-snapshot"/);
+  assert.doesNotMatch(bg, /"kill-heaviest"/);
 });
 
-test("snapshotProcesses returns available:false when API missing", () => {
-  const fn = fnBody("snapshotProcesses");
-  assert.match(fn, /if \(!processesApiAvailable\(\)\)/);
-  assert.match(fn, /available: false/);
-  assert.match(fn, /perTab: \{\}/);
+test("popup.js no longer wires the kill-heaviest UI or state.proc bag", () => {
+  assert.doesNotMatch(popup, /killHeaviest/);
+  assert.doesNotMatch(popup, /kill-heaviest/);
+  assert.doesNotMatch(popup, /state\.proc\b/);
 });
 
-test("snapshotProcesses calls getProcessInfo with includeMemory=true", () => {
-  const fn = fnBody("snapshotProcesses");
-  assert.match(fn, /chrome\.processes\.getProcessInfo\(\[\], true,/);
+test("manifest no longer declares the `processes` permission", () => {
+  assert.ok(!(manifest.optional_permissions || []).includes("processes"));
+  assert.ok(!(manifest.permissions || []).includes("processes"));
 });
 
-test("snapshotProcesses aggregates memory per tabId from process tasks", () => {
-  const fn = fnBody("snapshotProcesses");
-  assert.match(fn, /for \(const task of \(p\.tasks/);
-  assert.match(fn, /cur\.memoryBytes \+= mem/);
-  assert.match(fn, /perTab\[tid\]/);
-});
-
-test("snapshotProcesses skips tasks with invalid tabId", () => {
-  const fn = fnBody("snapshotProcesses");
-  assert.match(fn, /typeof tid !== "number" \|\| tid < 0/);
-});
-
-test("killHeaviestTab refuses when processes API unavailable", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /if \(!snap\.available\) return undefined/);
-});
-
-test("killHeaviestTab picks tab with highest memoryBytes", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /m\.memoryBytes > worst\.mem/);
-});
-
-test("killHeaviestTab avoids killing the active tab (picks next-heaviest)", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /if \(active\?\.id === worst\.tabId\)/);
-  assert.match(fn, /\.filter\(\(r\) => r\.tabId !== active\.id\)/);
-});
-
-test("killHeaviestTab removes the chosen tab via chrome.tabs.remove", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /await chrome\.tabs\.remove\(worst\.tabId\)/);
-});
-
-test("killHeaviestTab returns the removed tabId on success", () => {
-  const fn = fnBody("killHeaviestTab");
-  assert.match(fn, /return worst\.tabId/);
-});
-
-test("popup kill-heaviest UI toggles hidden based on proc.available", () => {
-  const popup = readFileSync(join(ROOT, "popup.js"), "utf8");
-  assert.match(popup, /getElementById\("killHeaviest"\)/);
-  assert.match(popup, /classList\.toggle\("hidden", !state\.proc\.available\)/);
-});
-
-test("manifest lists processes under optional_permissions (not required)", () => {
-  const manifest = JSON.parse(readFileSync(join(ROOT, "manifest.json"), "utf8"));
-  assert.ok(manifest.optional_permissions.includes("processes"));
-  assert.ok(!manifest.permissions.includes("processes"),
-    "processes must be optional — stable Chrome lacks the API");
-});
-
-test("processes-snapshot message handler returns snapshotProcesses shape", () => {
-  const idx = bg.indexOf('msg?.kind === "processes-snapshot"');
-  assert.ok(idx >= 0);
-  assert.match(bg.slice(idx, idx + 300), /snapshotProcesses\(\)/);
-});
-
-test("kill-heaviest command in dispatch delegates to killHeaviestTab", () => {
-  assert.match(bg, /command === "kill-heaviest"\)[\s\S]*?killHeaviestTab\(\)/);
+test("manifest no longer registers the kill-heaviest command", () => {
+  assert.ok(!("kill-heaviest" in (manifest.commands || {})));
 });
