@@ -88,6 +88,7 @@ cvv: 123
 - **Three-channel toolbar badge** — single Chrome action badge multiplexes downloads (cyan), tech detection (orange), and pass matches (magenta). The visible NUMBER is the dominant counter by priority (downloads → tech → pass) and the COLOR follows it. Trailing letter tags spell out which other counters are coexisting: `t` = tech also detected, `l` = login (pass) also matching. So a tab with 10 active downloads + 5 tech + 2 pass renders `10tl`; 5 tech + 2 pass renders `5l`; 2 pass alone renders `2`. Tooltip spells out the plain-English breakdown for any state. `refreshActiveTabBadge` is the one orchestrator that repaints on `chrome.tabs.onActivated` + `chrome.tabs.onUpdated`
 - **48 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
 - **Sub-popup live filter** — type to filter open + closed tabs; `↑`/`↓`/`Enter`/`Delete`/`Esc` nav
+- **Cyberpunk page-theme injector** — `modal/cyber-theme.js` runs at `document_start` on every http(s) tab and paints arbitrary pages with the strykelang HUD palette. Settings UI at `scripts-manager/theme-injector.html` (toolbar right-click → "Open theme injector" or popup → `theme ▸`). Knobs: **intensity** (subtle = links + headings + scrollbars only / medium = + body bg + form fields + code blocks / full = + tables, cards, dimmed images), **dark mode** (smart overlay — `color-scheme: dark` + targeted overrides for common white-card patterns: AUI `.a-box` / `.order-header` / `.delivery-box` / `.bia-content`, generic `[class*="card|panel|widget"]`, ARIA dialogs, inline `background: white|#fff|rgb(255,…)`; deliberately NOT `filter: invert()` so already-dark pages stay dark), **forceMono** (Share Tech Mono everywhere — exempts icon-font carriers `<i>` / `<svg>` / `[class*="icon|fa-|material-icons|material-symbols|lucide|phosphor|glyphicon"]` / `[data-icon|data-lucide|data-cds="Icon"|data-radix-icon]` so Anthropicons, Material Symbols, Lucide, etc. keep their glyphs instead of rendering as PUA tofu), and **scanlines** (CRT overlay via `body::after`). Per-host blocklist / allowlist via the textarea; settings broadcast to every tab over `chrome.storage.onChanged`
 - **Companion Chrome theme** — `theme/` paints frame/toolbar/omnibox/NTP with the strykelang HUD palette
 - **Strykelang HUD aesthetic** — palette and animations sourced from `strykelang/docs/hud-static.css` (`--cyan #05d9e8`, `--accent #ff2a6d`, `--magenta #d300c5`, CRT scanlines, neon-border-glow card frames)
 - **Pure-helper test surface** — MRU stack semantics, hostname parsing, jump-index resolution in `lib/util.js` + pass match/parse + dl filename/collision helpers in `zpwrchrome-host/src/{ported,extensions}/` all unit-tested without a Chrome runtime
@@ -330,7 +331,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 | Total chrome.commands | **52** (manifest cap on default keys is 4 — this ext ships 4; the other 48 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **2888** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
+| Test suite | **2893** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -373,7 +374,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 2888 tests across 178 files. Covers:
+Stock Node ≥ 20, no external dependencies. 2893 tests across 178 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
