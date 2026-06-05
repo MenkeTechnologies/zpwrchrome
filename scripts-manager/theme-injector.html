@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // cyberpunk theme</title>
+  <link rel="stylesheet" href="theme-injector.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🌃</span>
+    <h1>zpwrchrome <span class="dim">cyberpunk page theme</span></h1>
+  </div>
+  <label class="toggle">
+    <input type="checkbox" id="enabled">
+    <span class="toggle-slider"></span>
+    <span class="toggle-label" id="toggle-label">off</span>
+  </label>
+</header>
+
+<section class="main">
+  <aside class="left">
+    <div class="card">
+      <h2>Intensity</h2>
+      <div class="radios" id="intensity">
+        <label><input type="radio" name="intensity" value="subtle"> <span>subtle — links / headings / scrollbars only</span></label>
+        <label><input type="radio" name="intensity" value="medium" checked> <span>medium — + backgrounds, inputs, code</span></label>
+        <label><input type="radio" name="intensity" value="full"> <span>full — + tables, cards, dimmed images</span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Knobs</h2>
+      <label class="switch">
+        <input type="checkbox" id="forceMono">
+        <span>force Share Tech Mono font</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="scanlines">
+        <span>CRT scanline overlay</span>
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>Site rules</h2>
+      <div class="radios" id="mode">
+        <label><input type="radio" name="mode" value="all"       checked> <span>theme every site (blocklist below)</span></label>
+        <label><input type="radio" name="mode" value="allowlist">         <span>theme only sites in the list below</span></label>
+      </div>
+      <label class="block">
+        <span class="lbl" id="domains-lbl">Blocklist (one host per line)</span>
+        <textarea id="domains" rows="6" spellcheck="false" placeholder="github.com&#10;gmail.com"></textarea>
+      </label>
+    </div>
+  </aside>
+
+  <section class="preview">
+    <div class="preview-bar">
+      <span class="dim">live preview · these elements are themed with your current settings</span>
+    </div>
+    <div class="preview-body" id="preview-body">
+      <h1>Heading 1 / page title</h1>
+      <h2>Heading 2 / section</h2>
+      <p>Body text with an <a href="#">inline link</a> and some <code>inline code</code>. Lorem ipsum dolor sit amet. Try a <code>code-snippet</code> and a <kbd>Cmd</kbd>+<kbd>K</kbd> shortcut.</p>
+      <pre>function example() {
+  return "preformatted block";
+}</pre>
+      <blockquote>A blockquote — restyled as a magenta-bordered callout.</blockquote>
+      <table>
+        <thead><tr><th>Col A</th><th>Col B</th><th>Col C</th></tr></thead>
+        <tbody>
+          <tr><td>row 1</td><td>value</td><td>123</td></tr>
+          <tr><td>row 2</td><td>value</td><td>456</td></tr>
+          <tr><td>row 3</td><td>value</td><td>789</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top: 14px;">
+        <input type="text" placeholder="input field…">
+        <button>button</button>
+        <select>
+          <option>option one</option>
+          <option>option two</option>
+        </select>
+      </div>
+      <p style="margin-top: 14px;">
+        <span class="badge">badge</span>
+        <span class="tag">tag</span>
+        <span class="chip">chip</span>
+      </p>
+    </div>
+  </section>
+</section>
+
+<footer class="botbar">
+  <span id="status" class="dim">—</span>
+  <span class="grow"></span>
+  <span class="dim">changes apply to other tabs immediately (storage onChanged broadcast)</span>
+</footer>
+
+<style id="zpwr-cyber-theme-preview"></style>
+<script src="theme-injector.js" type="module"></script>
+</body>
+</html>

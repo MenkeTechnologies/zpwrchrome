@@ -1678,6 +1678,7 @@ const CTX_ACT_SCR    = "zpc-act-scripts";
 const CTX_ACT_PASS   = "zpc-act-pass";
 const CTX_ACT_FIND   = "zpc-act-find";
 const CTX_ACT_UA     = "zpc-act-ua";
+const CTX_ACT_THEME  = "zpc-act-theme";
 const CTX_ACT_DIAG   = "zpc-act-diag";
 const CTX_ACT_SET    = "zpc-act-settings";
 const CTX_ACT_IFACE  = "zpc-act-interface";
@@ -1735,6 +1736,7 @@ chrome.runtime.onInstalled.addListener(() => {
   create({ id: CTX_ACT_PASS,   title: "Open pass manager",            contexts: act });
   create({ id: CTX_ACT_FIND,   title: "Find in all tabs",             contexts: act });
   create({ id: CTX_ACT_UA,     title: "User-Agent switcher",          contexts: act });
+  create({ id: CTX_ACT_THEME,  title: "Cyberpunk page theme",         contexts: act });
   create({ id: CTX_ACT_DIAG,   title: "Open diagnostics",             contexts: act });
   create({ id: CTX_ACT_SHOT,   title: "Full-page screenshot (this tab)", contexts: act });
   create({ id: CTX_ACT_SEP1,   type: "separator",                     contexts: act });
@@ -1763,6 +1765,7 @@ if (chrome.contextMenus) {
       [CTX_ACT_PASS]:   "/scripts-manager/pass.html",
       [CTX_ACT_FIND]:   "/scripts-manager/find-all.html",
       [CTX_ACT_UA]:     "/scripts-manager/ua-switcher.html",
+      [CTX_ACT_THEME]:  "/scripts-manager/theme-injector.html",
       [CTX_ACT_DIAG]:   "/scripts-manager/dl-diag.html",
       [CTX_ACT_SET]:    "/scripts-manager/dl-settings.html",
       [CTX_ACT_IFACE]:  "/scripts-manager/dl-interface.html",
