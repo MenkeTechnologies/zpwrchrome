@@ -198,7 +198,7 @@
       <code>chrome.userScripts</code>; and a frecency-ranked
       <code>chrome.history</code> search replaces Chrome's built-in
       <code>chrome://history</code> page on <code>Cmd+Y</code>.
-      <strong>6,838 JS lines + 1,104 CSS lines + 22,511 test lines &middot; 54 commands &middot; 19 message handlers &middot; 2923 tests passing</strong>.
+      <strong>6,838 JS lines + 1,104 CSS lines + 22,517 test lines &middot; 54 commands &middot; 19 message handlers &middot; 2923 tests passing</strong>.
     </p>
 
     <div class="stat-grid">
@@ -217,8 +217,8 @@
     </div>
 
     <div>
-      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 30,743 total lines</p>
-      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:22.2%;"></div><span class="bar-label">JS &middot; 6,838 lines &middot; 22.2%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:73.2%;"></div><span class="bar-label">Tests &middot; 22,511 lines &middot; 73.2%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.6%;"></div><span class="bar-label">CSS &middot; 1,104 lines &middot; 3.6%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:0.9%;"></div><span class="bar-label">HTML &middot; 290 lines &middot; 0.9%</span></div>
+      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 30,749 total lines</p>
+      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:22.2%;"></div><span class="bar-label">JS &middot; 6,838 lines &middot; 22.2%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:73.2%;"></div><span class="bar-label">Tests &middot; 22,517 lines &middot; 73.2%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.6%;"></div><span class="bar-label">CSS &middot; 1,104 lines &middot; 3.6%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:0.9%;"></div><span class="bar-label">HTML &middot; 290 lines &middot; 0.9%</span></div>
     </div>
 
     <h2 class="section"><span class="hash">~</span>SUBSYSTEM BREAKDOWN</h2>
@@ -238,6 +238,36 @@
           <h3>Modal (content script)</h3>
           <ul class="files"><li><code>modal/content.template.js</code> &mdash; 930 lines</li></ul>
           <p>Shadow-DOM overlay matching the popup category set. Dormant by default after v0.4.16 — Cmd+E now opens the toolbar popup directly.</p>
+        </div>
+        <div class="card">
+          <h3>Page-theme injector (content script)</h3>
+          <ul class="files"><li><code>modal/cyber-theme.js</code> &mdash; 0 lines</li><li><code>lib/cyber-theme-css.js</code> &mdash; 0 lines</li><li><code>scripts-manager/theme-injector.html</code> &mdash; 0 lines</li></ul>
+          <p>document_start content script. Reads chrome.storage.local[&quot;theme.injector&quot;]; paints arbitrary pages with the strykelang HUD palette. Knobs: intensity (subtle/medium/full), dark mode (color-scheme + AUI / generic white-card overrides, no filter:invert), forceMono (icon-font carriers exempted), scanlines. Per-host block/allowlist.</p>
+        </div>
+        <div class="card">
+          <h3>Reader mode (on-demand content script)</h3>
+          <ul class="files"><li><code>modal/reader-mode.js</code> &mdash; 0 lines</li><li><code>lib/reader-mode-css.js</code> &mdash; 0 lines</li><li><code>scripts-manager/reader-mode.html</code> &mdash; 0 lines</li></ul>
+          <p>document_idle content script. Heuristic article extraction (largest &lt;article&gt; → &lt;main&gt; → densest paragraph cluster outside noise containers); clone sanitized (script/style/iframe/form/inline-handlers stripped); rendered in a fixed overlay with the strykelang palette. Four themes × three font families; A−/A+ live bumpers; Esc closes.</p>
+        </div>
+        <div class="card">
+          <h3>Turn off the lights (on-demand content script)</h3>
+          <ul class="files"><li><code>modal/lights-off.js</code> &mdash; 0 lines</li><li><code>lib/lights-off-css.js</code> &mdash; 0 lines</li><li><code>scripts-manager/lights-off.html</code> &mdash; 0 lines</li></ul>
+          <p>document_idle content script. Toggle messages from the SW. Full-viewport overlay at z-index 2147483646; every visible &lt;video&gt; + its ancestor chain lifted to z-index 2147483647 + position:relative. Click overlay or Esc undims and restores the original z-index / position values tagged on each touched element.</p>
+        </div>
+        <div class="card">
+          <h3>JSON viewer (content script)</h3>
+          <ul class="files"><li><code>modal/json-viewer.js</code> &mdash; 0 lines</li><li><code>lib/json-format.js</code> &mdash; 0 lines</li></ul>
+          <p>document_end content script. Auto-detects JSON-served pages, replaces &lt;pre&gt; with a collapsible tree. RFC 6901 pointer copy, prettyPrint / minify toggles, clipboard with execCommand fallback for non-secure contexts.</p>
+        </div>
+        <div class="card">
+          <h3>User-Agent switcher</h3>
+          <ul class="files"><li><code>modal/cyber-theme.js (n/a)</code> &mdash; 0 lines</li><li><code>scripts-manager/ua-switcher.html</code> &mdash; 0 lines</li><li><code>lib/ua-presets.js</code> &mdash; 0 lines</li></ul>
+          <p>16 vendor-shipped UA presets across 6 families plus a custom field. Backed by a single chrome.declarativeNetRequest dynamic rule (id 1001) that rewrites the User-Agent request header.</p>
+        </div>
+        <div class="card">
+          <h3>Find-in-all-tabs</h3>
+          <ul class="files"><li><code>scripts-manager/find-all.html</code> &mdash; 0 lines</li><li><code>lib/find-snippet.js</code> &mdash; 0 lines</li></ul>
+          <p>Parallel innerText scrape across every open http(s) tab capped at 200 KB / tab. fzf-fuzzy filter; Enter activates the chosen tab and scrolls to the match via window.find().</p>
         </div>
         <div class="card">
           <h3>Pure helpers</h3>
@@ -744,7 +774,7 @@
         <tr><td><code>tests/static.test.js</code></td><td class="num">41</td><td class="num">561</td></tr>
         <tr><td><code>tests/stress-memory-scale.test.js</code></td><td class="num">11</td><td class="num">170</td></tr>
         <tr><td><code>tests/stress-pathological-fzf.test.js</code></td><td class="num">15</td><td class="num">139</td></tr>
-        <tr><td><code>tests/stress-timing-budgets.test.js</code></td><td class="num">11</td><td class="num">161</td></tr>
+        <tr><td><code>tests/stress-timing-budgets.test.js</code></td><td class="num">11</td><td class="num">167</td></tr>
         <tr><td><code>tests/sync-failure-paths.test.js</code></td><td class="num">14</td><td class="num">81</td></tr>
         <tr><td><code>tests/sync-register.test.js</code></td><td class="num">20</td><td class="num">112</td></tr>
         <tr><td><code>tests/sync.test.js</code></td><td class="num">30</td><td class="num">185</td></tr>
@@ -772,7 +802,7 @@
         <tr><td><code>tests/util-mru-cap-edge.test.js</code></td><td class="num">10</td><td class="num">63</td></tr>
         <tr><td><code>tests/validate-userscript-unit.test.js</code></td><td class="num">13</td><td class="num">87</td></tr>
         <tr><td><code>tests/wappalyzer-engine.test.js</code></td><td class="num">19</td><td class="num">200</td></tr>
-        <tr><td><code>TOTAL</code></td><td class="num"><strong>2923</strong></td><td class="num"><strong>22,511</strong></td></tr>
+        <tr><td><code>TOTAL</code></td><td class="num"><strong>2923</strong></td><td class="num"><strong>22,517</strong></td></tr>
       </tbody>
     </table>
 
