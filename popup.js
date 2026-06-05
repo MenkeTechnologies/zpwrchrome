@@ -914,6 +914,12 @@ document.getElementById("open-pass").addEventListener("click", (e) => {
   window.close();
 });
 
+document.getElementById("open-find").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/find-all.html") });
+  window.close();
+});
+
 // ── bottom downloads strip (always-visible glance) ────────────────────
 //
 // Reuses the SW's cached dl.snapshot for an instant first paint, then
