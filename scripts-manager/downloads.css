@@ -374,3 +374,12 @@ a.tbtn { display: inline-flex; align-items: center; justify-content: center; tex
   background: linear-gradient(180deg, var(--cyan), var(--magenta));
   border-radius: 4px;
 }
+
+mark.fzf-hl {
+  background: rgba(5, 217, 232, 0.18);
+  color: var(--cyan);
+  border-bottom: 1px solid var(--cyan);
+  padding: 0;
+  border-radius: 0;
+  font-weight: inherit;
+}

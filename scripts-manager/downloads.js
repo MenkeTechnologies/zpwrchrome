@@ -6,6 +6,7 @@
 
 import "../lib/page-nav.js";
 import { loadSettings, DL_DEFAULTS } from "./dl-settings.js";
+import { fzfMatch, highlightWithIndices } from "../lib/fzf.js";
 
 const $list   = document.getElementById("list");
 const $search = document.getElementById("search");
@@ -94,6 +95,13 @@ function fmtDate(unixSec) {
   return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
 }
 
+function fzfHl(text, query) {
+  const t = String(text ?? "");
+  if (!query) return escapeHtml(t);
+  const m = fzfMatch(query, t);
+  return m ? highlightWithIndices(t, m.indices, escapeHtml) : escapeHtml(t);
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
@@ -104,7 +112,7 @@ function escapeHtml(s) {
 
 function filterJobs() {
   const cat = state.category;
-  const f   = state.filter.trim().toLowerCase();
+  const f   = state.filter.trim();
   const now = Math.floor(Date.now() / 1000);
 
   return state.jobs.filter((j) => {
@@ -134,10 +142,9 @@ function filterJobs() {
       if (j.status !== "cancelled") return false;
     }
 
-    // text filter
+    // text filter — fzf over name + url, either matching counts
     if (f) {
-      const haystack = (name + " " + (j.url || "")).toLowerCase();
-      if (!haystack.includes(f)) return false;
+      if (!fzfMatch(f, name) && !fzfMatch(f, j.url || "")) return false;
     }
     return true;
   });
@@ -189,8 +196,10 @@ function rowHtml(job) {
   const showSpeed  = job.status === "active";
   const showEta    = job.status === "active";
   const isSel      = state.selected === job.gid;
-  const escName    = escapeHtml(name || "(unnamed)");
-  const escUrl     = escapeHtml(job.url || "");
+  const q          = state.filter.trim();
+  const escName    = fzfHl(name || "(unnamed)", q);
+  const urlPlain   = escapeHtml(job.url || "");
+  const escUrl     = fzfHl(job.url || "", q);
   const escDest    = escapeHtml(job.dest || "");
   const dateStr    = fmtDate(job.started_at);
   // Host-computed presence flag (dl.list returns dest_exists per row). For
@@ -209,7 +218,7 @@ function rowHtml(job) {
       <span class="ico">${ICONS[kind] || "📄"}</span>
       <div class="body">
         <span class="name" title="${escDest}${isMissing ? ' (deleted)' : ''}">${escName}</span>
-        <span class="url"  title="${escUrl}">${escUrl}</span>
+        <span class="url"  title="${urlPlain}">${escUrl}</span>
         <span class="meta">
           ${statTag}
           <span>${sizeStr}</span>
