@@ -23,10 +23,10 @@ test("refreshLog stores entries in logEntries then calls renderLog", () => {
   assert.match(js, /updateLogCount\(\)/);
 });
 
-test("renderLog filters by script name id and url case-insensitively", () => {
-  assert.match(renderLog[0], /\(e\.name \|\| ""\)\.toLowerCase\(\)\.includes\(f\)/);
-  assert.match(renderLog[0], /\(e\.script \|\| ""\)\.toLowerCase\(\)\.includes\(f\)/);
-  assert.match(renderLog[0], /\(e\.url \|\| ""\)\.toLowerCase\(\)\.includes\(f\)/);
+test("renderLog fzf-filters by script name id and url", () => {
+  assert.match(renderLog[0], /fzfMatch\(f, e\.name \|\| ""\)/);
+  assert.match(renderLog[0], /fzfMatch\(f, e\.script \|\| ""\)/);
+  assert.match(renderLog[0], /fzfMatch\(f, e\.url \|\| ""\)/);
 });
 
 test("renderLog empty-with-filter message says no matches", () => {
@@ -46,9 +46,11 @@ test("renderLog table row includes tabId and frame columns", () => {
   assert.match(renderLog[0], /\$\{e\.frame \?\? 0\}/);
 });
 
-test("renderLog escapes HTML in script name and url cells", () => {
-  assert.match(renderLog[0], /escapeHtml\(e\.name/);
-  assert.match(renderLog[0], /escapeHtml\(\(e\.url/);
+test("renderLog HTML-safe-renders script name and url cells via fzfHl", () => {
+  assert.match(renderLog[0], /fzfHl\(e\.name \|\| "\(unnamed\)", f\)/);
+  assert.match(renderLog[0], /fzfHl\(url, f\)/);
+  // href stays plain escapeHtml — never wrapped in <mark>
+  assert.match(renderLog[0], /href="\$\{escapeHtml\(e\.url \|\| ""\)\}"/);
 });
 
 test("renderLog url cell links open in new tab with noopener", () => {
