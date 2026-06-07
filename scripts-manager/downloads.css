@@ -27,7 +27,7 @@ body {
 /* ── topbar ───────────────────────────────────────────────────────── */
 .topbar {
   display: grid;
-  grid-template-columns: 220px 1fr 280px;
+  grid-template-columns: 220px 1fr;
   align-items: center;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
@@ -94,7 +94,7 @@ a.tbtn { display: inline-flex; align-items: center; justify-content: center; tex
 .tmenu-item:hover { background: var(--bg-hover); color: var(--cyan); }
 .tmenu-item.danger { color: var(--accent); }
 .tmenu-item.danger:hover { background: var(--bg-hover); }
-.searchwrap { display: flex; justify-content: flex-end; }
+.searchwrap { display: flex; flex: 1; min-width: 0; margin-left: 8px; }
 .search {
   width: 100%;
   max-width: 280px;
