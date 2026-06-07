@@ -47,17 +47,17 @@ test("filterScripts returns all rows when filter input is empty", () => {
   assert.match(filterFn[0], /if \(!f\) return rows/);
 });
 
-test("filterScripts matches script name case-insensitively", () => {
-  assert.match(filterFn[0], /\(s\.name \|\| ""\)\.toLowerCase\(\)\.includes\(f\)/);
+test("filterScripts fzf-matches script name", () => {
+  assert.match(filterFn[0], /fzfMatch\(f, s\.name \|\| ""\)/);
 });
 
-test("filterScripts matches namespace from parsed metadata", () => {
-  assert.match(filterFn[0], /meta\.namespace \|\| ""\)\.toLowerCase\(\)\.includes\(f\)/);
+test("filterScripts fzf-matches namespace from parsed metadata", () => {
+  assert.match(filterFn[0], /fzfMatch\(f, meta\.namespace \|\| ""\)/);
 });
 
-test("filterScripts matches any @match or @include pattern substring", () => {
+test("filterScripts fzf-matches any @match or @include pattern", () => {
   assert.match(filterFn[0], /\[\.\.\.\(meta\.matches \|\| \[\]\), \.\.\.\(meta\.includes \|\| \[\]\)\]/);
-  assert.match(filterFn[0], /\.some\(\(p\) => p\.toLowerCase\(\)\.includes\(f\)\)/);
+  assert.match(filterFn[0], /\.some\(\(p\) => fzfMatch\(f, p\)\)/);
 });
 
 test("render count shows filtered of total with singular script grammar", () => {

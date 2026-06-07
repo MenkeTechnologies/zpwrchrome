@@ -735,6 +735,7 @@ function activate(idx) {
     chrome.tabs.create({ url: t.url, active: true }, () => window.close());
   } else {
     // "open", "tree", "minimap" — all wrap an open Tab.
+    if (typeof t.id !== "number") return;
     chrome.runtime.sendMessage({ kind: "activate", tabId: t.id }, () => window.close());
   }
 }

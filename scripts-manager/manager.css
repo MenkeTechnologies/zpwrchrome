@@ -500,3 +500,12 @@ kbd {
   border-radius: 4px;
   box-shadow: 0 0 6px var(--cyan-dim);
 }
+
+mark.fzf-hl {
+  background: rgba(5, 217, 232, 0.18);
+  color: var(--cyan);
+  border-bottom: 1px solid var(--cyan);
+  padding: 0;
+  border-radius: 0;
+  font-weight: inherit;
+}
