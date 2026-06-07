@@ -2628,6 +2628,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg?.kind === "activate") {
+    if (!Number.isInteger(msg.tabId)) {
+      sendResponse({ ok: false, error: "invalid tabId" });
+      return true;
+    }
     chrome.tabs.update(msg.tabId, { active: true }).then(() => {
       chrome.tabs.get(msg.tabId).then((t) => chrome.windows.update(t.windowId, { focused: true }));
       sendResponse({ ok: true });

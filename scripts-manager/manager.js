@@ -4,6 +4,7 @@ import {
   validateUserscript,
   userscriptId
 } from "../lib/userscript.js";
+import { fzfMatch, highlightWithIndices } from "../lib/fzf.js";
 
 const $list      = document.getElementById("list");
 const $newBtn    = document.getElementById("new-script");
@@ -41,6 +42,13 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
+}
+
+function fzfHl(text, query) {
+  const t = String(text ?? "");
+  if (!query) return escapeHtml(t);
+  const m = fzfMatch(query, t);
+  return m ? highlightWithIndices(t, m.indices, escapeHtml) : escapeHtml(t);
 }
 
 function fmtBytes(n) {
@@ -108,12 +116,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 refreshLog();
 
 function renderLog() {
-  const f = $logFilter.value.trim().toLowerCase();
+  const f = $logFilter.value.trim();
   const rows = logEntries.filter((e) => {
     if (!f) return true;
-    return (e.name || "").toLowerCase().includes(f)
-        || (e.script || "").toLowerCase().includes(f)
-        || (e.url || "").toLowerCase().includes(f);
+    return !!fzfMatch(f, e.name || "")
+        || !!fzfMatch(f, e.script || "")
+        || !!fzfMatch(f, e.url || "");
   });
   if (!rows.length) {
     $logList.innerHTML = `<tr class="empty-row"><td colspan="6" class="empty">${
@@ -127,12 +135,13 @@ function renderLog() {
     const d = new Date(e.when);
     const time = d.toLocaleTimeString() + "." + String(d.getMilliseconds()).padStart(3, "0");
     const date = d.toLocaleDateString();
+    const url = (e.url || "").slice(0, 80);
     return `
       <tr>
         <td class="num">${i + 1}</td>
         <td class="ver" title="${escapeHtml(d.toISOString())}">${escapeHtml(date)} <small>${escapeHtml(time)}</small></td>
-        <td class="name">${escapeHtml(e.name || "(unnamed)")} <small>${escapeHtml(e.script || "")}</small></td>
-        <td class="ver"><a class="home-link" href="${escapeHtml(e.url || "")}" target="_blank" rel="noopener">${escapeHtml((e.url || "").slice(0, 80))}</a></td>
+        <td class="name">${fzfHl(e.name || "(unnamed)", f)} <small>${fzfHl(e.script || "", f)}</small></td>
+        <td class="ver"><a class="home-link" href="${escapeHtml(e.url || "")}" target="_blank" rel="noopener">${fzfHl(url, f)}</a></td>
         <td class="ver">${e.tabId ?? "—"}</td>
         <td class="ver">${e.frame ?? 0}</td>
       </tr>
@@ -227,13 +236,15 @@ function sortValue(s, key) {
 }
 
 function filterScripts(rows) {
-  const f = $filter.value.trim().toLowerCase();
+  const f = $filter.value.trim();
   if (!f) return rows;
   return rows.filter((s) => {
     const meta = parseMetadata(s.src) || {};
-    return (s.name || "").toLowerCase().includes(f)
-        || (meta.namespace || "").toLowerCase().includes(f)
-        || [...(meta.matches || []), ...(meta.includes || [])].some((p) => p.toLowerCase().includes(f));
+    if (fzfMatch(f, s.name || "")) return true;
+    if (fzfMatch(f, meta.name || "")) return true;
+    if (fzfMatch(f, meta.namespace || "")) return true;
+    if ([...(meta.matches || []), ...(meta.includes || [])].some((p) => fzfMatch(f, p))) return true;
+    return false;
   });
 }
 
@@ -263,7 +274,8 @@ function render() {
 
 function rowHtml(s, idx) {
   const meta = parseMetadata(s.src) || {};
-  const name = escapeHtml(meta.name || s.name || "(unnamed)");
+  const q = $filter.value.trim();
+  const name = fzfHl(meta.name || s.name || "(unnamed)", q);
   const desc = meta.description ? `<small>${escapeHtml(meta.description.slice(0, 80))}</small>` : "";
   const ver  = escapeHtml(meta.version || "—");
   const size = fmtBytes(s.src?.length || 0);

@@ -2,6 +2,7 @@
 // ping the native host to verify end-to-end transport.
 
 import "../lib/page-nav.js";
+import { fzfMatch, highlightWithIndices } from "../lib/fzf.js";
 const $list    = document.getElementById("list");
 const $filter  = document.getElementById("filter");
 const $alive   = document.getElementById("alive");
@@ -18,17 +19,22 @@ function classify(label) {
   return "ok";
 }
 
-function fmt(entry) {
-  const { ts, label, ...rest } = entry;
-  const lvl = classify(label);
-  const body = Object.entries(rest).map(([k, v]) => {
+function bodyText(entry) {
+  const { ts: _ts, label: _label, ...rest } = entry;
+  return Object.entries(rest).map(([k, v]) => {
     const s = typeof v === "string" ? v : JSON.stringify(v);
     return `${k}=${s}`;
   }).join(" ");
+}
+
+function fmt(entry, q) {
+  const { ts, label } = entry;
+  const lvl = classify(label);
+  const body = bodyText(entry);
   return `<div class="diag-row lvl-${lvl}">
-    <span class="ts">${ts || ""}</span>
-    <span class="label">${label || ""}</span>
-    <span class="body">${escapeHtml(body)}</span>
+    <span class="ts">${escapeHtml(ts || "")}</span>
+    <span class="label">${fzfHl(label || "", q)}</span>
+    <span class="body">${fzfHl(body, q)}</span>
   </div>`;
 }
 
@@ -38,15 +44,22 @@ function escapeHtml(s) {
   }[c]));
 }
 
+function fzfHl(text, query) {
+  const t = String(text ?? "");
+  if (!query) return escapeHtml(t);
+  const m = fzfMatch(query, t);
+  return m ? highlightWithIndices(t, m.indices, escapeHtml) : escapeHtml(t);
+}
+
 function render() {
-  const f = state.filter.trim().toLowerCase();
+  const f = state.filter.trim();
   let entries = state.entries;
   if (f) {
-    entries = entries.filter((e) => JSON.stringify(e).toLowerCase().includes(f));
+    entries = entries.filter((e) => !!fzfMatch(f, e.label || "") || !!fzfMatch(f, bodyText(e)));
   }
   entries = entries.slice().reverse();   // newest first
   $list.innerHTML = entries.length
-    ? entries.map(fmt).join("")
+    ? entries.map((e) => fmt(e, f)).join("")
     : `<div class="diag-row"><span class="ts"></span><span class="label">empty</span><span class="body">no diagnostic entries yet — try a download or click "Ping host"</span></div>`;
   $count.textContent = `${entries.length} line${entries.length === 1 ? "" : "s"}`;
 }

@@ -6,6 +6,7 @@
 
 import "../lib/page-nav.js";
 import { formatEntry, validatePassPath, buildTree, derivePassPath } from "../lib/pass-entry.js";
+import { fzfMatch, highlightWithIndices } from "../lib/fzf.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -81,12 +82,17 @@ async function loadTree() {
 function renderTree() {
   const tree = $("tree");
   if (!state.tree) { tree.innerHTML = ""; return; }
-  const filter = state.filter.trim().toLowerCase();
+  const filter = state.filter.trim();
 
-  const matches = (path) => !filter || path.toLowerCase().includes(filter);
+  const matches = (path) => !filter || !!fzfMatch(filter, path);
   const dirHasMatch = (node) => {
     if (node.entries.some((e) => matches(e.path))) return true;
     return node.dirs.some(dirHasMatch);
+  };
+  const hl = (name) => {
+    if (!filter) return escapeHtml(name);
+    const m = fzfMatch(filter, name);
+    return m ? highlightWithIndices(name, m.indices, escapeHtml) : escapeHtml(name);
   };
 
   const renderNode = (node, isRoot) => {
@@ -99,7 +105,7 @@ function renderTree() {
         <div class="twrap">
           <span class="tcaret">${caret}</span>
           <span class="ticon">📁</span>
-          <span class="tname">${escapeHtml(dir.name)}</span>
+          <span class="tname">${hl(dir.name)}</span>
         </div>
         <div class="tchildren">${renderNode(dir, false)}</div>
       </div>`;
@@ -111,7 +117,7 @@ function renderTree() {
         <div class="twrap">
           <span class="tcaret"> </span>
           <span class="ticon">⛀</span>
-          <span class="tname">${escapeHtml(entry.name)}</span>
+          <span class="tname">${hl(entry.name)}</span>
         </div>
       </div>`;
     }
