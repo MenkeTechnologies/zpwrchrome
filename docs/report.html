@@ -421,7 +421,7 @@
 
         <rect class="box host" x="780" y="64" width="262" height="80" />
         <text class="lbl"  x="792" y="84">zpwrchrome-host</text>
-        <text class="sub"  x="792" y="100">crates.io · v0.9.6</text>
+        <text class="sub"  x="792" y="100">crates.io · v0.9.7</text>
         <text class="sub"  x="792" y="114">one process per NM message</text>
         <text class="sub"  x="792" y="128">stdio: length-prefixed JSON</text>
 
@@ -819,7 +819,7 @@
       <div class="card"><h3>No build step</h3><p>Zero npm dependencies at runtime. No bundler, no transpiler. Pure ES modules in the SW; popup ships as a regular extension page; modal pre-builds via scripts/build-modal.sh inlining fonts + lib/fzf.js + lib/util.js into a single content-script file.</p></div>
       <div class="card"><h3>Native messaging host in Rust, not JS</h3><p><code>pass</code> + <code>gpg</code> can't run inside the SW (MV3 has no shell). One long-lived Rust process per Chrome session multiplexes pass + dl channels over the same length-prefixed JSON port (4-byte LE len, ≤1 MiB/msg per spec). Single install.sh writes the NM manifest for Chrome/Chromium/Brave/Edge on macOS+Linux.</p></div>
       <div class="card"><h3>Vendored Rust HTTP client, not aria2</h3><p>ureq + rustls compiled into the host gives portable HTTP/HTTPS with Range support — no <code>aria2</code> or curl binary on PATH. Pure-Rust TLS works on macOS aarch64 + Linux x86_64/aarch64 with no system OpenSSL dependency. Future-proof against OS TLS API churn.</p></div>
-      <div class="card"><h3>Segmented download via Range, file pre-allocated</h3><p>HEAD probe + 4-way parallel <code>Range</code> GETs. Destination file pre-allocated to total size via <code>set_len</code> so segment threads never collide on disk writes. <code>downloaded_in_seg</code> counter tracks per-segment progress so a mid-stream connection drop resumes via Range from the correct offset rather than restarting the segment.</p></div>
+      <div class="card"><h3>Segmented download via Range, file pre-allocated</h3><p>HEAD probe + 6-way parallel <code>Range</code> GETs. Destination file pre-allocated to total size via <code>set_len</code> so segment threads never collide on disk writes. <code>downloaded_in_seg</code> counter tracks per-segment progress so a mid-stream connection drop resumes via Range from the correct offset rather than restarting the segment.</p></div>
       <div class="card"><h3>Cookie + UA forwarded for logged-in URLs</h3><p>chrome.cookies.getAll(url) → Cookie header on every HEAD + GET. Without this, downloads behind a login (paywalls, GitHub private releases, session-piggybacked S3 URLs) silently 401 / 403. UA forwarded too so servers that key on UA (GitHub release filtering, browser-detection paywalls) behave identically to a regular browser download.</p></div>
       <div class="card"><h3>Clipboard auto-clear matches &lt;code&gt;pass -c&lt;/code&gt;</h3><p>45 s setTimeout on copy. Fail-open: if the SW dies before the timer fires the clipboard stays, which is the conservative direction (worst case the user sees their password longer; never accidentally clobbers a later copy they made).</p></div>
       <div class="card"><h3>fzf scorer ported from audio-haxor</h3><p>Same constants — boundary=9, camel=7, gap-start=-3, match=16. Visual parity (<mark class="fzf-hl">) across MenkeTechnologies' tools.</p></div>

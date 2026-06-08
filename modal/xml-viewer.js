@@ -21,13 +21,16 @@
   // either pre-check on edge inputs.
   if (document.documentElement?.dataset?.zpwrJsonViewer === "1") return;
 
-  const pre = document.body?.querySelector?.("pre");
+  // Trigger ONLY when the page is a "pure XML document" — server-declared
+  // XML Content-Type, or Chrome's plain rendering shape (body is exactly
+  // one `<pre>`). A `<pre>` anywhere on a rich HTML page is NOT enough
+  // (Prism / highlight.js code blocks would false-fire); a `.xml` URL
+  // alone is NOT enough either.
   const ctype = String(document.contentType || "").toLowerCase();
   const isXmlCt = /\/(xml|atom\+xml|rss\+xml|xhtml\+xml|svg\+xml|soap\+xml)|\+xml\b/.test(ctype);
-  const pathOnly = location.pathname.toLowerCase();
-  const isXmlExt = /\.(xml|xsd|xsl|xslt|rss|atom|svg|plist|kml|gpx|opml|fxml)(\?|$)/.test(pathOnly);
+  const pre = chromePlainPreShape();
 
-  if (!pre && !isXmlCt && !isXmlExt) return;
+  if (!pre && !isXmlCt) return;
 
   const raw = (pre?.textContent ?? document.body?.textContent ?? "").trim();
   if (!raw) return;
@@ -37,15 +40,6 @@
   if (head[0] !== "<") return;
   if (/^<!DOCTYPE\s+html/i.test(head)) return;
   if (/^<html[\s>]/i.test(head)) return;
-  // SVG-as-image already renders natively, but if the server served it
-  // as text/xml or application/xml, we get to enhance it. Skip when
-  // the page already has rendered SVG content (img/embed inserted by
-  // Chrome's image handler).
-  if (isXmlCt || isXmlExt || pre) {
-    // proceed
-  } else {
-    return;
-  }
 
   // Parse — DOMParser is available in every Chrome MV3 content-script.
   // Try `application/xml` first; fall back to `text/xml` so namespaced
@@ -65,6 +59,21 @@
   document.documentElement.dataset.zpwrXmlViewer = "1";
   injectStyles();
   buildPage(doc, raw);
+
+  // Chrome's "raw response" rendering shape: <body> has exactly one
+  // meaningful child and it is a <pre>. Anything richer (header, nav,
+  // multiple sections, sibling code blocks) is a real HTML page and
+  // must not be hijacked even if a child <pre> happens to parse.
+  function chromePlainPreShape() {
+    const body = document.body;
+    if (!body) return null;
+    const kids = Array.from(body.children).filter((el) => {
+      const t = el.tagName;
+      return t !== "SCRIPT" && t !== "STYLE" && t !== "LINK" && t !== "META";
+    });
+    if (kids.length !== 1) return null;
+    return kids[0].tagName === "PRE" ? kids[0] : null;
+  }
 
   // ─── Style injection ─────────────────────────────────────────────
   function injectStyles() {
