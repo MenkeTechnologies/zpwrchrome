@@ -1782,6 +1782,7 @@ const CTX_ACT_SCR    = "zpc-act-scripts";
 const CTX_ACT_PASS   = "zpc-act-pass";
 const CTX_ACT_FIND   = "zpc-act-find";
 const CTX_ACT_UA     = "zpc-act-ua";
+const CTX_ACT_MODHDR = "zpc-act-modhdr";
 const CTX_ACT_THEME  = "zpc-act-theme";
 const CTX_ACT_LIGHTS = "zpc-act-lights";
 const CTX_ACT_LIGHTSCFG = "zpc-act-lightscfg";
@@ -1863,6 +1864,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_PASS,   title: "Open pass manager",       contexts: act });
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_FIND,   title: "Find in all tabs",        contexts: act });
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_UA,     title: "User-Agent switcher",     contexts: act });
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_MODHDR, title: "ModHeader (HTTP headers)", contexts: act });
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_THEME,  title: "Cyberpunk page theme",    contexts: act });
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_LIGHTSCFG, title: "Lights-off settings…", contexts: act });
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_READERCFG, title: "Reader-mode settings…", contexts: act });
@@ -1896,6 +1898,7 @@ if (chrome.contextMenus) {
       [CTX_ACT_PASS]:   "/scripts-manager/pass.html",
       [CTX_ACT_FIND]:   "/scripts-manager/find-all.html",
       [CTX_ACT_UA]:     "/scripts-manager/ua-switcher.html",
+      [CTX_ACT_MODHDR]: "/scripts-manager/modheader.html",
       [CTX_ACT_THEME]:  "/scripts-manager/theme-injector.html",
       [CTX_ACT_LIGHTSCFG]: "/scripts-manager/lights-off.html",
       [CTX_ACT_READERCFG]: "/scripts-manager/reader-mode.html",
