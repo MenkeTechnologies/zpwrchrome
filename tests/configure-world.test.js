@@ -51,7 +51,7 @@ test("syncUserScripts unregister runs before building new registrations", () => 
   const end = bg.indexOf("chrome.runtime.onInstalled.addListener(initUserscripts)");
   const sync = bg.slice(start, end);
   const unreg = sync.indexOf("chrome.userScripts.unregister");
-  const loop = sync.indexOf("for (const s of scripts)");
+  const loop = sync.indexOf("for (let i = 0; i < scripts.length; i++)");
   assert.ok(unreg >= 0 && loop >= 0 && unreg < loop);
 });
 
