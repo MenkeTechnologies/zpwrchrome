@@ -27,6 +27,12 @@ import { GM_SHIM_SOURCE } from "./lib/gm-shim.js";
 import { matchIn, parseEntry, fallbackUsernameFromPath, fallbackUrlFromPath } from "./lib/bp-pass.js";
 import { computeOtpFromUrl } from "./lib/totp.js";
 import { UA_PRESETS, getPreset, presetGroups, resolveUA } from "./lib/ua-presets.js";
+import {
+  buildDnrRules as modheaderBuildDnrRules,
+  defaultModheaderState,
+  MODHEADER_RULE_BASE,
+  MODHEADER_RULE_CAP,
+} from "./lib/modheader.js";
 import { STATE_KEY as DL_POSTCMD_KEY, pickRule as pickPostCmdRule, buildSpawn as buildPostCmdSpawn } from "./lib/dl-postcommands.js";
 import { compileFingerprints, detect as wappDetect, scrapeSignals } from "./lib/wappalyzer/engine.js";
 // JSON-module import attributes (`with { type: "json" }`) load
@@ -308,6 +314,45 @@ async function syncUaRule(state) {
 // Run once on SW boot — reapply whatever was persisted so settings
 // survive SW suspension.
 (async () => { try { await syncUaRule(await getUaState()); } catch {} })();
+
+// ─── ModHeader: modify HTTP request/response headers + URL redirects ──
+//
+// Generalisation of the UA switcher. Multiple profiles, each with N rules;
+// only the active profile's enabled rules project into
+// chrome.declarativeNetRequest dynamic rules. Pure projection helper lives
+// in lib/modheader.js for unit testing without a Chrome runtime. DNR rule
+// IDs 2000..2999 are reserved (UA switcher owns 1001 — do not overlap).
+const MODHEADER_STATE_KEY = "modheader.state";
+
+async function getModheaderState() {
+  const bag = await chrome.storage.local.get(MODHEADER_STATE_KEY);
+  const s = bag?.[MODHEADER_STATE_KEY];
+  if (!s || !Array.isArray(s.profiles) || !s.profiles.length) return defaultModheaderState();
+  return s;
+}
+
+async function setModheaderState(next) {
+  await chrome.storage.local.set({ [MODHEADER_STATE_KEY]: next });
+  await syncModheaderRules(next);
+  return next;
+}
+
+async function syncModheaderRules(state) {
+  if (!chrome.declarativeNetRequest?.updateDynamicRules) return;
+  const removeRuleIds = [];
+  for (let i = 0; i < MODHEADER_RULE_CAP; i++) removeRuleIds.push(MODHEADER_RULE_BASE + i);
+  const addRules = modheaderBuildDnrRules(state);
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules });
+    diagPush("modheader.rule.sync", { count: addRules.length });
+  } catch (e) {
+    diagPush("modheader.rule.err", { err: String(e?.message || e) });
+    console.warn("[zpwrchrome] modheader rule sync:", e?.message || e);
+  }
+}
+
+// Reapply persisted rules on SW boot so settings survive suspension.
+(async () => { try { await syncModheaderRules(await getModheaderState()); } catch {} })();
 
 async function passMatchActive() {
   const t = await getActive();
@@ -2926,6 +2971,124 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     setUaState({ enabled: false })
       .then((state) => sendResponse({ ok: true, state }))
       .catch((e)    => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+
+  // --- ModHeader ---
+  if (msg?.kind === "modheader.get") {
+    (async () => {
+      const state = await getModheaderState();
+      sendResponse({ ok: true, state, dnr: modheaderBuildDnrRules(state) });
+    })();
+    return true;
+  }
+  if (msg?.kind === "modheader.set") {
+    (async () => {
+      try {
+        const cur = await getModheaderState();
+        const next = { ...cur, ...(msg.patch || {}) };
+        await setModheaderState(next);
+        sendResponse({ ok: true, state: next });
+      } catch (e) { sendResponse({ ok: false, err: String(e?.message || e) }); }
+    })();
+    return true;
+  }
+  if (msg?.kind === "modheader.profile.add") {
+    (async () => {
+      try {
+        const cur = await getModheaderState();
+        const id = "p_" + Math.random().toString(36).slice(2, 10);
+        const profile = {
+          id,
+          name: String(msg.name || "New profile").slice(0, 80),
+          color: String(msg.color || "#05d9e8").slice(0, 16),
+          rules: [],
+        };
+        const next = { ...cur, profiles: [...cur.profiles, profile], activeProfileId: id };
+        await setModheaderState(next);
+        sendResponse({ ok: true, state: next, profile });
+      } catch (e) { sendResponse({ ok: false, err: String(e?.message || e) }); }
+    })();
+    return true;
+  }
+  if (msg?.kind === "modheader.profile.delete") {
+    (async () => {
+      try {
+        const cur = await getModheaderState();
+        const profiles = cur.profiles.filter((p) => p.id !== msg.id);
+        if (!profiles.length) profiles.push(defaultModheaderState().profiles[0]);
+        const activeProfileId = cur.activeProfileId === msg.id ? profiles[0].id : cur.activeProfileId;
+        const next = { ...cur, profiles, activeProfileId };
+        await setModheaderState(next);
+        sendResponse({ ok: true, state: next });
+      } catch (e) { sendResponse({ ok: false, err: String(e?.message || e) }); }
+    })();
+    return true;
+  }
+  if (msg?.kind === "modheader.profile.update") {
+    (async () => {
+      try {
+        const cur = await getModheaderState();
+        const profiles = cur.profiles.map((p) => p.id === msg.id ? { ...p, ...(msg.patch || {}) } : p);
+        const next = { ...cur, profiles };
+        await setModheaderState(next);
+        sendResponse({ ok: true, state: next });
+      } catch (e) { sendResponse({ ok: false, err: String(e?.message || e) }); }
+    })();
+    return true;
+  }
+  if (msg?.kind === "modheader.rule.add") {
+    (async () => {
+      try {
+        const cur = await getModheaderState();
+        const id = "r_" + Math.random().toString(36).slice(2, 10);
+        const rule = {
+          id, enabled: true,
+          kind: msg.rule?.kind === "response" || msg.rule?.kind === "redirect" ? msg.rule.kind : "request",
+          name: String(msg.rule?.name || ""),
+          value: String(msg.rule?.value || ""),
+          operation: msg.rule?.operation === "append" || msg.rule?.operation === "remove" ? msg.rule.operation : "set",
+          urlFilter: String(msg.rule?.urlFilter || ""),
+          resourceTypes: Array.isArray(msg.rule?.resourceTypes) ? msg.rule.resourceTypes : [],
+        };
+        const profiles = cur.profiles.map((p) =>
+          p.id === msg.profileId ? { ...p, rules: [...p.rules, rule] } : p
+        );
+        const next = { ...cur, profiles };
+        await setModheaderState(next);
+        sendResponse({ ok: true, state: next, rule });
+      } catch (e) { sendResponse({ ok: false, err: String(e?.message || e) }); }
+    })();
+    return true;
+  }
+  if (msg?.kind === "modheader.rule.update") {
+    (async () => {
+      try {
+        const cur = await getModheaderState();
+        const profiles = cur.profiles.map((p) => {
+          if (p.id !== msg.profileId) return p;
+          const rules = p.rules.map((r) => r.id === msg.ruleId ? { ...r, ...(msg.patch || {}) } : r);
+          return { ...p, rules };
+        });
+        const next = { ...cur, profiles };
+        await setModheaderState(next);
+        sendResponse({ ok: true, state: next });
+      } catch (e) { sendResponse({ ok: false, err: String(e?.message || e) }); }
+    })();
+    return true;
+  }
+  if (msg?.kind === "modheader.rule.delete") {
+    (async () => {
+      try {
+        const cur = await getModheaderState();
+        const profiles = cur.profiles.map((p) =>
+          p.id === msg.profileId ? { ...p, rules: p.rules.filter((r) => r.id !== msg.ruleId) } : p
+        );
+        const next = { ...cur, profiles };
+        await setModheaderState(next);
+        sendResponse({ ok: true, state: next });
+      } catch (e) { sendResponse({ ok: false, err: String(e?.message || e) }); }
+    })();
     return true;
   }
 

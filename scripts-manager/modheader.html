@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // modheader</title>
+  <link rel="stylesheet" href="modheader.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🧬</span>
+    <h1>zpwrchrome <span class="dim">modheader</span></h1>
+  </div>
+  <label class="toggle">
+    <input type="checkbox" id="enabled">
+    <span class="toggle-slider"></span>
+    <span class="toggle-label" id="toggle-label">off</span>
+  </label>
+</header>
+
+<section class="main">
+  <aside class="left">
+    <div class="card">
+      <h2>Profiles</h2>
+      <div id="profile-list" class="profile-list"></div>
+      <div class="row">
+        <button class="btn" id="b-add-profile">+ profile</button>
+        <button class="btn ghost" id="b-rename-profile">rename</button>
+        <button class="btn danger" id="b-delete-profile">delete</button>
+      </div>
+      <div class="hint">
+        Only the <strong>active</strong> profile's enabled rules are sent to
+        <code>declarativeNetRequest</code>. Disabled rules and inactive
+        profiles stay in storage but do not affect any request.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Active state</h2>
+      <div class="current">
+        <div class="row"><span class="lbl">status</span><span id="cur-status" class="val">—</span></div>
+        <div class="row"><span class="lbl">profile</span><span id="cur-profile" class="val">—</span></div>
+        <div class="row"><span class="lbl">live DNR</span><span id="cur-dnr" class="val">—</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <section class="rules-pane">
+    <div class="rules-head">
+      <h2 id="rules-title">Rules</h2>
+      <div class="row">
+        <button class="btn"        id="b-add-req">+ request header</button>
+        <button class="btn"        id="b-add-res">+ response header</button>
+        <button class="btn"        id="b-add-redir">+ redirect</button>
+      </div>
+    </div>
+    <div class="rules-list" id="rules-list"></div>
+  </section>
+</section>
+
+<footer class="botbar">
+  <span id="status" class="dim">—</span>
+  <span class="grow"></span>
+  <span class="dim">request/response headers + url redirects via declarativeNetRequest</span>
+</footer>
+
+<script src="modheader.js" type="module"></script>
+</body>
+</html>
