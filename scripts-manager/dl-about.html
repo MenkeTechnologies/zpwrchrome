@@ -70,7 +70,10 @@
       <code>.plist</code> / <code>.kml</code> / <code>.gpx</code> /
       <code>.opml</code> / <code>.fxml</code> URLs, and a
       <strong>User-Agent switcher</strong> backed by
-      <code>chrome.declarativeNetRequest</code> dynamic rules.
+      <code>chrome.declarativeNetRequest</code> dynamic rules, and a
+      <strong>ModHeader-style HTTP header manager</strong> (multi-profile
+      request/response header set/append/remove plus URL redirects, also
+      via <code>chrome.declarativeNetRequest</code>).
     </p>
 
     <h3>XML viewer</h3>
@@ -182,6 +185,40 @@
       <li>A full-viewport <code>&lt;div&gt;</code> overlay sits one z-index below the video chain at <code>2147483646</code> with the configured opacity, color, and CSS fade. Click the overlay or press <kbd>Esc</kbd> to undim &mdash; both restore the original <code>z-index</code> / <code>position</code> values via the <code>data-zpwr-lights-lifted</code> attribute we tagged on each touched element.</li>
       <li>Settings (<code>scripts-manager/lights-off.html</code>): opacity 0&ndash;1 slider, fade duration ms, overlay color picker, auto-on toggle (dim automatically on any page that has a <code>&lt;video&gt;</code>), blocklist / allowlist textarea (one host per line, dot-anchored subdomain match), live preview pane.</li>
       <li>Per-host routing matches the cyber-theme injector model: <code>all</code> and <code>blocklist</code> treat the textarea as exclusions, <code>allowlist</code> flips polarity. Settings persist in <code>chrome.storage.local</code> under the <code>lights.off</code> key.</li>
+    </ul>
+
+    <h3>ModHeader (HTTP header manager)</h3>
+    <p>
+      Multi-profile request/response header editor + URL redirect manager
+      modeled on the ModHeader extension. Configure at <em>ModHeader (HTTP
+      headers)</em> on the toolbar context menu or from the global nav strip.
+      Only the <strong>active</strong> profile's enabled rules project into
+      <code>chrome.declarativeNetRequest</code> dynamic rules (id range
+      <code>2000-2999</code>; the UA switcher owns <code>1001</code>). Rules,
+      profiles, and the master enable bit persist under
+      <code>chrome.storage.local["modheader.state"]</code> and survive SW
+      suspension &mdash; rules re-apply on every boot.
+    </p>
+    <ul>
+      <li><strong>Rule kinds</strong> &mdash; <em>request header</em> with
+      <code>set</code> / <code>append</code> / <code>remove</code>;
+      <em>response header</em> with the same three operations; <em>URL
+      redirect</em> that rewrites a matched URL to the rule's value (limited
+      by Chrome to <code>main_frame</code> + <code>sub_frame</code> resource
+      types).</li>
+      <li><strong>Per-rule URL filter</strong> &mdash; each rule carries its
+      own DNR <code>urlFilter</code>, so one profile can stack site-specific
+      overrides (default <code>*</code> = all requests). Pure projector in
+      <code>lib/modheader.js</code> normalizes blank filters, lower-cases
+      header names, and drops <code>value</code> on <code>remove</code> (DNR
+      rejects it otherwise).</li>
+      <li><strong>Profiles</strong> &mdash; sidebar list, click to activate;
+      add / rename / delete; only one is active at a time. Disabled rules
+      and inactive profiles stay in storage but do not affect any request.</li>
+      <li><strong>No content-script injection</strong> &mdash; everything
+      flows through <code>declarativeNetRequest.updateDynamicRules</code>,
+      so the page's own JS still sees the original request URL and the page's
+      own <code>document.cookie</code>; only the wire-level request changes.</li>
     </ul>
 
     <h3>Cyberpunk page-theme injector</h3>
