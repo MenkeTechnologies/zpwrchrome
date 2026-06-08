@@ -38,7 +38,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const READ_CHUNK: usize = 64 * 1024;
 const MIN_SEGMENT_BYTES: u64 = 1024 * 1024;
-const DEFAULT_SEGMENTS: u32 = 4;
+const DEFAULT_SEGMENTS: u32 = 6;
 const MAX_RETRIES: u32 = 4;
 const BASE_BACKOFF_MS: u64 = 200;
 const STATE_FLUSH_INTERVAL: Duration = Duration::from_millis(250);

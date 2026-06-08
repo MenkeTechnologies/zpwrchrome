@@ -1,6 +1,6 @@
 [package]
 name = "zpwrchrome-host"
-version = "0.9.6"
+version = "0.9.7"
 edition = "2021"
 authors = ["MenkeTechnologies <linux.dev25@gmail.com>"]
 description = "Native messaging host for the zpwrchrome Chrome extension. Rust port of browserpass-native (PROTOCOL.md v3.1.2) + extension actions for OTP, whole-store search, identity/CC autofill, and a file-state segmented download manager."
