@@ -2422,7 +2422,16 @@ async function configureUserScriptsWorld() {
   }
 }
 
+// Three listeners can fire syncUserScripts concurrently (onInstalled,
+// onStartup, and the bare boot call below). If their unregister() +
+// register() pairs interleave, chrome.userScripts.register sees the same
+// id twice and rejects the whole batch with "Duplicate script ID". This
+// in-flight promise lock collapses concurrent callers onto the first
+// one's result so we never race against ourselves.
+let _syncUserScriptsInFlight = null;
 async function syncUserScripts() {
+  if (_syncUserScriptsInFlight) return _syncUserScriptsInFlight;
+  _syncUserScriptsInFlight = (async () => {
   if (!chrome.userScripts) {
     await chrome.storage.local.set({
       "userScripts.error": "chrome.userScripts API not available — Chrome 120+ + Developer mode + per-extension 'Allow User Scripts' toggle required"
@@ -2558,6 +2567,9 @@ async function syncUserScripts() {
   }
 
   return { registered, skipped };
+  })();
+  try { return await _syncUserScriptsInFlight; }
+  finally { _syncUserScriptsInFlight = null; }
 }
 
 chrome.runtime.onInstalled.addListener(initUserscripts);

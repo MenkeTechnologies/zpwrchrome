@@ -94,6 +94,16 @@ test("syncUserScripts disambiguates duplicate registration IDs at load time", ()
   assert.match(fn, /\$\{id\}__\$\{(\+\+suffix|suffix)\}/);
 });
 
+test("syncUserScripts serializes concurrent callers via an in-flight mutex", () => {
+  // Three listeners can fire syncUserScripts in the same tick — onInstalled,
+  // onStartup, and the bare boot call. Without serialization their
+  // unregister()+register() pairs interleave and chrome.userScripts.register
+  // sees the same id twice and rejects with "Duplicate script ID". The
+  // in-flight promise lock collapses concurrent callers onto one execution.
+  assert.match(fn, /_syncUserScriptsInFlight/);
+  assert.match(fn, /if \(_syncUserScriptsInFlight\) return _syncUserScriptsInFlight/);
+});
+
 test("syncUserScripts logs registration and skip counts to console", () => {
   assert.match(fn, /registering", registrations\.length/);
   assert.match(fn, /skipped:", skipped/);
