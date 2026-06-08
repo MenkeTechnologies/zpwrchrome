@@ -12,20 +12,24 @@
   "use strict";
 
   // ─── Auto-detect ─────────────────────────────────────────────────
-  // Skip if not in a top frame, or already processed, or clearly not
-  // a JSON page. The body-text parse is the strongest signal — many
-  // servers don't set Content-Type correctly but the bytes parse fine.
+  // Trigger ONLY when the page is a "pure JSON document" — i.e. the
+  // browser is showing a raw JSON response, not an HTML page that happens
+  // to contain a JSON snippet in a `<pre>`. Two acceptable signals:
+  //   (1) server declared a JSON Content-Type, or
+  //   (2) the body is Chrome's plain rendering shape: exactly one
+  //       meaningful child element and it is a `<pre>`.
+  // A `.json` URL extension alone is NOT enough — many sites have ".json"
+  // somewhere in a doc URL. A `<pre>` anywhere on the page is NOT enough
+  // — Prism / highlight.js syntax-highlit code blocks would false-fire
+  // (e.g. aria2.github.io's `<pre class="line-numbers">` containing "1").
   if (window.top !== window.self) return;
   if (document.documentElement?.dataset?.zpwrJsonViewer === "1") return;
 
-  const pre = document.body?.querySelector?.("pre");
-  // The page must be just a `<pre>` (Chrome's default JSON / plain-text
-  // rendering) or have JSON content-type. Skip rich pages.
   const ctype = String(document.contentType || "").toLowerCase();
   const isJsonCt = /json/.test(ctype);
-  const isJsonExt = /\.json($|\?)/i.test(location.pathname);
+  const pre = chromePlainPreShape();
+  if (!pre && !isJsonCt) return;
 
-  if (!pre && !isJsonCt && !isJsonExt) return;
   const raw = (pre?.textContent ?? document.body?.textContent ?? "").trim();
   if (!raw) return;
 
@@ -45,6 +49,21 @@
   document.documentElement.dataset.zpwrJsonViewer = "1";
   injectStyles();
   buildPage(parsed, raw);
+
+  // Chrome's "raw response" rendering shape: <body> has exactly one
+  // meaningful child and it is a <pre>. Anything richer (header, nav,
+  // multiple sections, sibling code blocks) is a real HTML page and
+  // must not be hijacked even if a child <pre> happens to parse.
+  function chromePlainPreShape() {
+    const body = document.body;
+    if (!body) return null;
+    const kids = Array.from(body.children).filter((el) => {
+      const t = el.tagName;
+      return t !== "SCRIPT" && t !== "STYLE" && t !== "LINK" && t !== "META";
+    });
+    if (kids.length !== 1) return null;
+    return kids[0].tagName === "PRE" ? kids[0] : null;
+  }
 
   // ─── Style injection ─────────────────────────────────────────────
   function injectStyles() {
