@@ -81,8 +81,17 @@ test("syncUserScripts returns registered count and skipped array", () => {
 });
 
 test("syncUserScripts uses userscriptId(meta) as registration id", () => {
-  assert.match(fn, /const id = userscriptId\(meta\)/);
+  assert.match(fn, /let id = userscriptId\(meta\)/);
   assert.match(fn, /id,/);
+});
+
+test("syncUserScripts disambiguates duplicate registration IDs at load time", () => {
+  // Two stored scripts with identical @name+@namespace would otherwise collide
+  // and chrome.userScripts.register would reject the whole batch. Save-time
+  // isNew check rejects new dupes — load must never error on legacy dupes.
+  assert.match(fn, /usedIds/);
+  assert.match(fn, /duplicate userscript id at load/);
+  assert.match(fn, /\$\{id\}__\$\{(\+\+suffix|suffix)\}/);
 });
 
 test("syncUserScripts logs registration and skip counts to console", () => {

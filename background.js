@@ -2409,7 +2409,16 @@ async function syncUserScripts() {
 
   const registrations = [];
   const skipped = [];
-  for (const s of scripts) {
+  // Track which registration IDs we've already assigned in THIS sync pass.
+  // Two stored scripts sharing @name+@namespace would otherwise collide on
+  // userscriptId(meta) and chrome.userScripts.register would reject the
+  // whole batch with "Duplicate script ID". Save-time isNew check already
+  // rejects new dupes — but legacy storage, imports, or hand-edits can
+  // still leave dupes in place. Disambiguate at register time so load
+  // never errors, even if the dupes exist.
+  const usedIds = new Set();
+  for (let i = 0; i < scripts.length; i++) {
+    const s = scripts[i];
     if (!s.enabled) { skipped.push({ id: s.id, reason: "disabled" }); continue; }
     const meta = parseMetadata(s.src);
     if (!meta) { skipped.push({ id: s.id, reason: "no metadata block" }); continue; }
@@ -2425,7 +2434,19 @@ async function syncUserScripts() {
     // when they actually want www.amazon.com etc.
     const matches = expandMatchPatterns(baseMatches);
 
-    const id = userscriptId(meta);
+    let id = userscriptId(meta);
+    if (usedIds.has(id)) {
+      // Collision with an earlier registration this pass. Append a stable
+      // suffix derived from the array index so the load is deterministic.
+      // (We keep using the meta-derived prefix so the live id is still
+      // recognizable in logs / chrome.userScripts.getScripts output.)
+      let suffix = 2;
+      let candidate = `${id}__${suffix}`;
+      while (usedIds.has(candidate)) candidate = `${id}__${++suffix}`;
+      console.warn("[zpwrchrome] duplicate userscript id at load:", id, "→ remapped to", candidate, "(storage id:", s.id, ")");
+      id = candidate;
+    }
+    usedIds.add(id);
     const info = {
       script: {
         id, name: meta.name, namespace: meta.namespace, version: meta.version,
