@@ -174,7 +174,7 @@ test("syncUserScripts sets allFrames:false on registrations", () => {
 
 test("syncUserScripts uses userscriptId(meta) as registration id", () => {
   const fn = fnBody("syncUserScripts");
-  assert.match(fn, /const id = userscriptId\(meta\)/);
+  assert.match(fn, /let id = userscriptId\(meta\)/);
 });
 
 test("handleNav uses expandMatchPatterns on base patterns before matchUrl", () => {
