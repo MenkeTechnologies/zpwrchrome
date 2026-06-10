@@ -312,7 +312,7 @@
     const toggle = document.createElement("span");
     toggle.className = "zpwr-xv-toggle";
     toggle.textContent = "▼";
-    toggle.addEventListener("click", () => wrap.classList.toggle("zpwr-xv-collapsible-toggled") || wrap.classList.toggle("zpwr-xv-collapsed"));
+    toggle.addEventListener("click", () => wrap.classList.toggle("zpwr-xv-collapsed"));
     wrap.appendChild(toggle);
 
     // Detect element shape: empty / text-only leaf / mixed-content / nested.
