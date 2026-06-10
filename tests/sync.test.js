@@ -11,8 +11,12 @@ const ROOT = resolve(__dirname, "..");
 const bg = readFileSync(join(ROOT, "background.js"), "utf8");
 
 function fnBody(name) {
-  const m = bg.match(new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\n\\}`));
-  assert.ok(m, `${name} not found`);
+  // syncUserScripts is a thin chain-queue wrapper; its real body lives in
+  // _doSyncUserScripts. Tests that probe sync internals (allFrames, register
+  // shape, getScripts verification, etc.) should look at the inner function.
+  const target = name === "syncUserScripts" ? "_doSyncUserScripts" : name;
+  const m = bg.match(new RegExp(`(?:async )?function ${target}\\([\\s\\S]*?\\n\\}`));
+  assert.ok(m, `${target} not found`);
   return m[0];
 }
 
