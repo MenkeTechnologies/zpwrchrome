@@ -2387,14 +2387,23 @@ const GM_PREFIX = "gm:";  // chrome.storage.local key prefix for per-script GM v
 const FIRE_LOG_KEY = "userScripts.fireLog";
 const FIRE_LOG_CAP = 200;
 
+// Serial append chain — userscripts fire concurrently on SPA navigations
+// with multiple @match patterns, so a naive get→mutate→set lets the second
+// writer clobber the first's entry. Each call chains onto the prior tail
+// so the read/write window is never interleaved.
+let _fireLogChain = Promise.resolve();
 async function appendFireLog(entry) {
-  const bag = await chrome.storage.local.get(FIRE_LOG_KEY);
-  const log = Array.isArray(bag[FIRE_LOG_KEY]) ? bag[FIRE_LOG_KEY] : [];
-  const final = { when: Date.now(), ...entry };
-  log.unshift(final);
-  if (log.length > FIRE_LOG_CAP) log.length = FIRE_LOG_CAP;
-  await chrome.storage.local.set({ [FIRE_LOG_KEY]: log });
-  console.info("[zpwrchrome] fire logged:", final.mode, final.name || final.script, "→", final.url);
+  const next = _fireLogChain.then(async () => {
+    const bag = await chrome.storage.local.get(FIRE_LOG_KEY);
+    const log = Array.isArray(bag[FIRE_LOG_KEY]) ? bag[FIRE_LOG_KEY] : [];
+    const final = { when: Date.now(), ...entry };
+    log.unshift(final);
+    if (log.length > FIRE_LOG_CAP) log.length = FIRE_LOG_CAP;
+    await chrome.storage.local.set({ [FIRE_LOG_KEY]: log });
+    console.info("[zpwrchrome] fire logged:", final.mode, final.name || final.script, "→", final.url);
+  });
+  _fireLogChain = next.catch(() => {});
+  return next;
 }
 
 async function readScripts() {
@@ -2428,13 +2437,19 @@ async function configureUserScriptsWorld() {
 // Three listeners can fire syncUserScripts concurrently (onInstalled,
 // onStartup, and the bare boot call below). If their unregister() +
 // register() pairs interleave, chrome.userScripts.register sees the same
-// id twice and rejects the whole batch with "Duplicate script ID". This
-// in-flight promise lock collapses concurrent callers onto the first
-// one's result so we never race against ourselves.
-let _syncUserScriptsInFlight = null;
+// id twice and rejects the whole batch with "Duplicate script ID". A
+// single-flight collapse fixes the duplicate-id race but creates a fresh
+// one: writeScripts(vA) stores vA then awaits a sync; if writeScripts(vB)
+// stores vB while vA's sync is in flight, it joins vA's promise and never
+// triggers a register pass against vB. Serial chaining gives every caller
+// its own readScripts() snapshot taken AFTER prior passes settle.
+let _syncChainTail = Promise.resolve();
 async function syncUserScripts() {
-  if (_syncUserScriptsInFlight) return _syncUserScriptsInFlight;
-  _syncUserScriptsInFlight = (async () => {
+  const next = _syncChainTail.then(_doSyncUserScripts);
+  _syncChainTail = next.catch(() => {});
+  return next;
+}
+async function _doSyncUserScripts() {
   if (!chrome.userScripts) {
     await chrome.storage.local.set({
       "userScripts.error": "chrome.userScripts API not available — Chrome 120+ + Developer mode + per-extension 'Allow User Scripts' toggle required"
@@ -2570,9 +2585,6 @@ async function syncUserScripts() {
   }
 
   return { registered, skipped };
-  })();
-  try { return await _syncUserScriptsInFlight; }
-  finally { _syncUserScriptsInFlight = null; }
 }
 
 chrome.runtime.onInstalled.addListener(initUserscripts);
@@ -3651,17 +3663,26 @@ async function bpDlBroadcast() {
   }
 }
 
-// SW-level polling timer. Used to keep the badge + completion notifications
-// in sync with worker-side lifecycle transitions even when no page is open
-// to drive the polling itself.
-let _bgPollTimer = null;
+// SW-level polling. chrome.alarms (not setTimeout) — MV3 suspends the SW
+// after ~30s idle, which would silently destroy a setTimeout-driven poll
+// loop. Alarms wake the SW from suspension and survive across the session.
+// `periodInMinutes: 0.5` (~30s) is the floor that unpacked / MV3 alarms
+// reliably fire at; tighter cadence is OK in dev but throttled in prod.
+const DL_POLL_ALARM = "zpwr.dl.poll";
 function scheduleBgPoll(ms) {
-  cancelBgPoll();
-  _bgPollTimer = setTimeout(() => { _bgPollTimer = null; bpDlBroadcast(); }, ms);
+  // ms is advisory — alarms have a 30s minimum in production, so we round
+  // up. The first fire still happens via `when:` so the immediate transition
+  // (e.g. just-added job) gets a near-term poll.
+  const whenMs  = Math.max(250, ms | 0);
+  const periodM = 0.5;
+  chrome.alarms.create(DL_POLL_ALARM, { when: Date.now() + whenMs, periodInMinutes: periodM });
 }
 function cancelBgPoll() {
-  if (_bgPollTimer) { clearTimeout(_bgPollTimer); _bgPollTimer = null; }
+  chrome.alarms.clear(DL_POLL_ALARM).catch(() => {});
 }
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === DL_POLL_ALARM) bpDlBroadcast();
+});
 
 // Toolbar badge. Three counters share the single Chrome badge:
 //   1. Active downloads (cyan #05d9e8) — wins on number when ≥ 1 in flight.
@@ -3782,11 +3803,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 // Last-seen-status cache for completion / error notifications.
-let _dlLastStatus = new Map();
+// Persisted to chrome.storage.session so it survives MV3 SW suspension —
+// without persistence, a download that completes while the SW is asleep
+// would arrive at the next poll with prev=undefined, the `prev &&` guard
+// would short-circuit, and runPostDownloadCommand + the completion
+// notification would silently never fire.
+const DL_LAST_STATUS_KEY = "dl.lastStatus";
+async function loadDlLastStatus() {
+  try {
+    const bag = await chrome.storage.session.get(DL_LAST_STATUS_KEY);
+    const obj = bag[DL_LAST_STATUS_KEY];
+    return obj && typeof obj === "object" ? obj : {};
+  } catch { return {}; }
+}
+async function saveDlLastStatus(map) {
+  try { await chrome.storage.session.set({ [DL_LAST_STATUS_KEY]: map }); } catch {}
+}
 async function notifyJobTransitions(jobs) {
   const ifc = await loadDlInterface();
+  const prevMap = await loadDlLastStatus();
   for (const j of jobs) {
-    const prev = _dlLastStatus.get(j.gid);
+    const prev = prevMap[j.gid];
     if (prev === j.status) continue;
     if (j.status === "done" && prev && prev !== "done") {
       if (ifc.notifyOnComplete) {
@@ -3811,7 +3848,9 @@ async function notifyJobTransitions(jobs) {
       });
     }
   }
-  _dlLastStatus = new Map(jobs.map((j) => [j.gid, j.status]));
+  const next = {};
+  for (const j of jobs) next[j.gid] = j.status;
+  await saveDlLastStatus(next);
 }
 
 // ─── Post-download custom commands ────────────────────────────────────
