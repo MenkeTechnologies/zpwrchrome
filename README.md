@@ -337,7 +337,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 | Total chrome.commands | **54** (manifest cap on default keys is 4 — this ext ships 4; the other 50 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **2988** `node:test` cases (JS) + 102 `cargo test` cases (Rust) |
+| Test suite | **2988** `node:test` cases (JS) + 117 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
