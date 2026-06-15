@@ -238,6 +238,8 @@ function rowHtml(job) {
         ${(job.status === "done" && destOnDisk)
             ? `<button data-act="open"   data-dest="${escDest}">open</button>
                <button data-act="reveal" data-dest="${escDest}">reveal</button>` : ""}
+        ${(job.status === "done" || job.status === "failed" || job.status === "cancelled" || isMissing)
+            ? `<button data-act="restart" data-gid="${job.gid}" title="re-download from scratch">restart</button>` : ""}
         ${(job.status === "active" || job.status === "paused" || job.status === "pending")
             ? `<button class="danger" data-act="cancel" data-gid="${job.gid}">cancel</button>` : ""}
       </div>
@@ -399,9 +401,10 @@ $list.addEventListener("click", async (e) => {
     // pause/resume/cancel each pay 150-300ms of host startup + IPC; without
     // this the row looks frozen until poll() lands.
     const optimisticStatus = (
-      act === "pause"  ? "paused"    :
-      act === "resume" ? "pending"   :
-      act === "cancel" ? "cancelled" : null
+      act === "pause"   ? "paused"    :
+      act === "resume"  ? "pending"   :
+      act === "restart" ? "pending"   :
+      act === "cancel"  ? "cancelled" : null
     );
     if (optimisticStatus) {
       const job = state.jobs.find((j) => j.gid === gid);
@@ -619,6 +622,8 @@ function renderDrawer() {
       ${job.status === "active" ? `<button data-act="pause"  data-gid="${job.gid}">pause</button>`  : ""}
       ${job.status === "paused" ? `<button data-act="resume" data-gid="${job.gid}">resume</button>` : ""}
       ${(job.status === "failed" || job.status === "cancelled") ? `<button data-act="resume" data-gid="${job.gid}">retry</button>` : ""}
+      ${(job.status === "done" || job.status === "failed" || job.status === "cancelled" || (job.status === "done" && !destOnDisk))
+          ? `<button data-act="restart" data-gid="${job.gid}" title="re-download from scratch">restart</button>` : ""}
       ${(job.status === "active" || job.status === "paused" || job.status === "pending")
           ? `<button class="danger" data-act="cancel" data-gid="${job.gid}">cancel</button>` : ""}
       <button class="danger" data-act="deselect" title="Close details">close</button>

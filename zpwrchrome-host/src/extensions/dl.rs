@@ -446,6 +446,7 @@ pub fn dispatch_dl(action: &str, value: &Value) {
         "dl.pause"   => dl_pause(&req),
         "dl.resume"  => dl_resume(&req),
         "dl.cancel"  => dl_cancel(&req),
+        "dl.restart" => dl_restart(&req),
         "dl.clear"   => dl_clear(&req),
         "dl.remove"  => dl_remove(&req),
         "dl.openDir"        => dl_open_dir(&req),
@@ -594,6 +595,16 @@ fn worker_alive(pid: u32) -> bool {
 #[cfg(not(unix))]
 fn worker_alive(_pid: u32) -> bool { false }   // be conservative; respawn
 
+/// Hard-stop a live worker so a restart can reset the file without two
+/// processes writing the same dest. SIGTERM with no handler in the worker
+/// terminates it immediately — no further writes after this returns.
+#[cfg(unix)]
+fn kill_worker(pid: u32) {
+    if pid != 0 { unsafe { libc::kill(pid as i32, libc::SIGTERM); } }
+}
+#[cfg(not(unix))]
+fn kill_worker(_pid: u32) {}
+
 pub fn dl_resume(req: &DlRequest) {
     // Two cases trigger a fresh worker spawn:
     //   1. The previous run reached a terminal state (failed / cancelled)
@@ -638,6 +649,52 @@ pub fn dl_cancel(req: &DlRequest) {
         s.status = "cancelled".into();
     });
     response::SendOk(DlActionResponse { gid: req.gid, status: "cancelled".into() });
+}
+
+/// Re-download from byte zero, whatever the current status.
+///
+/// Distinct from `dl.resume`, which continues a paused/failed job from where
+/// it left off: restart discards the partial (or supposedly-complete) file
+/// and starts a clean download. This is the recovery path for a job that was
+/// stamped "done" on a truncated file, or any time the user wants a fresh
+/// copy. Works from done / failed / cancelled / paused / active.
+pub fn dl_restart(req: &DlRequest) {
+    let (dest, prior_pid) = match read_state(req.gid) {
+        Ok(s) => (s.dest.clone(), s.worker_pid),
+        Err(_) => {
+            response::SendErrorAndExit(
+                errors::Code::InvalidPasswordStore,
+                Some(response::params_of(&[
+                    (field::MESSAGE,  "Unknown gid"),
+                    (field::ACTION,   "dl.restart"),
+                    (field::STORE_ID, &req.gid.to_string()),
+                ])),
+            );
+        }
+    };
+    // Stop any live worker BEFORE touching the file, so the old and new
+    // workers never write the same dest at once.
+    if worker_alive(prior_pid) {
+        kill_worker(prior_pid);
+    }
+    // Throw away the partial/old bytes; the fresh worker re-probes and
+    // re-downloads from scratch.
+    let _ = fs::remove_file(&dest);
+    mutate_state(req.gid, "dl.restart", |s| {
+        s.done = 0;
+        s.status = "pending".into();
+        s.err = None;
+        s.paused = false;
+        s.cancelled = false;
+        s.elapsed_ms = 0;
+        s.paused_offset_ms = 0;
+        s.started_at = now_secs();
+        s.worker_pid = 0;
+    });
+    if let Err(e) = spawn_worker(req.gid) {
+        crate::diag::log(&format!("RESTART_SPAWN_ERR gid={} err={e}", req.gid));
+    }
+    response::SendOk(DlActionResponse { gid: req.gid, status: "restarted".into() });
 }
 
 // Clear state files in bulk. scope picks which jobs:
@@ -1336,6 +1393,19 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
                 // so the row stays visible under the "cancelled" filter — the
                 // user can clear it explicitly from there.
                 let _ = fs::remove_file(&state.dest);
+            } else if total > 0 && state.done < total {
+                // Defense in depth: a download path returned Ok(()) but fewer
+                // bytes than Content-Length actually landed on disk. This is
+                // how truncated responses (server/CDN closing the connection
+                // early on a multi-GB file) used to render as "DONE  10.2 GB /
+                // 12.2 GB (83%)". Never stamp "done" on a short file — surface
+                // it as failed so the user retries instead of trusting a
+                // corrupt archive.
+                state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
+                let done = state.done;
+                let pct = done * 100 / total;   // total > 0 guaranteed by the branch guard
+                let _ = finish_err(&mut state,
+                    format!("incomplete: {done} of {total} bytes ({pct}%)"));
             } else {
                 state.status = "done".into();
                 state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
@@ -1531,9 +1601,16 @@ fn run_single(state: &mut JobState, total: u64, accept_ranges: bool, start_insta
         .open(&state.dest)
         .map_err(|e| format!("open {}: {e}", state.dest))?;
     let mut downloaded: u64 = 0;
-    for attempt in 0..MAX_RETRIES {
+    // A truncated stream that resumes (ranged) made real progress and must not
+    // count against the retry budget; only no-progress attempts do. A server
+    // that can't resume (no Accept-Ranges) restarts from 0 each time, so there
+    // every truncation is a stall — MAX_RETRIES bounds the loop, no infinite
+    // re-truncate.
+    let resumable = accept_ranges && total > 0;
+    let mut stalls: u32 = 0;
+    loop {
         if state.cancelled { return Ok(()); }
-        let use_range = accept_ranges && total > 0 && downloaded > 0;
+        let use_range = resumable && downloaded > 0;
         if !use_range && downloaded > 0 {
             downloaded = 0;
             fs::OpenOptions::new()
@@ -1543,18 +1620,23 @@ fn run_single(state: &mut JobState, total: u64, accept_ranges: bool, start_insta
                 .open(&state.dest)
                 .map_err(|e| format!("retruncate: {e}"))?;
         }
+        let progress_before = downloaded;
         let range = if use_range { Some((downloaded, total.saturating_sub(1))) } else { None };
-        match stream_into_file(state, range, &mut downloaded, start_instant) {
+        match stream_into_file(state, range, &mut downloaded, total, start_instant) {
             Ok(()) => return Ok(()),
             Err(SegErr::Permanent(m)) => return Err(m),
-            Err(SegErr::Transient(m)) => {
-                if attempt + 1 == MAX_RETRIES { return Err(format!("after {MAX_RETRIES} retries: {m}")); }
-                thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.pow(attempt)));
-            }
             Err(SegErr::Cancelled) => return Ok(()),
+            Err(SegErr::Transient(m)) => {
+                if resumable && downloaded > progress_before {
+                    stalls = 0;
+                } else {
+                    stalls += 1;
+                    if stalls >= MAX_RETRIES { return Err(format!("after {MAX_RETRIES} retries: {m}")); }
+                    thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.saturating_pow(stalls)));
+                }
+            }
         }
     }
-    Ok(())
 }
 
 fn run_segmented(state: &mut JobState, total: u64, start_instant: Instant) -> Result<(), String> {
@@ -1673,6 +1755,7 @@ fn stream_into_file(
     state: &mut JobState,
     range: Option<(u64, u64)>,
     downloaded: &mut u64,
+    total: u64,
     start_instant: Instant,
 ) -> Result<(), SegErr> {
     let mut req = ureq::get(&state.url);
@@ -1725,7 +1808,16 @@ fn stream_into_file(
             ControlSignal::Continue => {}
         }
         match reader.read(&mut buf) {
-            Ok(0) => return Ok(()),
+            Ok(0) => {
+                // Premature EOF: the connection closed before Content-Length
+                // bytes arrived. Treat as transient so run_single resumes
+                // (ranged) instead of recording a truncated file as "done".
+                if total > 0 && *downloaded < total {
+                    return Err(SegErr::Transient(
+                        format!("truncated: got {downloaded} of {total} bytes")));
+                }
+                return Ok(());
+            }
             Ok(n) => {
                 f.write_all(&buf[..n])
                     .map_err(|e| SegErr::Permanent(format!("write: {e}")))?;
@@ -1755,8 +1847,15 @@ fn run_segment(
     seg_end: u64,
     done_total: Arc<AtomicU64>,
 ) -> Result<(), String> {
+    let expected = seg_end - seg_start + 1;
     let mut downloaded_in_seg: u64 = 0;
-    for attempt in 0..MAX_RETRIES {
+    // `stalls` counts only attempts that made ZERO forward progress. A short
+    // read that still advanced the offset — the server closed the connection
+    // early on a multi-GB range — resets it, so a segment that truncates
+    // repeatedly keeps resuming from where it left off instead of burning its
+    // retry budget on attempts that are actually succeeding.
+    let mut stalls: u32 = 0;
+    loop {
         if let Ok(s) = read_state(gid) {
             if s.cancelled { return Ok(()); }
             while s.paused {
@@ -1767,7 +1866,8 @@ fn run_segment(
             }
         }
         let from = seg_start + downloaded_in_seg;
-        if from > seg_end { return Ok(()); }
+        if from > seg_end { return Ok(()); }   // every requested byte is on disk
+        let progress_before = downloaded_in_seg;
         let mut req = ureq::get(url)
             .set("Range", &format!("bytes={from}-{seg_end}"));
         if !cookies.is_empty()    { req = req.set("Cookie", cookies); }
@@ -1777,10 +1877,12 @@ fn run_segment(
             Err(e) => {
                 let transient = matches!(&e, ureq::Error::Transport(_))
                     || matches!(&e, ureq::Error::Status(c, _) if *c >= 500);
-                if !transient || attempt + 1 == MAX_RETRIES {
-                    return Err(format!("segment {seg_start}..{seg_end}: GET: {e}"));
+                if !transient { return Err(format!("segment {seg_start}..{seg_end}: GET: {e}")); }
+                stalls += 1;
+                if stalls >= MAX_RETRIES {
+                    return Err(format!("segment {seg_start}..{seg_end} after {MAX_RETRIES} retries: GET: {e}"));
                 }
-                thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.pow(attempt)));
+                thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.saturating_pow(stalls)));
                 continue;
             }
         };
@@ -1793,7 +1895,7 @@ fn run_segment(
         }
         let mut reader = resp.into_reader();
         let mut buf = vec![0u8; READ_CHUNK];
-        let mut transient_err: Option<String> = None;
+        let mut read_err: Option<String> = None;
         loop {
             if let Ok(s) = read_state(gid) {
                 if s.cancelled { return Ok(()); }
@@ -1805,7 +1907,7 @@ fn run_segment(
                 }
             }
             match reader.read(&mut buf) {
-                Ok(0) => return Ok(()),
+                Ok(0) => break,   // EOF — completeness is verified after the loop
                 Ok(n) => {
                     if let Err(e) = f.write_all(&buf[..n]) {
                         return Err(format!("segment write: {e}"));
@@ -1813,19 +1915,28 @@ fn run_segment(
                     downloaded_in_seg += n as u64;
                     done_total.fetch_add(n as u64, Ordering::Relaxed);
                 }
-                Err(e) => { transient_err = Some(format!("read: {e}")); break; }
+                Err(e) => { read_err = Some(format!("read: {e}")); break; }
             }
         }
-        if let Some(e) = transient_err {
-            if attempt + 1 == MAX_RETRIES {
-                return Err(format!("segment {seg_start}..{seg_end} after {MAX_RETRIES} retries: {e}"));
-            }
-            thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.pow(attempt)));
+        if downloaded_in_seg >= expected {
+            return Ok(());   // segment fully transferred
+        }
+        // Short: a read error, or a premature EOF that earlier reported the
+        // segment "done" when only part of the range arrived. Resume. Forward
+        // progress means the resume is working, so don't spend a retry on it;
+        // only a no-progress attempt consumes the budget.
+        if downloaded_in_seg > progress_before {
+            stalls = 0;
         } else {
-            return Ok(());
+            stalls += 1;
+            if stalls >= MAX_RETRIES {
+                let why = read_err.unwrap_or_else(||
+                    format!("truncated: got {downloaded_in_seg} of {expected} bytes"));
+                return Err(format!("segment {seg_start}..{seg_end} after {MAX_RETRIES} retries: {why}"));
+            }
+            thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.saturating_pow(stalls)));
         }
     }
-    Err(format!("segment {seg_start}..{seg_end}: exhausted retries"))
 }
 
 fn now_secs() -> u64 {
