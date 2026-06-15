@@ -3272,6 +3272,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
+  if (msg?.kind === "dl.restart") {
+    // Re-download from byte zero: discard the partial/old file and respawn a
+    // fresh worker. Distinct from dl.resume (which continues from where it
+    // left off). Used to recover a job stamped done on a truncated file.
+    bpDlGid("dl.restart", Number(msg.gid))
+      .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
   if (msg?.kind === "dl.remove") {
     bpDlGid("dl.remove", Number(msg.gid))
       .then((resp) => { bpDlBroadcast(); sendResponse({ ok: true, ...(resp.data || {}) }); })
