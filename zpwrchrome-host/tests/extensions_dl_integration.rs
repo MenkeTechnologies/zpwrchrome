@@ -1206,3 +1206,100 @@ fn dl_marks_failed_not_done_when_server_truncates_permanently() {
     let _ = fs::remove_dir_all(&dlroot);
     let _ = fs::remove_dir_all(&cache);
 }
+
+/// Server whose HEAD answers 200 but WITHOUT Content-Length (streamed
+/// downloads behind X-Accel-Redirect / X-Sendfile, e.g. the teknovault
+/// "digital-downloads/download/<uuid>" delivery links). The size is only
+/// recoverable from the Range GET's Content-Range. Range GETs are served
+/// normally so the download itself completes.
+fn start_sizeless_head_server(payload: Arc<Vec<u8>>) -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = match stream { Ok(s) => s, Err(_) => continue };
+            let p = Arc::clone(&payload);
+            thread::spawn(move || {
+                let mut buf = [0u8; 8192];
+                let mut req = Vec::new();
+                loop {
+                    let n = match stream.read(&mut buf) { Ok(n) => n, Err(_) => return };
+                    if n == 0 { return; }
+                    req.extend_from_slice(&buf[..n]);
+                    if req.windows(4).any(|w| w == b"\r\n\r\n") { break; }
+                }
+                let req_str = String::from_utf8_lossy(&req).into_owned();
+                let first   = req_str.lines().next().unwrap_or("").to_string();
+                let method  = first.split_whitespace().next().unwrap_or("").to_string();
+                let range_header = req_str.lines().find_map(|l| {
+                    l.strip_prefix("Range: ")
+                        .or_else(|| l.strip_prefix("range: "))
+                        .map(|s| s.trim().to_string())
+                });
+                if method == "HEAD" {
+                    // 200, Accept-Ranges, but deliberately NO Content-Length.
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 200 OK\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n");
+                    return;
+                }
+                if method != "GET" { return; }
+                if let Some(rest) = range_header.as_deref().and_then(|r| r.strip_prefix("bytes=")) {
+                    let parts: Vec<&str> = rest.split('-').collect();
+                    let start: usize = parts.first().and_then(|x| x.parse().ok()).unwrap_or(0);
+                    let end:   usize = parts.get(1).and_then(|x| x.parse().ok()).unwrap_or(p.len() - 1);
+                    let slice = &p[start..=end];
+                    let resp = format!(
+                        "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nConnection: close\r\n\r\n",
+                        slice.len(), start, end, p.len()
+                    );
+                    let _ = stream.write_all(resp.as_bytes());
+                    let _ = stream.write_all(slice);
+                    return;
+                }
+                // Non-range GET: chunked-style with no Content-Length.
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n");
+                let _ = stream.write_all(&p);
+            });
+        }
+    });
+    port
+}
+
+#[test]
+fn dl_recovers_total_when_head_omits_content_length() {
+    // Regression for restarted downloads rendering "2.1 GB / ?": a HEAD that
+    // returns 200 without Content-Length used to make probe_headers report
+    // total=0 (skipping the Range-GET fallback). The worker must recover the
+    // size from the Range GET's Content-Range and persist a real total.
+    let payload = Arc::new(make_payload(2 * 1024 * 1024));   // 2 MiB → segmented
+    let port = start_sizeless_head_server(Arc::clone(&payload));
+    let cache  = tempdir("dl-sizeless-cache");
+    let dlroot = tempdir("dl-sizeless-dest");
+
+    let resp = run_with_env(
+        &json!({
+            "action":   "dl.add",
+            "url":      format!("http://127.0.0.1:{port}/download/abc?from=Thank%20you%20page"),
+            "dir":      dlroot.to_string_lossy(),
+            "name":     "file.bin",
+            "segments": 4,
+        }),
+        &[
+            ("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy()),
+            ("ZPWRCHROME_DL_DIR",       &dlroot.to_string_lossy()),
+        ],
+    );
+    assert_eq!(resp["status"], "ok", "dl.add: {resp}");
+    let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
+    let dest = resp["data"]["dest"].as_str().expect("dest").to_string();
+
+    let final_state = wait_for_done(&cache, gid, Duration::from_secs(30));
+    assert_eq!(final_state["status"], "done", "{final_state}");
+    assert_eq!(final_state["total"].as_u64().unwrap_or(0), payload.len() as u64,
+        "total must be recovered from the Range GET, not left at 0 (UI shows '/ ?'): {final_state}");
+    let bytes = fs::read(&dest).expect("dest readable");
+    assert_eq!(bytes, *payload, "content mismatch");
+
+    let _ = fs::remove_dir_all(&dlroot);
+    let _ = fs::remove_dir_all(&cache);
+}
