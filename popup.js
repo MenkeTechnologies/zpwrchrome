@@ -1046,6 +1046,14 @@ function renderStrip(jobs) {
       acts.push(`<button class="act" data-act="open"   data-dest="${stripEsc(j.dest)}" title="Open file with default app">↗</button>`);
       acts.push(`<button class="act" data-act="reveal" data-dest="${stripEsc(j.dest)}" title="Reveal in Finder">📁</button>`);
     }
+    // Restart — re-download from byte zero on any terminal state (done /
+    // failed / cancelled, incl. done-but-missing). Discards the partial/old
+    // file and respawns a fresh worker; distinct from resume/retry, which
+    // continue from the current offset. Same action wired in the full-page
+    // manager (scripts-manager/downloads.js).
+    if (j.status === "done" || j.status === "failed" || j.status === "cancelled") {
+      acts.push(`<button class="act" data-act="restart" data-gid="${j.gid}" title="Restart (re-download from scratch)">🔄</button>`);
+    }
     // Remove-row button — works on every status. Cancels the underlying job
     // if it's still in flight (best-effort, ignores host error), then drops
     // the state file via dl.clear with the row's gid. The disk file is left
