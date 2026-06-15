@@ -73,6 +73,11 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Run host crate tests (cargo test)
+        if: matrix.node == '22'
+        working-directory: zpwrchrome-host
+        run: cargo test --locked
+
       - name: Verify generator is idempotent (doc-drift guard)
         run: |
           scripts/gen.sh
