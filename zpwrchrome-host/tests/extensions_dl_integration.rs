@@ -9,6 +9,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -967,5 +968,241 @@ fn dl_remove_cancels_and_deletes_state_file() {
     assert_eq!(resp["data"]["status"], "removed");
     assert!(!cache.join("gid_000099.json").exists(),
         "state file must be gone after dl.remove");
+    let _ = fs::remove_dir_all(&cache);
+}
+
+/// HTTP server that simulates a flaky CDN closing connections early.
+///
+/// - `truncate_once`: the FIRST GET (across all segments) writes only half
+///   the bytes it advertised, then drops the connection — a premature EOF.
+///   The download must resume and still finish complete.
+/// - `cap`: never serve a byte at/after this absolute offset. A ranged GET
+///   whose start is past `cap` returns a 206 header but writes zero bytes and
+///   closes, so the download can never progress past `cap` — it must fail,
+///   never report "done".
+///
+/// The advertised Content-Length always reflects the FULL slice/file; the
+/// truncation is the connection closing before those bytes arrive, exactly
+/// the real-world failure that used to render as "DONE  10.2 GB / 12.2 GB".
+fn start_flaky_server(
+    payload: Arc<Vec<u8>>,
+    truncate_once: Arc<AtomicBool>,
+    cap: Option<usize>,
+) -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = match stream { Ok(s) => s, Err(_) => continue };
+            let p = Arc::clone(&payload);
+            let once = Arc::clone(&truncate_once);
+            thread::spawn(move || {
+                let mut buf = [0u8; 8192];
+                let mut req = Vec::new();
+                loop {
+                    let n = match stream.read(&mut buf) { Ok(n) => n, Err(_) => return };
+                    if n == 0 { return; }
+                    req.extend_from_slice(&buf[..n]);
+                    if req.windows(4).any(|w| w == b"\r\n\r\n") { break; }
+                }
+                let req_str = String::from_utf8_lossy(&req).into_owned();
+                let first   = req_str.lines().next().unwrap_or("").to_string();
+                let method  = first.split_whitespace().next().unwrap_or("").to_string();
+                let range_header = req_str.lines().find_map(|l| {
+                    l.strip_prefix("Range: ")
+                        .or_else(|| l.strip_prefix("range: "))
+                        .map(|s| s.trim().to_string())
+                });
+                if method == "HEAD" {
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                        p.len()
+                    );
+                    let _ = stream.write_all(resp.as_bytes());
+                    return;
+                }
+                if method != "GET" { return; }
+                let (start, end) = match range_header.as_deref().and_then(|r| r.strip_prefix("bytes=")) {
+                    Some(rest) => {
+                        let parts: Vec<&str> = rest.split('-').collect();
+                        let s: usize = parts.first().and_then(|x| x.parse().ok()).unwrap_or(0);
+                        let e: usize = parts.get(1).and_then(|x| x.parse().ok()).unwrap_or(p.len() - 1);
+                        (s, e)
+                    }
+                    None => (0, p.len() - 1),
+                };
+                // Past the cap: advertise the range but send nothing, then close.
+                if let Some(c) = cap {
+                    if start >= c {
+                        let resp = format!(
+                            "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nConnection: close\r\n\r\n",
+                            end - start + 1, start, end, p.len()
+                        );
+                        let _ = stream.write_all(resp.as_bytes());
+                        return;   // zero body → premature EOF with no progress
+                    }
+                }
+                // Clamp the served tail to the cap so the boundary segment
+                // stalls exactly at `cap` on its next resume.
+                let served_end = match cap {
+                    Some(c) => end.min(c - 1),
+                    None    => end,
+                };
+                let full = &p[start..=served_end];
+                let resp = format!(
+                    "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nConnection: close\r\n\r\n",
+                    full.len(), start, served_end, p.len()
+                );
+                let _ = stream.write_all(resp.as_bytes());
+                // First GET truncates to half its body then closes early.
+                if once.swap(true, Ordering::SeqCst) == false {
+                    let half = full.len() / 2;
+                    let _ = stream.write_all(&full[..half]);
+                } else {
+                    let _ = stream.write_all(full);
+                }
+            });
+        }
+    });
+    port
+}
+
+#[test]
+fn dl_recovers_from_premature_eof_and_finishes_complete() {
+    // A segment's first connection closes after only half its range arrives.
+    // Before the fix run_segment returned Ok(()) on that EOF and the worker
+    // stamped "done" on a short file. The resume must complete the file.
+    let payload = Arc::new(make_payload(2 * 1024 * 1024));   // 2 MiB → segmented
+    let truncate_once = Arc::new(AtomicBool::new(false));
+    let port = start_flaky_server(Arc::clone(&payload), Arc::clone(&truncate_once), None);
+    let cache  = tempdir("dl-trunc-once-cache");
+    let dlroot = tempdir("dl-trunc-once-dest");
+
+    let resp = run_with_env(
+        &json!({
+            "action":   "dl.add",
+            "url":      format!("http://127.0.0.1:{port}/file.bin"),
+            "dir":      dlroot.to_string_lossy(),
+            "name":     "file.bin",
+            "segments": 4,
+        }),
+        &[
+            ("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy()),
+            ("ZPWRCHROME_DL_DIR",       &dlroot.to_string_lossy()),
+        ],
+    );
+    assert_eq!(resp["status"], "ok", "dl.add response: {resp}");
+    let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
+    let dest = resp["data"]["dest"].as_str().expect("dest").to_string();
+
+    let final_state = wait_for_done(&cache, gid, Duration::from_secs(30));
+    assert_eq!(final_state["status"], "done",
+        "must resume past the truncated connection and finish: {final_state}");
+    let bytes = fs::read(&dest).expect("dest readable");
+    assert_eq!(bytes.len(), payload.len(), "size mismatch after recovery");
+    assert_eq!(bytes, *payload, "content mismatch after recovery");
+    assert_eq!(final_state["done"].as_u64().unwrap_or(0), payload.len() as u64,
+        "state.done must equal full size: {final_state}");
+
+    let _ = fs::remove_dir_all(&dlroot);
+    let _ = fs::remove_dir_all(&cache);
+}
+
+#[test]
+fn dl_restart_redownloads_a_done_job_from_scratch() {
+    // A finished job is restarted: the worker must discard the file, respawn,
+    // and re-download from byte zero to a complete copy again.
+    let payload = Arc::new(make_payload(2 * 1024 * 1024));   // 2 MiB → segmented
+    let port = start_server(Arc::clone(&payload));
+    let cache  = tempdir("dl-restart-cache");
+    let dlroot = tempdir("dl-restart-dest");
+    let envs = [
+        ("ZPWRCHROME_DL_CACHE_DIR", cache.to_string_lossy().to_string()),
+        ("ZPWRCHROME_DL_DIR",       dlroot.to_string_lossy().to_string()),
+    ];
+    let env_refs: Vec<(&str, &str)> = envs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+    let resp = run_with_env(
+        &json!({
+            "action":   "dl.add",
+            "url":      format!("http://127.0.0.1:{port}/file.bin"),
+            "dir":      dlroot.to_string_lossy(),
+            "name":     "file.bin",
+            "segments": 4,
+        }),
+        &env_refs,
+    );
+    assert_eq!(resp["status"], "ok", "dl.add: {resp}");
+    let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
+    let dest = resp["data"]["dest"].as_str().expect("dest").to_string();
+
+    let first = wait_for_done(&cache, gid, Duration::from_secs(30));
+    assert_eq!(first["status"], "done", "initial download: {first}");
+
+    // Corrupt the finished file so we can prove restart actually rewrote it.
+    fs::write(&dest, b"corrupt").unwrap();
+
+    let r = run_with_env(&json!({ "action": "dl.restart", "gid": gid }), &env_refs);
+    assert_eq!(r["status"], "ok", "dl.restart response: {r}");
+    assert_eq!(r["data"]["status"], "restarted", "{r}");
+
+    // Poll until it finishes again (status flips away from done→pending→done).
+    let start = Instant::now();
+    let path = cache.join(format!("gid_{gid:06}.json"));
+    loop {
+        assert!(start.elapsed() < Duration::from_secs(30), "restart never re-finished");
+        if let Ok(body) = fs::read_to_string(&path) {
+            if let Ok(v) = serde_json::from_str::<Value>(&body) {
+                if v["status"] == "done" && v["done"].as_u64() == Some(payload.len() as u64) {
+                    break;
+                }
+                if v["status"] == "failed" { panic!("restart failed: {v}"); }
+            }
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let bytes = fs::read(&dest).expect("dest readable after restart");
+    assert_eq!(bytes.len(), payload.len(), "restart size mismatch");
+    assert_eq!(bytes, *payload, "restart did not rewrite the corrupt file");
+
+    let _ = fs::remove_dir_all(&dlroot);
+    let _ = fs::remove_dir_all(&cache);
+}
+
+#[test]
+fn dl_marks_failed_not_done_when_server_truncates_permanently() {
+    // The server never serves past 50% of the file. The download can never
+    // complete; it must end "failed", never "done". This is the regression
+    // for "DONE  10.2 GB / 12.2 GB (83%)".
+    let size = 2 * 1024 * 1024;
+    let payload = Arc::new(make_payload(size));
+    let truncate_once = Arc::new(AtomicBool::new(true));   // disable the once-path
+    let port = start_flaky_server(Arc::clone(&payload), truncate_once, Some(size / 2));
+    let cache  = tempdir("dl-trunc-perma-cache");
+    let dlroot = tempdir("dl-trunc-perma-dest");
+
+    let resp = run_with_env(
+        &json!({
+            "action":   "dl.add",
+            "url":      format!("http://127.0.0.1:{port}/file.bin"),
+            "dir":      dlroot.to_string_lossy(),
+            "name":     "file.bin",
+            "segments": 4,
+        }),
+        &[
+            ("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy()),
+            ("ZPWRCHROME_DL_DIR",       &dlroot.to_string_lossy()),
+        ],
+    );
+    assert_eq!(resp["status"], "ok", "dl.add response: {resp}");
+    let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
+
+    let final_state = wait_for_done(&cache, gid, Duration::from_secs(30));
+    assert_eq!(final_state["status"], "failed",
+        "a permanently-truncated download must be failed, never done: {final_state}");
+    assert_ne!(final_state["status"], "done",
+        "must never stamp done on a short file: {final_state}");
+
+    let _ = fs::remove_dir_all(&dlroot);
     let _ = fs::remove_dir_all(&cache);
 }
