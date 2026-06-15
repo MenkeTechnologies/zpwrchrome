@@ -71,7 +71,7 @@ The download worker (`zpwrchrome-host --dl-worker <gid>`) is the detached child 
 - **Spawn isolation** — `setsid()` + `close(fd)` for every `fd >= 3` before `exec`. Without this the worker inherits Chrome's NM stdout pipe; Chrome never sees EOF on the parent host and reports `Native host has exited` even on a successful response.
 - **Liveness check on resume** — `worker_pid` is written into the state file by `run_worker` at start. On `dl.resume` for a paused job, `worker_alive(prior_pid)` (via `kill(pid, 0)`) decides whether to flip the paused flag (live worker will notice) or spawn a fresh worker (dead worker means SW was suspended and the previous worker process was reaped).
 - **Path probing** — `probe_headers(url, cookies, ua)` tries HEAD first; on failure or non-OK (common on pre-signed S3 URLs that bind the signature to the GET method — GitHub releases, Cloudflare R2, etc.) falls back to `GET` with `Range: bytes=0-0`. A 206 response gives Content-Range + confirms Range support; a 200 means Range is ignored and we record the full size.
-- **Segmented mode** — total ≥ `MIN_SEGMENT_BYTES` + `accept_ranges` + `segments > 1` → N threads each fetch one byte range. A shared `AtomicU64 done_total` accumulates bytes across threads; a `progress_pump` thread flushes it to disk every `STATE_FLUSH_INTERVAL` so the UI sees live progress.
+- **Segmented mode (download accelerator)** — this is the acceleration path: total ≥ `MIN_SEGMENT_BYTES` + `accept_ranges` + `segments > 1` → N threads each fetch one byte range over its own connection, so throughput scales past what a single stream gives (IDM / aria2 / axel model). A shared `AtomicU64 done_total` accumulates bytes across threads; a `progress_pump` thread flushes it to disk every `STATE_FLUSH_INTERVAL` so the UI sees live progress. When the server lacks `Accept-Ranges` or the file is below the minimum, it falls back to a single-stream download.
 - **Filename derivation** — at HEAD time, if the URL-derived name looks like query-string garbage (`looks_like_query_garbage` heuristic) the worker uses `download-{ts}.bin`. The HEAD response's `Content-Disposition` header is parsed (RFC 5987 `filename*=UTF-8''`, quoted `filename=""`, bare `filename=`) and renames before the file is opened.
 - **Cookies + User-Agent** are forwarded from `chrome.cookies.getAll()` so logged-in downloads work the same way the browser would.
 
@@ -169,7 +169,7 @@ zpwrchrome-host/src/
 cargo test
 ```
 
-**117 tests, 0 failures** across:
+**121 tests, 0 failures** across:
 
 - Pure protocol pins (`tests/ported_version.rs`, `tests/ported_errors.rs`)
 - Pure helpers (`tests/ported_helpers.rs`, `tests/ported_common.rs`, `tests/ported_configure_helpers.rs`)
@@ -178,7 +178,7 @@ cargo test
 - Live pass store (`tests/live_password_store.rs`) — gated on `~/.password-store/.gpg-id` presence; verifies byte-equal `pass show` round-trip
 - Extensions: `extensions_otp.rs`, `extensions_search.rs`, `extensions_run_command.rs`, `extensions_dl_state.rs`, `extensions_dl_integration.rs` (74 cases: 2 MiB segmented download against a local HTTP server with Range support, dl.clear scopes, dl.remove cancel-and-delete, dl.writeFile + writeFileChunk streaming protocol, naming-mask token substitution, probe_headers HEAD-then-Range-GET fallback, spawn_worker setsid + close-fd, dl.resume worker-pid liveness check, expand_home tilde resolution).
 
-All green on push/PR via GitHub Actions on `ubuntu-latest`.
+All green on push/PR via GitHub Actions on `ubuntu-latest` — the repo `.github/workflows/ci.yml` runs `cargo test --locked` for this crate on the Node 22 matrix leg, alongside the extension's `npm test`.
 
 ## License
 
