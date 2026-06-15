@@ -1323,8 +1323,13 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
         Ok(p) => p,
         Err(e) => return finish_err(&mut state, format!("HEAD: {e}")),
     };
-    let total = probe.total;
     let accept_ranges = probe.accept_ranges;
+    // A re-probe (notably after dl.restart) can come back sizeless when the
+    // server streams the file without a Content-Length on HEAD or the Range
+    // GET. Keep the size we already knew rather than dropping the UI to "/ ?"
+    // and — critically — disarming the truncation gate, which is gated on
+    // total > 0. For a first run state.total is 0, so this is a no-op there.
+    let total = if probe.total > 0 { probe.total } else { state.total };
     state.total = total;
 
     // Rename dest to a Content-Disposition-derived name when (a) the server
@@ -1442,20 +1447,32 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
         if !user_agent.is_empty() { r = r.set("User-Agent", user_agent); }
         r
     }
-    // First attempt: HEAD.
+    // First attempt: HEAD. A HEAD that succeeds but omits Content-Length
+    // (streamed downloads behind X-Accel-Redirect / X-Sendfile expose the
+    // size only on the actual GET) must NOT short-circuit size discovery —
+    // keep what HEAD gave us as defaults and fall through to the Range GET,
+    // which recovers the total from Content-Range (206) or Content-Length
+    // (200). Returning total=0 here is what blanked restarted downloads to
+    // "/ ?" and silently disarmed the truncation gate.
+    let mut head_accept_ranges = false;
+    let mut head_cd: Option<String> = None;
     let head_req = apply_headers(ureq::head(url), cookies, user_agent);
     if let Ok(resp) = head_req.call() {
         let total = resp.header("Content-Length")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
-        let accept_ranges = resp.header("Accept-Ranges")
+        head_accept_ranges = resp.header("Accept-Ranges")
             .map(|v| v.eq_ignore_ascii_case("bytes"))
             .unwrap_or(false);
-        let cd = resp.header("Content-Disposition")
+        head_cd = resp.header("Content-Disposition")
             .and_then(parse_content_disposition_filename);
-        return Ok(ProbeResult {
-            total, accept_ranges, content_disposition_filename: cd,
-        });
+        if total > 0 {
+            return Ok(ProbeResult {
+                total,
+                accept_ranges: head_accept_ranges,
+                content_disposition_filename: head_cd,
+            });
+        }
     }
     // Fallback: Range GET. Discard the body — we only need headers.
     let get_req = apply_headers(ureq::get(url), cookies, user_agent)
@@ -1466,7 +1483,8 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
     };
     let status = resp.status();
     let cd = resp.header("Content-Disposition")
-        .and_then(parse_content_disposition_filename);
+        .and_then(parse_content_disposition_filename)
+        .or(head_cd);
     if status == 206 {
         // Parse Content-Range: "bytes 0-0/12345"
         let total = resp.header("Content-Range")
@@ -1484,14 +1502,16 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
         })
     } else {
         // 200 — server ignored Range. Whole body would download here;
-        // we abort the read and just record total size.
+        // we abort the read and just record total size. Honor HEAD's
+        // Accept-Ranges: a server can advertise ranges yet answer a
+        // bytes=0-0 probe with 200 (some do this only for tiny ranges).
         let total = resp.header("Content-Length")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
         drop(resp);
         Ok(ProbeResult {
             total,
-            accept_ranges: false,
+            accept_ranges: head_accept_ranges,
             content_disposition_filename: cd,
         })
     }
