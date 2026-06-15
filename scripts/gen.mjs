@@ -42,6 +42,18 @@ const testCount = testFiles.reduce((sum, f) => {
   return sum + (src.match(/^test\(/gm) || []).length;
 }, 0);
 
+// Host crate test count — statically counted by scanning the Rust test files
+// for `#[test]` attributes (mirrors the JS count above; no `cargo test` run at
+// gen time, so it stays deterministic and offline). All host tests live in
+// zpwrchrome-host/tests/*.rs; there are no `#[cfg(test)]` modules under src/.
+const cargoTestDir = join(ROOT, "zpwrchrome-host/tests");
+const cargoTestCount = readdirSync(cargoTestDir)
+  .filter((f) => f.endsWith(".rs"))
+  .reduce((sum, f) => {
+    const src = readFileSync(join(cargoTestDir, f), "utf8");
+    return sum + (src.match(/^\s*#\[test\]/gm) || []).length;
+  }, 0);
+
 // ---------------------------------------------------------------------------
 // Live stats for docs/report.html. Everything below is derived from the
 // repo state at gen time so the report cannot drift from reality.
@@ -422,7 +434,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 | Total chrome.commands | **${total}** (manifest cap on default keys is 4 — this ext ships ${withKey.length}; the other ${userBound} are user-bindable at \`chrome://extensions/shortcuts\`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **${testCount}** \`node:test\` cases (JS) + 121 \`cargo test\` cases (Rust) |
+| Test suite | **${testCount}** \`node:test\` cases (JS) + ${cargoTestCount} \`cargo test\` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from \`manifest.json\` by \`scripts/gen.sh\`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds \`serde\` / \`serde_json\` / \`ureq\` (foundational pure-Rust crates) and ships as a single static binary |
 
