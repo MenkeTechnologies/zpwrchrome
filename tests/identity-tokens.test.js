@@ -167,14 +167,14 @@ test("expandFieldValue: cc-exp-month / cc-exp-year extracted from cc-exp", () =>
 test("expandFieldValue: name composed from given + additional + family", () => {
   assert.equal(expandFieldValue("name", {
     "given-name": "Jane", "additional-name": "P", "family-name": "Doe",
-  }), "Jacob P Menke");
+  }), "Jane P Doe");
   assert.equal(expandFieldValue("name", { "given-name": "Jane", "family-name": "Doe" }),
                                           "Jane Doe");
 });
 
 test("expandFieldValue: given-name / family-name split out of a single name field", () => {
-  assert.equal(expandFieldValue("given-name",  { name: "Jacob P Menke" }), "Jane");
-  assert.equal(expandFieldValue("family-name", { name: "Jacob P Menke" }), "Doe");
+  assert.equal(expandFieldValue("given-name",  { name: "Jane P Doe" }), "Jane");
+  assert.equal(expandFieldValue("family-name", { name: "Jane P Doe" }), "Doe");
   // single-word name has no surname
   assert.equal(expandFieldValue("family-name", { name: "Jane" }), null);
 });

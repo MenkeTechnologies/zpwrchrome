@@ -210,8 +210,8 @@ A Chrome MV3 extension that bundles every daily-driver browser tool into one too
 
 \`\`\`text
 personal
-given-name: Jacob
-family-name: Menke
+given-name: Jane
+family-name: Doe
 email: jane.doe@example.com
 phone: +15551234
 address: 123 Main St
