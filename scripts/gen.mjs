@@ -740,6 +740,32 @@ const html = `<!DOCTYPE html>
     tr.user-set kbd, .muted { color: var(--text-muted); }
     .muted { font-style: italic; font-size: 11px; }
 
+    .prose { color: var(--text-dim); font-size: 13px; line-height: 1.7; }
+    .prose code { background: var(--bg-secondary); border: 1px solid var(--border); padding: 1px 6px; border-radius: 2px; color: var(--cyan); font-size: 12px; }
+    .prose strong { color: var(--text); }
+    .prose + .prose { margin-top: 10px; }
+
+    .cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 8px; }
+    .cat {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 8px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent);
+      background: var(--bg-secondary); border-radius: 2px; font-size: 12px;
+    }
+    .cat .lbl { color: var(--text); }
+    .cat .key { color: var(--text-muted); font-size: 11px; letter-spacing: 1px; }
+
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .pill {
+      display: inline-block; padding: 3px 9px; font-size: 11px;
+      border: 1px solid var(--cyan); color: var(--cyan); border-radius: 2px;
+      background: rgba(5,217,232,0.06); letter-spacing: .3px;
+    }
+
+    .defs { list-style: none; margin: 6px 0 0; }
+    .defs li { margin: 0 0 12px; font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+    .defs li strong { color: var(--accent-light); display: block; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 1px; margin-bottom: 3px; text-transform: uppercase; }
+    .defs li code { background: var(--bg-secondary); border: 1px solid var(--border); padding: 1px 6px; border-radius: 2px; color: var(--cyan); font-size: 11px; }
+
     footer { text-align: center; padding: 24px 16px 40px; color: var(--text-muted); font-size: 11px; letter-spacing: .5px; }
     footer a { color: var(--cyan); text-decoration: none; }
     footer a:hover { color: var(--accent-light); text-shadow: 0 0 8px var(--cyan-glow); }
@@ -760,6 +786,9 @@ const html = `<!DOCTYPE html>
       <a class="btn btn-primary"   href="https://github.com/MenkeTechnologies/zpwrchrome">▸ source on github</a>
       <a class="btn btn-secondary" href="#install">▸ install</a>
       <a class="btn btn-secondary" href="#commands">▸ commands</a>
+      <a class="btn btn-secondary" href="#categories">▸ categories</a>
+      <a class="btn btn-secondary" href="#host">▸ native host</a>
+      <a class="btn btn-secondary" href="#permissions">▸ permissions</a>
       <a class="btn btn-secondary" href="#theme">▸ theme</a>
       <a class="btn btn-secondary" href="report.html">▸ engineering report</a>
     </div>
@@ -808,6 +837,175 @@ ${cmds.map(htmlRow).join("\n")}
           </tbody>
         </table>
       </div>
+    </section>
+
+    <section class="card" id="categories">
+      <h2>popup categories</h2>
+      <p class="prose">
+        The toolbar popup (<code>popup.html</code> / <code>popup.css</code> / <code>popup.js</code>)
+        renders <strong>${popupCategories.length}</strong> categories, each fzf-scored against
+        tab title + host. Jump straight to a category with <code>Cmd+1</code>..<code>Cmd+0</code>
+        (the digit shown beside each row); <code>Cmd+P</code> and <code>Cmd+K</code> jump to the
+        Pass and Tech categories. Type to fuzzy-filter, <kbd>↑</kbd>/<kbd>↓</kbd> to move,
+        <kbd>Enter</kbd> to activate, <kbd>Del</kbd> to close/forget the highlighted row.
+      </p>
+      <div class="cats">
+${popupCategories.map((c) => `        <div class="cat"><span class="lbl">${escape(c.label)}</span><span class="key">${escape(c.key)}</span></div>`).join("\n")}
+      </div>
+    </section>
+
+    <section class="card" id="how">
+      <h2>how it works</h2>
+      <p class="prose">
+        zpwrchrome is a <strong>Manifest V3</strong> extension. The service worker
+        (<code>background.js</code>) tracks tab activation across every window in
+        <code>chrome.storage.session</code> so the MRU stack survives service-worker
+        restarts, dispatches the ${total} keyboard commands, answers the
+        <strong>${bgKinds.length}</strong> message kinds the popup / modal / managers send,
+        registers userscripts, and bridges to the native host for <code>pass</code> and
+        segmented downloads.
+      </p>
+      <p class="prose">
+        On-page features ship as content scripts rather than DevTools panels:
+        a <strong>page-theme injector</strong> (<code>modal/cyber-theme.js</code>) paints
+        arbitrary pages with the HUD palette at <code>document_start</code>;
+        <strong>reader mode</strong> (<code>modal/reader-mode.js</code>) extracts the main
+        article into a sanitized overlay; <strong>Turn Off the Lights</strong>
+        (<code>modal/lights-off.js</code>) dims the page while lifting <code>&lt;video&gt;</code>
+        elements above the overlay; a <strong>JSON viewer</strong>
+        (<code>modal/json-viewer.js</code>) and <strong>XML viewer</strong>
+        (<code>modal/xml-viewer.js</code>) replace raw structured-data pages with
+        collapsible trees (RFC 6901 pointer / XPath copy). The
+        <strong>find-in-all-tabs</strong> page scrapes <code>innerText</code> from every
+        open http(s) tab in parallel (capped at 200&nbsp;KB / tab) and fuzzy-filters
+        across them, scrolling the chosen tab to the match via <code>window.find()</code>.
+      </p>
+      <p class="prose">
+        Pure helpers live in <code>lib/util.js</code> and <code>lib/fzf.js</code> with zero
+        <code>chrome.*</code> references, so they unit-test headless in plain Node and can be
+        inlined into the shadow-DOM modal by <code>scripts/build-modal.mjs</code>. The fzf
+        scorer matches the constants used across the MenkeTechnologies tools (boundary&nbsp;9,
+        camel&nbsp;7, gap-start&nbsp;−3, match&nbsp;16).
+      </p>
+    </section>
+
+    <section class="card" id="host">
+      <h2>native host (<code>zpwrchrome-host</code>)</h2>
+      <p class="prose">
+        <code>pass</code>, GPG, and segmented downloads can't run inside an MV3 service
+        worker, so a small Rust binary handles them over Chrome native messaging
+        (length-prefixed JSON on stdio). It is a strict 1:1 port of
+        <code>browserpass-native</code> with the zpwrchrome extension actions layered on top.
+        Install and register it for your extension ID:
+      </p>
+      <ol class="install" style="margin-top:8px;">
+        <li><code>cargo install zpwrchrome-host</code></li>
+        <li><code>zpwrchrome-host --install &lt;ext-id&gt;</code> &mdash; writes the native-messaging manifest (host name <code>com.menketechnologies.zpwrchrome</code>) into every detected Chromium-family browser config dir on macOS/Linux. Find the ext-id at <code>chrome://extensions</code> (Developer mode).</li>
+        <li><code>zpwrchrome-host --version</code> / <code>-V</code> &mdash; print version and exit. <code>-v</code> logs verbosely to stderr. <code>--help</code> / <code>-h</code> prints usage.</li>
+      </ol>
+      <p class="prose" style="margin-top:10px;">
+        With no flags the host reads one framed JSON request on stdin, dispatches it, and
+        exits &mdash; one process per request, mirroring upstream. It handles the upstream
+        browserpass actions <code>configure</code>, <code>list</code>, <code>tree</code>,
+        <code>fetch</code>, <code>save</code>, <code>delete</code>, <code>echo</code>; the
+        extension actions <code>otp</code> and <code>search</code>; and the download-manager
+        actions <code>dl.add</code> / <code>dl.list</code> / <code>dl.pause</code> /
+        <code>dl.resume</code> / <code>dl.cancel</code> / <code>dl.remove</code> /
+        <code>dl.clear</code> / <code>dl.openDir</code> / <code>dl.openFile</code> /
+        <code>dl.writeFile</code> / <code>dl.writeFileChunk</code>. Downloads run in
+        <strong>detached worker processes</strong> (<code>--dl-worker &lt;gid&gt;</code>,
+        one per download) that <code>setsid</code> away from the parent, fetch N parallel
+        <code>Range</code> segments with <code>ureq</code> + <code>rustls</code> (no
+        <code>aria2</code> binary), and persist authoritative state under
+        <code>~/.cache/zpwrchrome/dl/</code> so the queue survives browser restarts.
+        <code>pass</code> support also requires GPG configured locally.
+      </p>
+    </section>
+
+    <section class="card" id="userscripts">
+      <h2>userscripts (Tampermonkey-equivalent)</h2>
+      <p class="prose">
+        The userscript engine (<code>lib/userscript.js</code> + <code>lib/gm-shim.js</code>)
+        runs scripts in Chrome's native <code>USER_SCRIPT</code> world via
+        <code>chrome.userScripts</code>. It parses the <code>// ==UserScript==</code> metadata
+        block (<code>@match</code> / <code>@include</code> / <code>@exclude</code>,
+        <code>@run-at</code>, <code>@name</code>, …), validates match patterns, and exposes a
+        Greasemonkey-style API. Manage, edit, enable/disable, and watch the injection fire-log
+        in the dashboard at <code>scripts-manager/manager.html</code> (open with the
+        <code>manage-scripts</code> command). Supported GM calls:
+      </p>
+      <div class="pills">
+${["GM_getValue", "GM_setValue", "GM_deleteValue", "GM_listValues", "GM_setClipboard", "GM_openInTab", "GM_notification", "GM_addStyle", "GM_addElement", "GM_info"].map((g) => `        <span class="pill">${g}</span>`).join("\n")}
+      </div>
+      <p class="prose" style="margin-top:8px;">
+        Each is also available in promise form (<code>GM.getValue</code>, <code>GM.setValue</code>,
+        …). Per-script values are stored in an isolated <code>chrome.storage.local</code> bag,
+        keyed by script, and dropped when the script is deleted.
+      </p>
+    </section>
+
+    <section class="card" id="permissions">
+      <h2>permissions</h2>
+      <p class="prose">
+        ${permissions.length} permissions are declared in <code>manifest.json</code>.
+        <code>tests/static.test.js</code> enforces that every declared permission is actually
+        referenced in <code>background.js</code> or <code>popup.js</code> &mdash; no dead
+        permissions ship.
+      </p>
+      <div class="pills">
+${permissions.map((p) => `        <span class="pill">${escape(p)}</span>`).join("\n")}
+      </div>
+    </section>
+
+    <section class="card" id="config">
+      <h2>configuration &amp; storage</h2>
+      <p class="prose">
+        No options file and no build step &mdash; runtime state lives in
+        <code>chrome.storage</code>. <code>chrome.storage.session</code> holds the cross-window
+        MRU stack (survives service-worker restart, cleared on browser restart);
+        <code>chrome.storage.local</code> holds scenes, installed userscripts, per-script GM
+        bags, the userscript fire-log ring buffer, download settings / rules / queue snapshot,
+        page-theme injector knobs, ModHeader profiles, and pass settings. Browsing history and
+        recently-closed tabs come from the Chrome-managed <code>chrome.history</code> and
+        <code>chrome.sessions</code> APIs. The download host keeps its own authoritative state
+        on disk under <code>~/.cache/zpwrchrome/dl/</code>.
+      </p>
+    </section>
+
+    <section class="card" id="troubleshooting">
+      <h2>troubleshooting</h2>
+      <ul class="defs">
+        <li>
+          <strong>pass / downloads do nothing</strong>
+          The native host isn't registered. Run
+          <code>cargo install zpwrchrome-host &amp;&amp; zpwrchrome-host --install &lt;ext-id&gt;</code>
+          with your extension's ID (from <code>chrome://extensions</code>, Developer mode), then
+          restart the browser. Chrome reports "Native host has exited" when the manifest is
+          missing or points at a stale binary path.
+        </li>
+        <li>
+          <strong>pass entries don't decrypt</strong>
+          <code>pass</code> support needs GPG configured locally — the host shells out to your
+          GPG agent to decrypt <code>~/.password-store/*.gpg</code>. Verify
+          <code>pass show &lt;entry&gt;</code> works in a terminal first.
+        </li>
+        <li>
+          <strong>only 4 commands have default shortcuts</strong>
+          Chrome MV3 caps default-suggested keys at 4. Bind any of the remaining
+          ${userBound} commands yourself at <code>chrome://extensions/shortcuts</code>.
+        </li>
+        <li>
+          <strong>a shortcut doesn't fire</strong>
+          The key is reserved by the OS or another extension, or collides with an existing
+          binding. Pick a different chord at <code>chrome://extensions/shortcuts</code>.
+        </li>
+        <li>
+          <strong>downloads behind a login fail</strong>
+          The host forwards Chrome cookies + User-Agent on every request; if a URL still
+          401/403s, the session cookie may have expired — reload the source page so Chrome
+          refreshes the cookie, then retry the download.
+        </li>
+      </ul>
     </section>
 
     <section class="card" id="theme">
@@ -986,7 +1184,7 @@ const designDecisions = [
   ["Closed shadow DOM for the modal", "Host-page CSS can never leak in. Fonts inlined as base64 data: URIs so strict host-page font-src CSP can't block them."],
   ["Window-capture keydown for the modal", "window.addEventListener(\"keydown\", h, true) + stopImmediatePropagation beats Vimium / cVim / any other extension that listens on document."],
   ["Frecency for History", "visitCount + 2*typedCount over hoursAgo+2. Typed visits weigh 2x (deliberate). Linear decay: ~57x weight to 1h-ago vs 1w-ago."],
-  ["Default-key ceiling = 4", "Chrome MV3 hard cap. Currently 3 used (Alt+T popup, Cmd+E switch-previous-tab, Cmd+Y history). Everything else binds at chrome://extensions/shortcuts."],
+  ["Default-key ceiling = 4", `Chrome MV3 hard cap. Currently ${withKey.length} used (${withKey.map(([n, v]) => `${(v.suggested_key?.mac || v.suggested_key?.default).replace(/Command/g, "Cmd")} ${n}`).join(", ")}). Everything else binds at chrome://extensions/shortcuts.`],
   ["Pure helpers in lib/util.js", "Zero chrome.* refs so they unit-test in plain Node and so they can also be inlined into the content-script modal via UTIL_INLINE_START/END markers + scripts/build-modal.mjs."],
   ["Pure helpers in zpwrchrome-host/src/extensions/", "Filename sanitization, unique_dest_path collision handling, subseq search scorer, OTP otpauth extractor — all <code>fn</code>s with no I/O. cargo test exercises them directly. Integration tests stand up a std::net HTTP/1.1 fixture with Range support to drive the detached worker process end-to-end, with cookie-gate + retry-recovery + cancel paths.",],
 ];
