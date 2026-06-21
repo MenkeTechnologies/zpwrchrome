@@ -176,7 +176,7 @@ cargo test
 - End-to-end with spawned binary (`tests/ported_integration.rs`) — echo round-trip, every error code path, configure/list/tree/delete against tempdir stores
 - Frame round-trip (`tests/frame_roundtrip.rs`)
 - Live pass store (`tests/live_password_store.rs`) — gated on `~/.password-store/.gpg-id` presence; verifies byte-equal `pass show` round-trip
-- Extensions: `extensions_otp.rs`, `extensions_search.rs`, `extensions_run_command.rs`, `extensions_dl_state.rs`, `extensions_dl_integration.rs` (74 cases: 2 MiB segmented download against a local HTTP server with Range support, dl.clear scopes, dl.remove cancel-and-delete, dl.writeFile + writeFileChunk streaming protocol, naming-mask token substitution, probe_headers HEAD-then-Range-GET fallback, spawn_worker setsid + close-fd, dl.resume worker-pid liveness check, expand_home tilde resolution).
+- Extensions: `extensions_otp.rs`, `extensions_search.rs`, `extensions_run_command.rs`, `extensions_dl_state.rs`, `extensions_dl_integration.rs` (78 cases: 2 MiB segmented download against a local HTTP server with Range support, dl.clear scopes, dl.remove cancel-and-delete, dl.writeFile + writeFileChunk streaming protocol, naming-mask token substitution, probe_headers HEAD-then-Range-GET fallback, spawn_worker setsid + close-fd, dl.resume worker-pid liveness check, expand_home tilde resolution).
 
 All green on push/PR via GitHub Actions on `ubuntu-latest` — the repo `.github/workflows/ci.yml` runs `cargo test --locked` for this crate on the Node 22 matrix leg, alongside the extension's `npm test`.
 
