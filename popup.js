@@ -100,6 +100,25 @@ function renderCats() {
   });
 }
 
+// Fuzzy-filter helper shared by the non-tab category modes (scenes, tree,
+// tech, pass, minimap) so every mode matches the search box the same fzf way
+// as the tab modes. `primary` is the displayed field; `rest` are extra
+// fields that should still match but aren't highlighted. Returns the match
+// indices for `primary` (highlight those chars), [] when the query is empty
+// or matched only a secondary field, or null when nothing matched (drop row).
+function fzfFields(query, primary, ...rest) {
+  if (!query) return [];
+  const pm = fzfMatch(query, primary || "");
+  if (pm) return pm.indices;
+  for (const f of rest) if (fzfMatch(query, f || "")) return [];
+  return null;
+}
+
+// Render a field with fzf match highlights when present, else plain-escaped.
+function hlText(text, indices) {
+  return indices?.length ? highlightWithIndices(text, indices, escapeHtml) : escapeHtml(text);
+}
+
 function currentList() {
   const cat = CATEGORIES[state.catIdx];
 
@@ -110,38 +129,49 @@ function currentList() {
       return t && { ...t, kind: "closed", sessionId: s.tab?.sessionId || s.window?.sessionId };
     }).filter(Boolean);
   } else if (cat.id === "scenes") {
-    // Scenes have name+slug, not URL+title — bypass the fzf scorer and
-    // use plain substring matching against the scene metadata.
-    const f = state.filter.toLowerCase();
+    // Scenes match the search box via fzf against name (highlighted) + slug,
+    // preserving the stored metadata order (no score re-sort).
     return state.scenes
-      .filter((s) => !f || s.name.toLowerCase().includes(f) || s.slug.includes(f))
-      .map((s) => ({
-        kind: "scene",
-        slug: s.slug,
-        name: s.name,
-        title: s.name,
-        url: `scene://${s.slug}`,
-        tabCount: s.tabs?.length || 0,
-        updated_at: s.updated_at,
-      }));
+      .map((s) => {
+        const hl = fzfFields(state.filter, s.name, s.slug);
+        if (hl === null) return null;
+        return {
+          kind: "scene",
+          slug: s.slug,
+          name: s.name,
+          title: s.name,
+          url: `scene://${s.slug}`,
+          tabCount: s.tabs?.length || 0,
+          updated_at: s.updated_at,
+          _nameHl: hl,
+        };
+      })
+      .filter(Boolean);
   } else if (cat.id === "tree") {
-    // Tree rows must preserve parent→child ordering — bypass fzf reshape.
-    const f = state.filter.toLowerCase();
-    const matchesLite = (t) => !f
-      || (t.title || "").toLowerCase().includes(f)
-      || (t.url   || "").toLowerCase().includes(f)
-      || host(t.url || "").toLowerCase().includes(f);
+    // Tree rows must preserve parent→child ordering — fzf-filter and
+    // highlight against title/host, but never re-sort by score.
+    const f = state.filter;
     const { roots } = buildTabTree(state.mru);
     const flat = flattenTree(roots, state.collapsedTreeIds);
     return flat
-      .filter((n) => matchesLite(n.tab))
-      .map((n) => ({
-        ...n.tab,
-        kind: "tree",
-        _depth: n.depth,
-        _hasChildren: n.hasChildren,
-        _collapsed: n.collapsed,
-      }));
+      .map((n) => {
+        const t = n.tab;
+        const titleText = t.title || t.url || "";
+        const hostText  = host(t.url || "");
+        const tm = f ? fzfMatch(f, titleText) : null;
+        const hm = f ? fzfMatch(f, hostText)  : null;
+        if (f && !tm && !hm) return null;
+        return {
+          ...t,
+          kind: "tree",
+          _depth: n.depth,
+          _hasChildren: n.hasChildren,
+          _collapsed: n.collapsed,
+          _titleHl: tm?.indices || [],
+          _hostHl:  hm?.indices || [],
+        };
+      })
+      .filter(Boolean);
   } else if (cat.id === "history") {
     // state.history arrives already frecency-sorted (recent + frequent first)
     // from background.js's history-list handler. Carry frecency forward so
@@ -159,20 +189,23 @@ function currentList() {
       loadTech();
       return [];
     }
-    const f = state.filter.toLowerCase();
     return state.tech.hits
-      .filter((h) => !f
-        || h.name.toLowerCase().includes(f)
-        || (h.cats || []).some((c) => (state.tech.categories[c]?.name || "").toLowerCase().includes(f)))
-      .map((h) => ({
-        kind:  "tech",
-        name:  h.name,
-        title: h.name,
-        version: h.version || "",
-        confidence: h.confidence || 0,
-        cats: (h.cats || []).map((c) => state.tech.categories[c]?.name).filter(Boolean),
-        url:   h.website || "",
-      }));
+      .map((h) => {
+        const cats = (h.cats || []).map((c) => state.tech.categories[c]?.name).filter(Boolean);
+        const hl = fzfFields(state.filter, h.name, ...cats);
+        if (hl === null) return null;
+        return {
+          kind:  "tech",
+          name:  h.name,
+          title: h.name,
+          version: h.version || "",
+          confidence: h.confidence || 0,
+          cats,
+          url:   h.website || "",
+          _nameHl: hl,
+        };
+      })
+      .filter(Boolean);
   } else if (cat.id === "pass") {
     if (!state.pass.loaded) {
       loadPass();
@@ -191,25 +224,26 @@ function currentList() {
         searchMode: true
       }));
     }
-    const f = state.filter.toLowerCase();
     return state.pass.matches
-      .filter((m) => !f || m.path.toLowerCase().includes(f))
-      .map((m) => ({
-        kind: "pass",
-        path: m.path,
-        store: m.store,
-        title: m.path,
-        url: state.pass.host || ""
-      }));
+      .map((m) => {
+        const hl = fzfFields(state.filter, m.path);
+        if (hl === null) return null;
+        return {
+          kind: "pass",
+          path: m.path,
+          store: m.store,
+          title: m.path,
+          url: state.pass.host || "",
+          _pathHl: hl,
+        };
+      })
+      .filter(Boolean);
   } else if (cat.id === "minimap") {
-    // Minimap doesn't render titles; filter still helps when user types.
-    const f = state.filter.toLowerCase();
-    const matchesLite = (t) => !f
-      || (t.title || "").toLowerCase().includes(f)
-      || (t.url   || "").toLowerCase().includes(f)
-      || host(t.url || "").toLowerCase().includes(f);
+    // Minimap doesn't render titles, so there's nothing to highlight, but the
+    // filter still fuzzy-matches title/host like every other mode.
+    const f = state.filter;
     return state.mru
-      .filter(matchesLite)
+      .filter((t) => !f || fzfMatch(f, t.title || t.url || "") || fzfMatch(f, host(t.url || "")))
       .map((t) => ({ ...t, kind: "minimap" }));
   } else {
     items = state.mru.map((t) => ({ ...t, kind: "open" }));
@@ -295,7 +329,7 @@ function renderList() {
 
   $list.innerHTML = saveForm + techHeader + items.map((t, i) => {
     if (t.kind === "tech") {
-      const name    = escapeHtml(t.name);
+      const name    = hlText(t.name, t._nameHl);
       const ver     = t.version ? `<span class="tech-version">${escapeHtml(t.version)}</span>` : "";
       const cats    = (t.cats || []).map((c) => `<span class="tech-cat">${escapeHtml(c)}</span>`).join("");
       const conf    = t.confidence < 100 ? `<span class="tech-conf">${t.confidence}%</span>` : "";
@@ -313,7 +347,8 @@ function renderList() {
       `;
     }
     if (t.kind === "pass") {
-      const pth   = escapeHtml(t.path);
+      const pth   = escapeHtml(t.path);                 // for data-* attributes
+      const pthHl = hlText(t.path, t._pathHl);          // for visible name
       const store = escapeHtml(t.store || "");
       const storeBadge = store
         ? `<span class="pass-store-badge" title="store: ${store}">${store}</span>`
@@ -324,7 +359,7 @@ function renderList() {
              data-idx="${i}" data-kind="pass" ${dataset}>
           <span class="favicon pass-glyph">⛀</span>
           <div class="title-col">
-            <span class="name">${storeBadge}${pth}</span>
+            <span class="name">${storeBadge}${pthHl}</span>
             <span class="path">pass · ${escapeHtml(t.url)}</span>
           </div>
           <div class="badges pass-badges">
@@ -344,7 +379,7 @@ function renderList() {
              data-idx="${i}" data-kind="scene" data-slug="${escapeHtml(t.slug)}">
           <span class="favicon scene-glyph">⌬</span>
           <div class="title-col">
-            <span class="name">${escapeHtml(t.name)}</span>
+            <span class="name">${hlText(t.name, t._nameHl)}</span>
             <span class="path">${t.tabCount} tab${t.tabCount === 1 ? "" : "s"} · ${escapeHtml(when)} · slug: ${escapeHtml(t.slug)}</span>
           </div>
           <div class="badges">

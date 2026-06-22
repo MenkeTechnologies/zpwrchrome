@@ -61,9 +61,10 @@ test("template currentList uses frecency as fzf tiebreaker on history rows", () 
   assert.match(tmpl, /\(b\.frecency \?\? 0\) - \(a\.frecency \?\? 0\)/);
 });
 
-test("template tree category bypasses fzf reshape (preserves opener order)", () => {
+test("template tree category fzf-filters but preserves opener order (no score re-sort)", () => {
   assert.match(tmpl, /buildTabTree\(state\.mru\)/);
   assert.match(tmpl, /flattenTree\(roots, state\.collapsedTreeIds\)/);
+  assert.match(tmpl, /const tm = f \? fzfMatch\(f, titleText\) : null/);
   assert.match(tmpl, /kind: "tree"/);
 });
 
@@ -73,10 +74,10 @@ test("template minimap category colors cells with domainHueFor", () => {
   assert.match(tmpl, /hsl\(\$\{hue\},75%,45%\)/);
 });
 
-test("template scenes category uses substring filter (not fzf)", () => {
+test("template scenes category fzf-filters name+slug with highlight", () => {
   assert.match(tmpl, /cat\.id === "scenes"/);
-  assert.match(tmpl, /s\.name\.toLowerCase\(\)\.includes\(f\)/);
-  assert.match(tmpl, /s\.slug\.includes\(f\)/);
+  assert.match(tmpl, /fzfFields\(state\.filter, s\.name, s\.slug\)/);
+  assert.match(tmpl, /_nameHl: hl/);
 });
 
 test("template render() branches to renderMinimap for minimap category", () => {

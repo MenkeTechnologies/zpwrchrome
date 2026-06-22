@@ -787,6 +787,25 @@ function frecencyScore(item, nowMs = Date.now()) {
 
   function hostOf(url) { try { return new URL(url).hostname; } catch { return ""; } }
 
+  // Fuzzy-filter helper shared by the non-tab category modes (scenes, tree,
+  // minimap) so every mode matches the search box the same fzf way as the tab
+  // modes. `primary` is the displayed field; `rest` are extra fields that
+  // still match but aren't highlighted. Returns the match indices for
+  // `primary` (highlight those chars), [] when the query is empty or matched
+  // only a secondary field, or null when nothing matched (drop row).
+  function fzfFields(query, primary, ...rest) {
+    if (!query) return [];
+    const pm = fzfMatch(query, primary || "");
+    if (pm) return pm.indices;
+    for (const f of rest) if (fzfMatch(query, f || "")) return [];
+    return null;
+  }
+
+  // Render a field with fzf match highlights when present, else plain-escaped.
+  function hlText(text, indices) {
+    return indices?.length ? highlightWithIndices(text, indices, escapeHtml) : escapeHtml(text);
+  }
+
   function currentList() {
     const cat = CATEGORIES[state.catIdx];
 
@@ -798,45 +817,55 @@ function frecencyScore(item, nowMs = Date.now()) {
         return t && { ...t, kind: "closed", sessionId: s.tab?.sessionId || s.window?.sessionId };
       }).filter(Boolean);
     } else if (cat.id === "scenes") {
-      // Scenes — plain substring match (not fzf — name+slug, not URL+title).
-      const f = state.filter.toLowerCase();
+      // Scenes match the search box via fzf against name (highlighted) + slug,
+      // preserving the stored metadata order (no score re-sort).
       return state.scenes
-        .filter((s) => !f || s.name.toLowerCase().includes(f) || s.slug.includes(f))
-        .map((s) => ({
-          kind: "scene",
-          slug: s.slug,
-          name: s.name,
-          title: s.name,
-          url: `scene://${s.slug}`,
-          tabCount: s.tabs?.length || 0,
-          updated_at: s.updated_at,
-        }));
+        .map((s) => {
+          const hl = fzfFields(state.filter, s.name, s.slug);
+          if (hl === null) return null;
+          return {
+            kind: "scene",
+            slug: s.slug,
+            name: s.name,
+            title: s.name,
+            url: `scene://${s.slug}`,
+            tabCount: s.tabs?.length || 0,
+            updated_at: s.updated_at,
+            _nameHl: hl,
+          };
+        })
+        .filter(Boolean);
     } else if (cat.id === "tree") {
-      // Tree rows preserve parent→child ordering — bypass fzf reshape.
-      const f = state.filter.toLowerCase();
-      const matchesLite = (t) => !f
-        || (t.title || "").toLowerCase().includes(f)
-        || (t.url   || "").toLowerCase().includes(f)
-        || hostOf(t.url || "").toLowerCase().includes(f);
+      // Tree rows must preserve parent→child ordering — fzf-filter and
+      // highlight against title/host, but never re-sort by score.
+      const f = state.filter;
       const { roots } = buildTabTree(state.mru);
       const flat = flattenTree(roots, state.collapsedTreeIds);
       return flat
-        .filter((n) => matchesLite(n.tab))
-        .map((n) => ({
-          ...n.tab,
-          kind: "tree",
-          _depth: n.depth,
-          _hasChildren: n.hasChildren,
-          _collapsed: n.collapsed,
-        }));
+        .map((n) => {
+          const t = n.tab;
+          const titleText = t.title || t.url || "";
+          const hostText  = hostOf(t.url || "");
+          const tm = f ? fzfMatch(f, titleText) : null;
+          const hm = f ? fzfMatch(f, hostText)  : null;
+          if (f && !tm && !hm) return null;
+          return {
+            ...t,
+            kind: "tree",
+            _depth: n.depth,
+            _hasChildren: n.hasChildren,
+            _collapsed: n.collapsed,
+            _titleHl: tm?.indices || [],
+            _hostHl:  hm?.indices || [],
+          };
+        })
+        .filter(Boolean);
     } else if (cat.id === "minimap") {
-      const f = state.filter.toLowerCase();
-      const matchesLite = (t) => !f
-        || (t.title || "").toLowerCase().includes(f)
-        || (t.url   || "").toLowerCase().includes(f)
-        || hostOf(t.url || "").toLowerCase().includes(f);
+      // Minimap doesn't render titles, so there's nothing to highlight, but the
+      // filter still fuzzy-matches title/host like every other mode.
+      const f = state.filter;
       return state.mru
-        .filter(matchesLite)
+        .filter((t) => !f || fzfMatch(f, t.title || t.url || "") || fzfMatch(f, hostOf(t.url || "")))
         .map((t) => ({ ...t, kind: "minimap" }));
     } else if (cat.id === "history") {
       // Already frecency-sorted by background. frecency forwarded for the
@@ -1038,7 +1067,7 @@ function frecencyScore(item, nowMs = Date.now()) {
              data-idx="${idx}" data-kind="scene" data-slug="${escapeHtml(t.slug)}">
           <span class="favicon scene-glyph">⌬</span>
           <div class="title-col">
-            <span class="name">${escapeHtml(t.name)}</span>
+            <span class="name">${hlText(t.name, t._nameHl)}</span>
             <span class="path">${t.tabCount} tab${t.tabCount === 1 ? "" : "s"} · ${escapeHtml(when)} · slug: ${escapeHtml(t.slug)}</span>
           </div>
           <div class="badges">

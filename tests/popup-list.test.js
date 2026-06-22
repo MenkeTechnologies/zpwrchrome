@@ -18,15 +18,17 @@ test("popup currentList maps closed sessions to kind:closed with sessionId", () 
   assert.match(currentListFn[0], /kind: "closed", sessionId:/);
 });
 
-test("popup currentList scenes category uses substring filter not fzf", () => {
+test("popup currentList scenes category fzf-filters name+slug with highlight", () => {
   assert.match(currentListFn[0], /cat\.id === "scenes"/);
-  assert.match(currentListFn[0], /s\.name\.toLowerCase\(\)\.includes\(f\) \|\| s\.slug\.includes\(f\)/);
+  assert.match(currentListFn[0], /fzfFields\(state\.filter, s\.name, s\.slug\)/);
+  assert.match(currentListFn[0], /_nameHl: hl/);
   assert.match(currentListFn[0], /kind: "scene"/);
 });
 
-test("popup currentList tree category preserves opener order via flattenTree", () => {
+test("popup currentList tree category fzf-filters but preserves opener order via flattenTree", () => {
   assert.match(currentListFn[0], /buildTabTree\(state\.mru\)/);
   assert.match(currentListFn[0], /flattenTree\(roots, state\.collapsedTreeIds\)/);
+  assert.match(currentListFn[0], /const tm = f \? fzfMatch\(f, titleText\) : null/);
   assert.match(currentListFn[0], /kind: "tree"/);
 });
 
