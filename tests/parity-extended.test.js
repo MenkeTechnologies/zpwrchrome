@@ -64,17 +64,19 @@ test("popup and modal both close/delete open tabs via close-tab message", () => 
   }
 });
 
-test("popup and modal scenes category uses substring filter not fzf", () => {
+test("popup and modal scenes category fzf-filters name+slug with highlight", () => {
   for (const [name, src] of [["popup", popup], ["modal", modal]]) {
-    assert.match(src, /s\.name\.toLowerCase\(\)\.includes\(f\)/, `${name}: scene name filter`);
-    assert.match(src, /s\.slug\.includes\(f\)/, `${name}: scene slug filter`);
+    assert.match(src, /fzfFields\(state\.filter, s\.name, s\.slug\)/, `${name}: scene fzf filter`);
+    assert.match(src, /_nameHl: hl/, `${name}: scene name highlight`);
   }
 });
 
-test("popup and modal tree category uses matchesLite not fzfMatch", () => {
+test("popup and modal tree category fzf-filters title+host but preserves opener order", () => {
   for (const [name, src] of [["popup", popup], ["modal", modal]]) {
-    assert.match(src, /function matchesLite|const matchesLite/, `${name}: lite filter fn`);
     assert.match(src, /cat\.id === "tree"/, `${name}: tree branch`);
+    assert.match(src, /const tm = f \? fzfMatch\(f, titleText\) : null/, `${name}: tree fzf title`);
+    assert.match(src, /flattenTree\(roots, state\.collapsedTreeIds\)/, `${name}: tree order preserved`);
+    assert.doesNotMatch(src, /const matchesLite/, `${name}: no substring matchesLite in tree`);
   }
 });
 
