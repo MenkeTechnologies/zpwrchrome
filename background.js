@@ -55,6 +55,7 @@ import { loadRules as loadDlRules } from "./scripts-manager/dl-rules.js";
 import { diagPush, diagRead, diagClear } from "./lib/diag.js";
 import { expandBatchSafe }                from "./lib/dl-batch.js";
 import { screenshotFullPage, blobToBase64 } from "./lib/screenshot.js";
+import { extractCslFromPage } from "./lib/zcite-extract.js";
 
 const MRU_KEY = "mru";
 const DL_SETTINGS_KEY = "dl.settings";
@@ -1772,11 +1773,52 @@ chrome.runtime.onStartup.addListener(()   => { bpDlBroadcast(); });
 //     mirroring Chrono's right-click: manager, settings, change folder,
 //     diagnostics, help, report-issue, repo.
 
+// "Save to zcite" — extract the active page's bibliographic metadata as CSL-JSON and hand
+// it to the native host's `zcite.save`, which drops it into zcite's inbox for import. The
+// MIT extension/host never link the proprietary zcite engine; the handoff is a CSL-JSON
+// file in a shared directory.
+async function savePageToZcite(tab) {
+  if (!tab || !tab.id) return;
+  let csl = null;
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: extractCslFromPage,
+    });
+    csl = results && results[0] && results[0].result;
+  } catch (e) {
+    notifyZcite("Save to zcite failed", String((e && e.message) || e));
+    return;
+  }
+  if (!csl || !csl.title) {
+    notifyZcite("Save to zcite", "No citation metadata found on this page.");
+    return;
+  }
+  try {
+    await bpSend({ action: "zcite.save", item: csl });
+    notifyZcite("Saved to zcite", csl.title);
+  } catch (e) {
+    notifyZcite("Save to zcite failed", String((e && e.message) || e));
+  }
+}
+
+function notifyZcite(title, message) {
+  if (chrome.notifications) {
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+      title,
+      message: String(message || "").slice(0, 200),
+    });
+  }
+}
+
 const CTX_DL_LINK    = "zpwrchrome-dl-link";
 const CTX_DL_MEDIA   = "zpwrchrome-dl-media";
 const CTX_PG_LINKS   = "zpwrchrome-pg-links";
 const CTX_PG_IMAGES  = "zpwrchrome-pg-images";
 const CTX_PG_MEDIA   = "zpwrchrome-pg-media";
+const CTX_PG_ZCITE   = "zpwrchrome-pg-zcite";
 const CTX_ACT_MGR    = "zpc-act-manager";
 const CTX_ACT_SCR    = "zpc-act-scripts";
 const CTX_ACT_PASS   = "zpc-act-pass";
@@ -1836,6 +1878,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.create({ id: CTX_PG_LINKS,  title: "zpwrchrome: download all links on page",  contexts: ["page"] }, ok);
   chrome.contextMenus.create({ id: CTX_PG_IMAGES, title: "zpwrchrome: download all images on page", contexts: ["page"] }, ok);
   chrome.contextMenus.create({ id: CTX_PG_MEDIA,  title: "zpwrchrome: download all media on page",  contexts: ["page"] }, ok);
+  chrome.contextMenus.create({ id: CTX_PG_ZCITE,  title: "Save page to zcite (reference)",          contexts: ["page"] }, ok);
 
   // Toolbar-icon menu (right-click on the extension's action icon).
   //
@@ -1941,6 +1984,12 @@ if (chrome.contextMenus) {
     }
     if (info.menuItemId === CTX_ACT_ISSUE) { chrome.tabs.create({ url: ISSUE_URL }); return; }
     if (info.menuItemId === CTX_ACT_REPO)  { chrome.tabs.create({ url: REPO_URL });  return; }
+
+    // Save the current page as a reference into zcite.
+    if (info.menuItemId === CTX_PG_ZCITE) {
+      await savePageToZcite(tab);
+      return;
+    }
 
     // Page-level sniffer: enumerate URLs in the current tab, then batch-add.
     if (info.menuItemId === CTX_PG_LINKS  ||

@@ -13,7 +13,7 @@
 #![allow(non_snake_case)]
 
 use zpwrchrome_host::diag;
-use zpwrchrome_host::extensions::{dl, otp, run_command, search};
+use zpwrchrome_host::extensions::{dl, otp, run_command, search, zcite};
 use zpwrchrome_host::frame;
 use zpwrchrome_host::ported::errors::{self, field};
 use zpwrchrome_host::ported::request::process::request;
@@ -167,6 +167,12 @@ fn main() {
     if action_str == "run.spawn" {
         diag::log("DISPATCH category=extension target=run.spawn");
         run_command::run_spawn(&value);
+        diag::log("EXIT code=0 reason=ext_returned");
+        return;
+    }
+    if action_str == "zcite.save" {
+        diag::log("DISPATCH category=extension target=zcite.save");
+        zcite::zcite_save(&value);
         diag::log("EXIT code=0 reason=ext_returned");
         return;
     }

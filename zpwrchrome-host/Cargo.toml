@@ -40,6 +40,11 @@ serde_json = "1"
 # TLS (works on macOS, Linux, future archs without recompile). Vendorable.
 ureq = { version = "2.10", default-features = false, features = ["tls", "native-certs"] }
 
+# Resolve the platform data dir for the zcite.save action so the inbox path matches
+# zcite-core's own dirs::data_dir()-based profile path exactly — no hand-rolled per-OS
+# path logic to drift out of sync. Foundational, vendorable.
+dirs = "6"
+
 # Used in spawn_worker to detach the worker from Chrome's inherited stdio
 # FDs — without setsid + close(>=3), the worker keeps Chrome's stdout pipe
 # open and Chrome reports "Native host has exited" even on a successful
