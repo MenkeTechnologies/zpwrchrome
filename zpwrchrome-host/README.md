@@ -48,6 +48,12 @@ These are additive — `browserpass-extension` never sends them, so wire compati
 | `otp`      | Shells `pass otp <entry>` with `PASSWORD_STORE_DIR` set to the matching store. Returns the current TOTP code. | request `{action:"otp", storeId, file, settings}` → ok `{code:"123456"}`                                                                                            |
 | `search`   | Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores. | request `{action:"search", settings, echoResponse:"<query>"}` → ok `{matches:[{store, path}, …]}`                                                                  |
 
+### zcite connector
+
+| Action        | Behavior                                                                                                                                                                                              | Wire shape                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `zcite.save`  | Writes a CSL-JSON reference (extracted from the active web page by the extension's "Save to zcite") to zcite's inbox at `<data_dir>/zcite/inbox/zpwrchrome-<nanos>.json`. zcite's `inbox.import` drains it into the library. No link to the proprietary zcite engine — the handoff is a plain CSL-JSON file in a shared directory. | request `{action:"zcite.save", item:<CSL-JSON object\|array>}` → ok `{status:"ok", path, bytes}` |
+
 ### Download manager
 
 | Action                | Behavior                                                                                                                                                                                                              | Wire shape                                                                                                                                                          |
