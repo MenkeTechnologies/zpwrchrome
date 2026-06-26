@@ -14,6 +14,14 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+// How long a test waits for a download to reach a terminal state. The
+// failure/success paths are deterministic (segment backoff sums to ~8s), so
+// this is pure headroom: `cargo test` runs these heavy integration tests in
+// parallel — each spawns a detached worker process, an in-process HTTP server,
+// and N segment threads — which oversubscribes a 2-core CI runner and stretches
+// wall-clock far past the ~8s floor. A genuine hang still fails, just later.
+const DONE_TIMEOUT: Duration = Duration::from_secs(120);
+
 fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_zpwrchrome-host")
 }
@@ -174,7 +182,7 @@ fn dl_add_downloads_file_via_detached_worker_and_marks_state_done() {
     let dest = resp["data"]["dest"].as_str().expect("dest in response");
     assert!(dest.ends_with("file.bin"), "unexpected dest: {dest}");
 
-    let final_state = wait_for_done(&cache, gid, Duration::from_secs(30));
+    let final_state = wait_for_done(&cache, gid, DONE_TIMEOUT);
     assert_eq!(final_state["status"], "done", "{final_state}");
     let bytes = fs::read(dest).expect("dest file readable");
     assert_eq!(bytes.len(), payload.len(), "size mismatch");
@@ -1095,7 +1103,7 @@ fn dl_recovers_from_premature_eof_and_finishes_complete() {
     let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
     let dest = resp["data"]["dest"].as_str().expect("dest").to_string();
 
-    let final_state = wait_for_done(&cache, gid, Duration::from_secs(30));
+    let final_state = wait_for_done(&cache, gid, DONE_TIMEOUT);
     assert_eq!(final_state["status"], "done",
         "must resume past the truncated connection and finish: {final_state}");
     let bytes = fs::read(&dest).expect("dest readable");
@@ -1136,7 +1144,7 @@ fn dl_restart_redownloads_a_done_job_from_scratch() {
     let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
     let dest = resp["data"]["dest"].as_str().expect("dest").to_string();
 
-    let first = wait_for_done(&cache, gid, Duration::from_secs(30));
+    let first = wait_for_done(&cache, gid, DONE_TIMEOUT);
     assert_eq!(first["status"], "done", "initial download: {first}");
 
     // Corrupt the finished file so we can prove restart actually rewrote it.
@@ -1150,7 +1158,7 @@ fn dl_restart_redownloads_a_done_job_from_scratch() {
     let start = Instant::now();
     let path = cache.join(format!("gid_{gid:06}.json"));
     loop {
-        assert!(start.elapsed() < Duration::from_secs(30), "restart never re-finished");
+        assert!(start.elapsed() < DONE_TIMEOUT, "restart never re-finished");
         if let Ok(body) = fs::read_to_string(&path) {
             if let Ok(v) = serde_json::from_str::<Value>(&body) {
                 if v["status"] == "done" && v["done"].as_u64() == Some(payload.len() as u64) {
@@ -1197,7 +1205,7 @@ fn dl_marks_failed_not_done_when_server_truncates_permanently() {
     assert_eq!(resp["status"], "ok", "dl.add response: {resp}");
     let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
 
-    let final_state = wait_for_done(&cache, gid, Duration::from_secs(30));
+    let final_state = wait_for_done(&cache, gid, DONE_TIMEOUT);
     assert_eq!(final_state["status"], "failed",
         "a permanently-truncated download must be failed, never done: {final_state}");
     assert_ne!(final_state["status"], "done",
@@ -1293,7 +1301,7 @@ fn dl_recovers_total_when_head_omits_content_length() {
     let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
     let dest = resp["data"]["dest"].as_str().expect("dest").to_string();
 
-    let final_state = wait_for_done(&cache, gid, Duration::from_secs(30));
+    let final_state = wait_for_done(&cache, gid, DONE_TIMEOUT);
     assert_eq!(final_state["status"], "done", "{final_state}");
     assert_eq!(final_state["total"].as_u64().unwrap_or(0), payload.len() as u64,
         "total must be recovered from the Range GET, not left at 0 (UI shows '/ ?'): {final_state}");
