@@ -1311,3 +1311,186 @@ fn dl_recovers_total_when_head_omits_content_length() {
     let _ = fs::remove_dir_all(&dlroot);
     let _ = fs::remove_dir_all(&cache);
 }
+
+// === Content-Type → extension grafting =====================================
+
+#[test]
+fn ext_for_content_type_maps_common_image_and_media_types() {
+    use zpwrchrome_host::extensions::dl::ext_for_content_type;
+    assert_eq!(ext_for_content_type("image/jpeg"), Some("jpg"));
+    assert_eq!(ext_for_content_type("image/png"), Some("png"));
+    assert_eq!(ext_for_content_type("image/webp"), Some("webp"));
+    assert_eq!(ext_for_content_type("image/svg+xml"), Some("svg"));
+    // parameters stripped + case-insensitive
+    assert_eq!(ext_for_content_type("IMAGE/JPEG; charset=binary"), Some("jpg"));
+    assert_eq!(ext_for_content_type("application/pdf"), Some("pdf"));
+    // generic / unknown → None so we never invent a misleading extension
+    assert_eq!(ext_for_content_type("application/octet-stream"), None);
+    assert_eq!(ext_for_content_type(""), None);
+}
+
+#[test]
+fn has_file_extension_distinguishes_placeholders_from_real_names() {
+    use zpwrchrome_host::extensions::dl::has_file_extension;
+    assert!(has_file_extension("photo.jpg"));
+    assert!(has_file_extension("archive.tar"));
+    assert!(!has_file_extension("download-1782749028")); // the reported bug
+    assert!(!has_file_extension("noext"));
+    assert!(!has_file_extension(".bashrc"));            // empty stem
+    assert!(!has_file_extension("trailing."));          // empty ext
+    assert!(!has_file_extension("file.toolongext"));    // > 8 chars
+}
+
+/// Server that advertises a Content-Type but no Content-Disposition, for a URL
+/// whose path carries no filename extension — the "right-click save image"
+/// case that used to land as a bare "download-{ts}".
+fn start_typed_server(payload: Arc<Vec<u8>>, content_type: &'static str) -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = match stream { Ok(s) => s, Err(_) => continue };
+            let p = Arc::clone(&payload);
+            thread::spawn(move || {
+                let mut buf = [0u8; 8192];
+                let mut req = Vec::new();
+                loop {
+                    let n = match stream.read(&mut buf) { Ok(n) => n, Err(_) => return };
+                    if n == 0 { return; }
+                    req.extend_from_slice(&buf[..n]);
+                    if req.windows(4).any(|w| w == b"\r\n\r\n") { break; }
+                }
+                let req_str = String::from_utf8_lossy(&req).into_owned();
+                let method  = req_str.split_whitespace().next().unwrap_or("").to_string();
+                let range_header = req_str.lines().find_map(|l| {
+                    l.strip_prefix("Range: ").or_else(|| l.strip_prefix("range: "))
+                        .map(|s| s.trim().to_string())
+                });
+                if method == "HEAD" {
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nContent-Type: {}\r\nConnection: close\r\n\r\n",
+                        p.len(), content_type);
+                    let _ = stream.write_all(resp.as_bytes());
+                    return;
+                }
+                if method != "GET" { return; }
+                if let Some(rest) = range_header.as_deref().and_then(|r| r.strip_prefix("bytes=")) {
+                    let parts: Vec<&str> = rest.split('-').collect();
+                    let start: usize = parts.first().and_then(|x| x.parse().ok()).unwrap_or(0);
+                    let end:   usize = parts.get(1).and_then(|x| x.parse().ok()).unwrap_or(p.len() - 1);
+                    let slice = &p[start..=end];
+                    let resp = format!(
+                        "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nContent-Type: {}\r\nConnection: close\r\n\r\n",
+                        slice.len(), start, end, p.len(), content_type);
+                    let _ = stream.write_all(resp.as_bytes());
+                    let _ = stream.write_all(slice);
+                    return;
+                }
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: {}\r\nConnection: close\r\n\r\n",
+                    p.len(), content_type);
+                let _ = stream.write_all(resp.as_bytes());
+                let _ = stream.write_all(&p);
+            });
+        }
+    });
+    port
+}
+
+#[test]
+fn generic_stem_for_content_type_picks_friendly_names() {
+    use zpwrchrome_host::extensions::dl::generic_stem_for_content_type;
+    assert_eq!(generic_stem_for_content_type("image/jpeg"), "image");
+    assert_eq!(generic_stem_for_content_type("video/mp4"), "video");
+    assert_eq!(generic_stem_for_content_type("audio/mpeg"), "audio");
+    assert_eq!(generic_stem_for_content_type("application/pdf"), "document");
+    assert_eq!(generic_stem_for_content_type("application/octet-stream"), "download");
+}
+
+#[test]
+fn guess_filename_keeps_extensionless_url_stems() {
+    use zpwrchrome_host::extensions::dl::guess_filename;
+    // Real filename — kept verbatim.
+    assert_eq!(guess_filename("https://x.com/a/photo.jpg").as_deref(), Some("photo.jpg"));
+    // Bare stem with a query string — keep the stem, drop the query.
+    assert_eq!(guess_filename("https://x.com/image?id=42").as_deref(), Some("image"));
+    assert_eq!(guess_filename("https://cdn.x.com/a/b/a1b2c3").as_deref(), Some("a1b2c3"));
+    // Opaque query body or empty → None (caller uses a generic placeholder).
+    assert_eq!(guess_filename("https://x.com/?foo=1&bar=2&baz=3"), None);
+    assert_eq!(guess_filename("https://x.com/"), None);
+}
+
+#[test]
+fn dl_keeps_url_stem_and_grafts_extension_from_content_type() {
+    // Regression for "right-click save image" saving a bare "download-1782749028"
+    // with no extension. The bytes were correct; the name wasn't. The URL stem
+    // ("image") is kept and gains ".jpg" from Content-Type → "image.jpg".
+    let payload = Arc::new(make_payload(2 * 1024 * 1024));   // 2 MiB → segmented
+    let port = start_typed_server(Arc::clone(&payload), "image/jpeg");
+    let cache  = tempdir("dl-ext-cache");
+    let dlroot = tempdir("dl-ext-dest");
+
+    let resp = run_with_env(
+        &json!({
+            "action":   "dl.add",
+            "url":      format!("http://127.0.0.1:{port}/image?id=42"),
+            "dir":      dlroot.to_string_lossy(),
+            "segments": 4,
+        }),
+        &[
+            ("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy()),
+            ("ZPWRCHROME_DL_DIR",       &dlroot.to_string_lossy()),
+        ],
+    );
+    assert_eq!(resp["status"], "ok", "dl.add: {resp}");
+    let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
+
+    let final_state = wait_for_done(&cache, gid, DONE_TIMEOUT);
+    assert_eq!(final_state["status"], "done", "{final_state}");
+    let dest = final_state["dest"].as_str().expect("dest in final state");
+    let name = std::path::Path::new(dest).file_name().unwrap().to_str().unwrap();
+    assert_eq!(name, "image.jpg",
+        "URL stem must be kept and gain .jpg from Content-Type, got: {name}");
+    let bytes = fs::read(dest).expect("dest readable");
+    assert_eq!(bytes, *payload, "content mismatch after rename");
+
+    let _ = fs::remove_dir_all(&dlroot);
+    let _ = fs::remove_dir_all(&cache);
+}
+
+#[test]
+fn dl_uses_generic_typed_name_when_url_is_opaque() {
+    // URL carries no usable basename at all → instead of "download-{ts}.jpg"
+    // we name it by type: "image.jpg".
+    let payload = Arc::new(make_payload(2 * 1024 * 1024));
+    let port = start_typed_server(Arc::clone(&payload), "image/jpeg");
+    let cache  = tempdir("dl-gen-cache");
+    let dlroot = tempdir("dl-gen-dest");
+
+    let resp = run_with_env(
+        &json!({
+            "action":   "dl.add",
+            "url":      format!("http://127.0.0.1:{port}/?download=1&token=abc"),
+            "dir":      dlroot.to_string_lossy(),
+            "segments": 4,
+        }),
+        &[
+            ("ZPWRCHROME_DL_CACHE_DIR", &cache.to_string_lossy()),
+            ("ZPWRCHROME_DL_DIR",       &dlroot.to_string_lossy()),
+        ],
+    );
+    assert_eq!(resp["status"], "ok", "dl.add: {resp}");
+    let gid: u64 = resp["data"]["gid"].as_u64().expect("gid");
+    let initial = resp["data"]["dest"].as_str().unwrap_or("");
+    assert!(initial.contains("download-"), "precondition: opaque URL → placeholder: {initial}");
+
+    let final_state = wait_for_done(&cache, gid, DONE_TIMEOUT);
+    assert_eq!(final_state["status"], "done", "{final_state}");
+    let dest = final_state["dest"].as_str().expect("dest");
+    let name = std::path::Path::new(dest).file_name().unwrap().to_str().unwrap();
+    assert_eq!(name, "image.jpg",
+        "opaque URL must yield a friendly typed name, not download-{{ts}}, got: {name}");
+
+    let _ = fs::remove_dir_all(&dlroot);
+    let _ = fs::remove_dir_all(&cache);
+}

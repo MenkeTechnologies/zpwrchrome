@@ -213,9 +213,101 @@ pub fn guess_filename(url: &str) -> Option<String> {
     let no_query = basename.split('?').next().unwrap_or("");
     let no_frag  = no_query.split('#').next().unwrap_or("");
     if no_frag.is_empty() { return None; }
-    if looks_like_query_garbage(no_frag) { return None; }
     let decoded = percent_decode(no_frag);
-    Some(sanitize_filename(&decoded))
+    let cleaned = sanitize_filename(&decoded);
+    if cleaned.is_empty() { return None; }
+    // Keep the URL's own basename when it's either a real filename (already
+    // has an extension) or a clean bare stem we can later graft a Content-Type
+    // extension onto — e.g. ".../image?id=42" → "image" → "image.jpg", far
+    // nicer than "download-{ts}". Only genuinely opaque query-string bodies
+    // fall through to the placeholder.
+    if has_file_extension(&cleaned) || looks_like_clean_stem(&cleaned) {
+        Some(cleaned)
+    } else {
+        None
+    }
+}
+
+/// A URL path segment usable as a filename stem even without an extension —
+/// a clean slug ("image", "photo-2024", "a1b2c3") we can graft a Content-Type
+/// extension onto. Rejects opaque query-string bodies (containing `& = %`),
+/// empty/separator-only strings, and absurd lengths.
+fn looks_like_clean_stem(s: &str) -> bool {
+    let len = s.chars().count();
+    if len == 0 || len > 80 { return false; }
+    if s.chars().any(|c| matches!(c, '&' | '=' | '%' | '?' | '/' | '\\')) { return false; }
+    // Require at least one alphanumeric so "---" or "." alone don't qualify.
+    s.chars().any(|c| c.is_ascii_alphanumeric())
+}
+
+/// A human-friendly generic stem for a Content-Type, used only when the URL
+/// gave us nothing usable — "image" / "video" / "audio" / "document" beats a
+/// raw "download-{timestamp}". The extension is grafted separately.
+pub fn generic_stem_for_content_type(content_type: &str) -> &'static str {
+    let mime = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    if      mime.starts_with("image/") { "image" }
+    else if mime.starts_with("video/") { "video" }
+    else if mime.starts_with("audio/") { "audio" }
+    else if mime == "application/pdf"  { "document" }
+    else                               { "download" }
+}
+
+/// True when `name` already carries a plausible file extension — a final dot
+/// followed by 1–8 alphanumeric chars, with a non-empty stem. Placeholder
+/// names like "download-1782749028" (no dot) return false, so the worker can
+/// safely graft on a Content-Type-derived extension without clobbering names
+/// that already have one (e.g. "photo.jpg").
+pub fn has_file_extension(name: &str) -> bool {
+    match name.rsplit_once('.') {
+        Some((stem, ext)) => {
+            !stem.is_empty()
+                && (1..=8).contains(&ext.len())
+                && ext.chars().all(|c| c.is_ascii_alphanumeric())
+        }
+        None => false,
+    }
+}
+
+/// Map a response `Content-Type` to a file extension (no leading dot), for the
+/// common web-download types. Parameters (`; charset=…`) are stripped and the
+/// type is matched case-insensitively. Returns None for anything unmapped —
+/// including generic `application/octet-stream` — so we never invent a
+/// misleading extension when the server didn't actually tell us the type.
+pub fn ext_for_content_type(content_type: &str) -> Option<&'static str> {
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let ext = match mime.as_str() {
+        "image/jpeg" | "image/jpg"                   => "jpg",
+        "image/png"                                  => "png",
+        "image/gif"                                  => "gif",
+        "image/webp"                                 => "webp",
+        "image/avif"                                 => "avif",
+        "image/svg+xml"                              => "svg",
+        "image/bmp" | "image/x-bmp"                  => "bmp",
+        "image/tiff"                                 => "tiff",
+        "image/x-icon" | "image/vnd.microsoft.icon"  => "ico",
+        "image/heic"                                 => "heic",
+        "video/mp4"                                  => "mp4",
+        "video/webm"                                 => "webm",
+        "video/quicktime"                            => "mov",
+        "audio/mpeg"                                 => "mp3",
+        "audio/ogg" | "application/ogg"              => "ogg",
+        "audio/wav" | "audio/x-wav"                  => "wav",
+        "application/pdf"                            => "pdf",
+        "application/zip"                            => "zip",
+        "application/gzip"                           => "gz",
+        "application/json"                           => "json",
+        "text/plain"                                 => "txt",
+        "text/html"                                  => "html",
+        "text/css"                                   => "css",
+        "application/javascript" | "text/javascript" => "js",
+        _ => return None,
+    };
+    Some(ext)
 }
 
 /// Heuristic: reject URL-derived basenames that look like opaque query
@@ -1359,6 +1451,43 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
             state.dest = new_dest.to_string_lossy().into_owned();
         }
     }
+
+    // If the dest still has no usable extension — e.g. an image whose URL path
+    // is all query string, so guess_filename produced a "download-{ts}"
+    // placeholder and the server sent no Content-Disposition — graft one on
+    // from the Content-Type. Without this a JPEG lands as "download-1782749028"
+    // and the OS won't recognize it as an image. Only acts when the name truly
+    // lacks an extension, so names that already have one are left untouched.
+    if let Some(ct) = probe.content_type.as_deref() {
+        let cur_name = std::path::Path::new(&state.dest)
+            .file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        if !cur_name.is_empty() && !has_file_extension(&cur_name) {
+            if let Some(ext) = ext_for_content_type(ct) {
+                let dest_path = std::path::Path::new(&state.dest);
+                let already_has_data = matches!(fs::metadata(dest_path), Ok(m) if m.len() > 0);
+                if !already_has_data {
+                    let parent = dest_path.parent()
+                        .unwrap_or(std::path::Path::new("."))
+                        .to_path_buf();
+                    // A raw "download-{ts}" placeholder carries no information —
+                    // swap the whole stem for a Content-Type-based generic
+                    // ("image"/"video"/…). A real URL-derived stem ("image",
+                    // "photo") is kept and just gains the extension.
+                    let stem = if cur_name.starts_with("download-") {
+                        generic_stem_for_content_type(ct)
+                    } else {
+                        cur_name.as_str()
+                    };
+                    let new_dest = unique_dest_path(&parent, &format!("{stem}.{ext}"));
+                    crate::diag::log(&format!(
+                        "WORKER_EXT gid={} ct={} from={} to={}",
+                        state.gid, ct, cur_name, new_dest.display(),
+                    ));
+                    state.dest = new_dest.to_string_lossy().into_owned();
+                }
+            }
+        }
+    }
     flush_worker(&state)?;
     // Re-sync paused/cancelled from disk after the probe (could be ~seconds).
     if let Ok(disk) = read_state(gid) {
@@ -1426,6 +1555,7 @@ struct ProbeResult {
     total:                        u64,
     accept_ranges:                bool,
     content_disposition_filename: Option<String>,
+    content_type:                 Option<String>,
 }
 
 /// Discover Content-Length + Range support + Content-Disposition for a URL.
@@ -1456,6 +1586,7 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
     // "/ ?" and silently disarmed the truncation gate.
     let mut head_accept_ranges = false;
     let mut head_cd: Option<String> = None;
+    let mut head_ct: Option<String> = None;
     let head_req = apply_headers(ureq::head(url), cookies, user_agent);
     if let Ok(resp) = head_req.call() {
         let total = resp.header("Content-Length")
@@ -1466,11 +1597,13 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
             .unwrap_or(false);
         head_cd = resp.header("Content-Disposition")
             .and_then(parse_content_disposition_filename);
+        head_ct = resp.header("Content-Type").map(str::to_string);
         if total > 0 {
             return Ok(ProbeResult {
                 total,
                 accept_ranges: head_accept_ranges,
                 content_disposition_filename: head_cd,
+                content_type: head_ct,
             });
         }
     }
@@ -1485,6 +1618,7 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
     let cd = resp.header("Content-Disposition")
         .and_then(parse_content_disposition_filename)
         .or(head_cd);
+    let ct = resp.header("Content-Type").map(str::to_string).or(head_ct);
     if status == 206 {
         // Parse Content-Range: "bytes 0-0/12345"
         let total = resp.header("Content-Range")
@@ -1499,6 +1633,7 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
             total,
             accept_ranges: true,
             content_disposition_filename: cd,
+            content_type: ct,
         })
     } else {
         // 200 — server ignored Range. Whole body would download here;
@@ -1513,6 +1648,7 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
             total,
             accept_ranges: head_accept_ranges,
             content_disposition_filename: cd,
+            content_type: ct,
         })
     }
 }
