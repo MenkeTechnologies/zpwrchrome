@@ -951,12 +951,41 @@ test("pass.fill caller treats userFilled-only frames as success (browserpass par
     "passFillActive summary must count userFilled-only frames");
 });
 
-test("takeover handler honors downloadDir > lastDir > ~/Downloads", () => {
+test("takeover handler honors downloadDir > Save-As dir > lastDir > ~/Downloads", () => {
   const block = bg.match(/chrome\.downloads\.onCreated\.addListener[\s\S]+?bpDlAdd/);
   assert.ok(block, "takeover block missing");
   assert.match(block[0], /settings\.downloadDir && settings\.downloadDir\.trim/);
+  // The directory Chrome resolved (the "Ask where to save" Save As choice) must
+  // be extracted from item.filename and used, not discarded — regression for
+  // downloads ignoring the chosen location and always landing in ~/Downloads.
+  assert.match(block[0], /const chosenDir\s*=/);
+  assert.match(block[0], /item\.filename/);
+  assert.match(block[0], /:\s*chosenDir\b/);
   assert.match(block[0], /settings\.saveToLastUsedLocation && settings\.lastDir/);
   assert.match(block[0], /"~\/Downloads"/);
+});
+
+test("resolveDownloadDir centralizes downloadDir > lastDir > ~/Downloads", () => {
+  const fn = bg.match(/async function resolveDownloadDir\([\s\S]*?\n\}/);
+  assert.ok(fn, "resolveDownloadDir helper missing");
+  assert.match(fn[0], /s\.downloadDir && s\.downloadDir\.trim\(\)/);
+  assert.match(fn[0], /s\.saveToLastUsedLocation && s\.lastDir/);
+  assert.match(fn[0], /return "~\/Downloads"/);
+});
+
+test("right-click, page-sniffer and paste-URL all pass a resolved dir to the host", () => {
+  // Before the fix these called enrichDownloadArgs(url, {}) with no dir, so the
+  // host defaulted to ~/Downloads and the user's configured folder was ignored.
+  const ctx = bg.match(/const url = info\.linkUrl \|\| info\.srcUrl;[\s\S]+?bpDlAdd/);
+  assert.ok(ctx, "context-menu download block missing");
+  assert.match(ctx[0], /enrichDownloadArgs\(url, \{ dir: await resolveDownloadDir\(\) \}\)/);
+
+  const sniff = bg.match(/for \(const u of urls\)[\s\S]+?bpDlAdd/);
+  assert.ok(sniff, "page-sniffer loop missing");
+  assert.match(sniff[0], /enrichDownloadArgs\(u, \{ dir: sniffDir \}\)/);
+
+  // paste-URL path
+  assert.match(bg, /enrichDownloadArgs\(url, \{ dir: await resolveDownloadDir\(\) \}\)/);
 });
 
 test("downloads.js renders rows incrementally via _rowCache (no innerHTML thrash, no hover flicker)", () => {

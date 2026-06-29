@@ -1399,9 +1399,10 @@ async function runPageSniffer(menuId) {
   // Use the existing enrich + bpDlAdd path. Sequential to avoid hammering
   // the host with N concurrent dl.add calls — each spawns its own worker.
   let ok = 0;
+  const sniffDir = await resolveDownloadDir();
   for (const u of urls) {
     try {
-      const args = await enrichDownloadArgs(u, {});
+      const args = await enrichDownloadArgs(u, { dir: sniffDir });
       await bpDlAdd(args);
       ok++;
     } catch (e) {
@@ -1547,7 +1548,7 @@ async function dlPasteUrl() {
     return;
   }
   try {
-    const args = await enrichDownloadArgs(url, {});
+    const args = await enrichDownloadArgs(url, { dir: await resolveDownloadDir() });
     const resp = await bpDlAdd(args);
     const data = resp.data || {};
     if (chrome.notifications) {
@@ -1619,6 +1620,20 @@ async function enrichDownloadArgs(url, msg) {
   return args;
 }
 
+// Resolve the destination directory for a download from settings, the same way
+// the Chrome-takeover path does: an explicit user-set downloadDir wins, else
+// the tracked lastDir (only when saveToLastUsedLocation is on), else the host
+// default ~/Downloads. Centralized so the right-click menu, page sniffer,
+// paste-URL command and takeover all honor the SAME configured folder — before
+// this, only the takeover did, so right-click downloads silently ignored the
+// user's chosen download folder and always landed in ~/Downloads.
+async function resolveDownloadDir(settings) {
+  const s = settings || await loadDlSettings();
+  if (s.downloadDir && s.downloadDir.trim())   return s.downloadDir.trim();
+  if (s.saveToLastUsedLocation && s.lastDir)   return s.lastDir;
+  return "~/Downloads";
+}
+
 // ---------------------------------------------------------------------------
 // Default-download takeover. Every browser-initiated download (Save link as,
 // click on direct-link, content-disposition: attachment, etc.) is intercepted
@@ -1675,17 +1690,25 @@ if (chrome.downloads && chrome.downloads.onCreated) {
     try { await chrome.downloads.cancel(item.id); } catch {}
     try { await chrome.downloads.erase({ id: item.id }); } catch {}
 
-    // Chrome may have picked a filename via its own heuristic — use it
-    // when present so the user-visible name matches what they expected.
-    const suggested = (item.filename || "").split(/[\\/]/).pop();
+    // Chrome may have picked a full target path via its own heuristic OR via
+    // the "Ask where to save each file" Save As dialog. Split it into the
+    // basename (user-visible name) and the directory the user actually chose.
+    const suggestedPath = String(item.filename || "");
+    const suggested     = suggestedPath.split(/[\\/]/).pop();
+    const chosenDir     = /[\\/]/.test(suggestedPath)
+      ? suggestedPath.replace(/[\\/][^\\/]*$/, "")
+      : "";
     const settings  = await loadDlSettings();
-    // Priority: explicit user-set downloadDir > tracked lastDir (only when
-    // saveToLastUsedLocation is on) > ~/Downloads (matches the host default).
+    // Priority: explicit user-set downloadDir (a deliberate override) > the
+    // directory Chrome resolved for this download — i.e. the Save As choice,
+    // which used to be discarded > tracked lastDir > ~/Downloads.
     const dir       = (settings.downloadDir && settings.downloadDir.trim())
       ? settings.downloadDir.trim()
-      : (settings.saveToLastUsedLocation && settings.lastDir)
-        ? settings.lastDir
-        : "~/Downloads";
+      : chosenDir
+        ? chosenDir
+        : (settings.saveToLastUsedLocation && settings.lastDir)
+          ? settings.lastDir
+          : "~/Downloads";
     // Pull the rule-system default naming mask too. dl-rules.js exposes it
     // as `defaultMask`. Empty mask = host passes filename through verbatim.
     let mask = "";
@@ -2003,7 +2026,7 @@ if (chrome.contextMenus) {
     const url = info.linkUrl || info.srcUrl;
     if (!url) return;
     try {
-      const args = await enrichDownloadArgs(url, {});
+      const args = await enrichDownloadArgs(url, { dir: await resolveDownloadDir() });
       const resp = await bpDlAdd(args);
       const data = resp.data || {};
       if (chrome.notifications) {
