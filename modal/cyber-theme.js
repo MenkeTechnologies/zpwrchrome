@@ -50,7 +50,9 @@
     const forceMono = !!o.forceMono;
     const scanlines = !!o.scanlines;
     const darkMode  = !!o.darkMode;
-    const t = PALETTE;
+    // settings.palette (written by the theme-injector picker) carries the
+    // chosen scheme's colors; PALETTE is the pre-pick Cyberpunk default.
+    const t = o.palette || PALETTE;
     const parts = [];
 
     if (darkMode) {

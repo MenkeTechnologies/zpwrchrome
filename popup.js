@@ -3,6 +3,7 @@
 
 import { fzfMatch, highlightWithIndices } from "./lib/fzf.js";
 import { buildTabTree, flattenTree, domainHueFor } from "./lib/util.js";
+import "./lib/ui-scheme.js"; // recolor the popup to the chosen scheme
 
 const $q    = document.querySelector(".search");
 const $cats = document.getElementById("cats");
