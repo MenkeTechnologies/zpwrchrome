@@ -1196,99 +1196,18 @@ const report = `<!DOCTYPE html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. ${total} keyboard commands, ${popupCategories.length} popup categories, ${bgKinds.length} message kinds, ${num(totalJsLines)} JS lines, ${num(testCount)} tests. Cyberpunk HUD by MenkeTechnologies.">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. ${total} keyboard commands, ${popupCategories.length} popup categories, ${bgKinds.length} message kinds, ${num(totalJsLines)} JS lines, ${num(testCount)} tests. Strykelang HUD by MenkeTechnologies.">
   <title>zpwrchrome &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="hud-static.css">
+  <link rel="stylesheet" href="tutorial.css">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
     html { color-scheme: dark; }
-    ::selection { background: rgba(5,217,232,0.3); color: #fff; }
-    :root {
-      --bg-primary: #05050a; --bg-secondary: #0a0a14; --bg-card: #0d0d1a;
-      --bg-hover: #12122a;
-      --accent: #ff2a6d; --accent-light: #ff6b9d; --accent-glow: rgba(255,42,109,0.4);
-      --cyan: #05d9e8; --cyan-glow: rgba(5,217,232,0.4); --cyan-dim: rgba(5,217,232,0.15);
-      --magenta: #d300c5; --magenta-glow: rgba(211,0,197,0.3);
-      --green: #39ff14; --red: #ff073a; --yellow: #ffb800;
-      --text: #e0f0ff; --text-dim: #7a8ba8; --text-muted: #3d4f6a;
-      --border: #1a1a3e;
-      --cyber-grid-line: rgba(5,217,232,0.042);
-    }
-    body {
-      font-family: 'Share Tech Mono','SF Mono','Fira Code',monospace;
-      background-color: var(--bg-primary);
-      background-image:
-        radial-gradient(ellipse at 20% 50%, rgba(5,217,232,0.045) 0%, transparent 52%),
-        radial-gradient(ellipse at 80% 20%, rgba(211,0,197,0.04)  0%, transparent 50%),
-        radial-gradient(ellipse at 50% 82%, rgba(255,42,109,0.035) 0%, transparent 48%),
-        linear-gradient(var(--cyber-grid-line) 1px, transparent 1px),
-        linear-gradient(90deg, var(--cyber-grid-line) 1px, transparent 1px);
-      background-size: auto, auto, auto, 52px 52px, 52px 52px;
-      background-attachment: fixed;
-      color: var(--text);
-      min-height: 100vh;
-      line-height: 1.55;
-      font-size: 13px;
-    }
-    .scanline {
-      position: fixed; left: 0; right: 0; height: 2px;
-      background: linear-gradient(90deg, transparent 0%, rgba(5,217,232,.03) 20%, rgba(5,217,232,.08) 50%, rgba(5,217,232,.03) 80%, transparent 100%);
-      box-shadow: 0 0 15px 5px rgba(5,217,232,.04);
-      pointer-events: none; z-index: 9997;
-      animation: hscan 12s linear infinite;
-    }
-    @keyframes hscan { 0% { top:-2px; opacity:0; } 5%,95% { opacity:1; } 100% { top:100%; opacity:0; } }
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: rgba(5,5,10,.5); }
-    ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan), var(--magenta)); border-radius: 4px; box-shadow: 0 0 8px var(--cyan-glow); }
-
-    header.hero {
-      padding: 36px 24px 28px;
-      border-bottom: 1px solid var(--border);
-      background: linear-gradient(180deg, #070714 0%, #0d0d22 42%, var(--bg-secondary) 100%);
-      box-shadow: 0 4px 28px rgba(0,0,0,.55), 0 1px 0 rgba(5,217,232,.1), inset 0 1px 0 rgba(5,217,232,.06);
-    }
-    header.hero .inner { max-width: 80rem; margin: 0 auto; }
-    h1.brand {
-      font-family: 'Orbitron', sans-serif;
-      font-size: clamp(1.2rem, 3.6vw, 2rem);
-      font-weight: 900; letter-spacing: 4px; text-transform: uppercase;
-      background: linear-gradient(90deg, var(--cyan), #fff, var(--accent), var(--cyan));
-      background-size: 300% 100%;
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-      filter: drop-shadow(0 0 12px var(--cyan-glow));
-      animation: shimmer 6s linear infinite;
-    }
-    @keyframes shimmer { 0% { background-position: 0% 0%; } 100% { background-position: 300% 0%; } }
-    .crumbs {
-      margin-top: 6px;
-      font-size: 11px; color: var(--text-dim); letter-spacing: 0.05em;
-    }
-    .crumbs a { color: var(--cyan); text-decoration: none; }
-    .crumbs a:hover { color: var(--accent-light); text-shadow: 0 0 6px var(--cyan-glow); }
-    .crumbs .sep { color: var(--text-muted); margin: 0 6px; }
-    .tagline {
-      margin-top: 10px;
-      font-size: 11px; color: var(--text-dim); letter-spacing: 0.03em; opacity: 0.8;
-    }
-    .tagline code { color: var(--accent-light); background: var(--bg-primary); padding: 1px 4px; border-radius: 2px; font-size: 11px; }
-
-    main { max-width: 80rem; margin: 0 auto; padding: 30px 20px 60px; }
-
-    h2.section {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 14px; color: var(--cyan);
-      text-transform: uppercase; letter-spacing: 3px;
-      padding-bottom: 10px; margin: 32px 0 14px;
-      border-bottom: 1px solid var(--border);
-    }
-    h2.section .hash { color: var(--accent); margin-right: 8px; }
-    .subtitle { color: var(--text-dim); font-size: 12px; margin-bottom: 14px; line-height: 1.65; }
-    .subtitle strong { color: var(--text); }
-    .subtitle code { color: var(--accent-light); background: var(--bg-primary); padding: 1px 5px; border-radius: 2px; font-size: 11.5px; }
+    :root { --yellow: #ffb800; }
+    .tutorial-main { max-width: 80rem; }
 
     .stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:0.65rem; margin: 18px 0; }
     .stat-card { border:1px solid var(--border); border-top:3px solid var(--cyan); background:var(--bg-card); padding:0.9rem 1rem; border-radius:2px; text-align:center; }
@@ -1300,7 +1219,7 @@ const report = `<!DOCTYPE html>
     .stat-card .l { font-family:'Orbitron',sans-serif; font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); margin-top:6px; }
 
     .bar-wrap { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 2px; height: 22px; position: relative; overflow: hidden; margin: 4px 0 6px; }
-    .bar-fill { height: 100%; }
+    .bar-fill { height: 100%; transition: width 1.2s cubic-bezier(.22,1,.36,1); }
     .bar-cyan { background: linear-gradient(90deg,#05d9e8,#0891b2); box-shadow: 0 0 8px var(--cyan-glow); }
     .bar-accent { background: linear-gradient(90deg,#ff2a6d,#a01545); box-shadow: 0 0 8px var(--accent-glow); }
     .bar-magenta { background: linear-gradient(90deg,#d300c5,#a000a0); box-shadow: 0 0 8px var(--magenta-glow); }
@@ -1337,13 +1256,7 @@ const report = `<!DOCTYPE html>
     .decisions .card { border-left-color: var(--accent); }
     .decisions .card h3 { color: var(--accent); }
 
-    pre.code {
-      background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--cyan);
-      padding: 10px 14px; border-radius: 2px;
-      font-family: 'Share Tech Mono', monospace; font-size: 11.5px; color: var(--text);
-      overflow-x: auto; line-height: 1.55;
-      margin: 8px 0;
-    }
+    pre.code { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--cyan); padding: 10px 14px; border-radius: 2px; font-family: 'Share Tech Mono', monospace; font-size: 11.5px; color: var(--text); overflow-x: auto; line-height: 1.55; margin: 8px 0; }
     pre.code .c { color: var(--text-muted); }
     pre.code .k { color: var(--cyan); }
     pre.code .a { color: var(--accent-light); }
@@ -1353,35 +1266,40 @@ const report = `<!DOCTYPE html>
 
     .perm-pill { display: inline-block; margin: 2px 4px 2px 0; padding: 3px 8px; font-size: 11px; border: 1px solid var(--cyan); color: var(--cyan); border-radius: 2px; background: rgba(5,217,232,0.06); }
     .perm-pill.opt { border-color: var(--text-muted); color: var(--text-muted); background: transparent; }
-
-    footer { text-align: center; padding: 24px 16px 40px; color: var(--text-muted); font-size: 11px; letter-spacing: .5px; }
-    footer a { color: var(--cyan); text-decoration: none; }
-    footer a:hover { color: var(--accent-light); text-shadow: 0 0 8px var(--cyan-glow); }
   </style>
 </head>
 <body>
-  <div class="scanline"></div>
+  <div class="app tutorial-app" id="reportApp">
+    <div class="crt-scanline" id="crtH" aria-hidden="true"></div>
+    <div class="crt-scanline-v" id="crtV" aria-hidden="true"></div>
 
-  <header class="hero">
-    <div class="inner">
-      <h1 class="brand">// ZPWRCHROME &mdash; ENGINEERING REPORT</h1>
-      <nav class="crumbs">
-        <span>Engineering Report</span>
-        <span class="sep">/</span>
-        <a href="index.html">Landing</a>
-        <span class="sep">/</span>
-        <a href="https://github.com/MenkeTechnologies/zpwrchrome">GitHub</a>
-      </nav>
-      <p class="tagline">
-        Manifest V3 Chrome extension &middot; cross-window MRU &middot; ${total} keyboard commands &middot; ${popupCategories.length}-category fzf-scored popup &middot; <code>chrome.userScripts</code> Tampermonkey-equivalent &middot; frecency-ranked history search
-      </p>
-    </div>
-  </header>
+    <header class="tutorial-header">
+      <div class="tutorial-header-inner">
+        <div>
+          <h1 class="tutorial-brand">// ZPWRCHROME &mdash; ENGINEERING REPORT</h1>
+          <nav class="tutorial-crumbs" aria-label="Breadcrumb">
+            <span class="current">Engineering Report</span>
+            <span class="sep">/</span>
+            <a href="index.html">Landing</a>
+            <span class="sep">/</span>
+            <a href="https://github.com/MenkeTechnologies/zpwrchrome" target="_blank" rel="noopener noreferrer">GitHub</a>
+          </nav>
+          <p style="margin:0.35rem 0 0;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);letter-spacing:0.03em;opacity:0.75;">
+            Manifest V3 Chrome extension &middot; cross-window MRU &middot; ${total} keyboard commands &middot; ${popupCategories.length}-category fzf-scored popup &middot; <code>chrome.userScripts</code> Tampermonkey-equivalent &middot; frecency-ranked history search
+          </p>
+        </div>
+        <div class="tutorial-toolbar">
+          <button type="button" class="btn btn-secondary" id="btnTheme" title="Toggle light/dark">Theme</button>
+          <button type="button" class="btn btn-secondary active" id="btnCrt" title="CRT scanline overlay">CRT</button>
+          <button type="button" class="btn btn-secondary active" id="btnNeon" title="Neon border pulse">Neon</button>
+        </div>
+      </div>
+    </header>
 
-  <main>
+    <main class="tutorial-main">
 
-    <h2 class="section"><span class="hash">&gt;_</span>EXECUTIVE SUMMARY</h2>
-    <p class="subtitle">
+    <h2 class="tutorial-title"><span class="step-hash">&gt;_</span>EXECUTIVE SUMMARY</h2>
+    <p class="tutorial-subtitle">
       zpwrchrome is a single-author Chrome MV3 extension built around the
       MRU (most-recently-used) tab primitive. The service worker tracks
       tab activation in <code>chrome.storage.session</code> across windows;
@@ -1424,13 +1342,13 @@ const report = `<!DOCTYPE html>
       })()}
     </div>
 
-    <h2 class="section"><span class="hash">~</span>SUBSYSTEM BREAKDOWN</h2>
-    <p class="subtitle">Every JS surface in the repo, by role. Pure helpers in <code>lib/util.js</code> + <code>lib/fzf.js</code> carry zero <code>chrome.*</code> references so they unit-test headless and so <code>scripts/build-modal.mjs</code> can inline them into the content-script modal between <code>UTIL_INLINE_START/END</code> and <code>FZF_INLINE_START/END</code> markers.</p>
+    <h2 class="tutorial-title"><span class="step-hash">~</span>SUBSYSTEM BREAKDOWN</h2>
+    <p class="tutorial-subtitle">Every JS surface in the repo, by role. Pure helpers in <code>lib/util.js</code> + <code>lib/fzf.js</code> carry zero <code>chrome.*</code> references so they unit-test headless and so <code>scripts/build-modal.mjs</code> can inline them into the content-script modal between <code>UTIL_INLINE_START/END</code> and <code>FZF_INLINE_START/END</code> markers.</p>
     <div class="subsystems">${subsystems.map(subsystemCard).join("")}
     </div>
 
-    <h2 class="section"><span class="hash">#</span>TOP FILES BY SIZE</h2>
-    <p class="subtitle">Sorted descending. <code>modal/content.template.js</code> is the source; <code>modal/content.js</code> is generated (fonts + fzf + util inlined) and excluded from this table.</p>
+    <h2 class="tutorial-title"><span class="step-hash">#</span>TOP FILES BY SIZE</h2>
+    <p class="tutorial-subtitle">Sorted descending. <code>modal/content.template.js</code> is the source; <code>modal/content.js</code> is generated (fonts + fzf + util inlined) and excluded from this table.</p>
     <table class="file-table">
       <thead><tr><th>Path</th><th class="num">Lines</th><th class="num">Bytes</th></tr></thead>
       <tbody>
@@ -1438,8 +1356,8 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
       </tbody>
     </table>
 
-    <h2 class="section"><span class="hash">%</span>ARCHITECTURE</h2>
-    <p class="subtitle">Three processes, six storage planes. Chrome hosts the extension; the extension's SW (one process) talks to a Rust native messaging host (one process per request, plus detached download worker processes that outlive their parent). All persistent state lives in <code>chrome.storage</code> or on the filesystem under <code>~/.cache/zpwrchrome/</code> — nothing relies on the SW staying alive.</p>
+    <h2 class="tutorial-title"><span class="step-hash">%</span>ARCHITECTURE</h2>
+    <p class="tutorial-subtitle">Three processes, six storage planes. Chrome hosts the extension; the extension's SW (one process) talks to a Rust native messaging host (one process per request, plus detached download worker processes that outlive their parent). All persistent state lives in <code>chrome.storage</code> or on the filesystem under <code>~/.cache/zpwrchrome/</code> — nothing relies on the SW staying alive.</p>
     <div class="arch-wrap">
       <svg class="arch" viewBox="0 0 1080 660" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="zpwrchrome process and data flow architecture">
         <defs>
@@ -1618,7 +1536,7 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
         <line class="flow" x1="420" y1="352" x2="420" y2="430" marker-end="url(#arrow)" />
 
       </svg>
-      <p class="subtitle" style="margin-top:6px;">
+      <p class="tutorial-subtitle" style="margin-top:6px;">
         <strong>Cyan</strong> edges = in-process chrome.* calls.
         <strong>Magenta</strong> edges = native messaging RPC (stdio, length-prefixed JSON, one round-trip per process).
         <strong>Pink</strong> edges = filesystem I/O performed by the detached worker process.
@@ -1626,8 +1544,8 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
       </p>
     </div>
 
-    <h2 class="section"><span class="hash">@</span>EXECUTION PIPELINE</h2>
-    <p class="subtitle">Three persistence stores: <code>chrome.storage.session</code> for MRU (survives SW restart, not browser restart), <code>chrome.storage.local</code> for scenes / userscripts / GM bags / fire log, and the Chrome-managed <code>chrome.history</code> + <code>chrome.sessions</code> APIs for browsing history and recently-closed tabs.</p>
+    <h2 class="tutorial-title"><span class="step-hash">@</span>EXECUTION PIPELINE</h2>
+    <p class="tutorial-subtitle">Three persistence stores: <code>chrome.storage.session</code> for MRU (survives SW restart, not browser restart), <code>chrome.storage.local</code> for scenes / userscripts / GM bags / fire log, and the Chrome-managed <code>chrome.history</code> + <code>chrome.sessions</code> APIs for browsing history and recently-closed tabs.</p>
     <pre class="code"><span class="c">    chrome.tabs events            background.js (SW)                  chrome.storage</span>
    onActivated  ────────────▶  <span class="k">pushMru / dropFromMru</span>  ────────▶  <span class="a">.session</span>
    onRemoved                                                              (MRU array)
@@ -1651,26 +1569,26 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
               4 tabs &middot; sortable table &middot; firelog reader
 </pre>
 
-    <h2 class="section"><span class="hash">&amp;</span>MESSAGE PROTOCOL</h2>
-    <p class="subtitle"><strong>${bgKinds.length}</strong> message kinds handled by the service worker. Popup sends <strong>${popupKinds.length}</strong> kinds; modal sends <strong>${modalKinds.length}</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
+    <h2 class="tutorial-title"><span class="step-hash">&amp;</span>MESSAGE PROTOCOL</h2>
+    <p class="tutorial-subtitle"><strong>${bgKinds.length}</strong> message kinds handled by the service worker. Popup sends <strong>${popupKinds.length}</strong> kinds; modal sends <strong>${modalKinds.length}</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
     <ul class="kinds">
 ${bgKinds.map((k) => kindCard(k, messageRoles[k] || "(handler in background.js)")).join("")}
     </ul>
 
-    <h2 class="section"><span class="hash">$</span>KEYBOARD COMMANDS</h2>
-    <p class="subtitle">Chrome MV3 caps commands with default-suggested keys at <strong>4</strong>; everything else is user-bound at <code>chrome://extensions/shortcuts</code>. Currently <strong>${withKey.length}</strong> default-keyed (<code>${withKey.map(([n, v]) => `${n}=${v.suggested_key?.mac || v.suggested_key?.default}`).join("</code>, <code>")}</code>), <strong>${userBound}</strong> user-bound, <strong>${total}</strong> total.</p>
+    <h2 class="tutorial-title"><span class="step-hash">$</span>KEYBOARD COMMANDS</h2>
+    <p class="tutorial-subtitle">Chrome MV3 caps commands with default-suggested keys at <strong>4</strong>; everything else is user-bound at <code>chrome://extensions/shortcuts</code>. Currently <strong>${withKey.length}</strong> default-keyed (<code>${withKey.map(([n, v]) => `${n}=${v.suggested_key?.mac || v.suggested_key?.default}`).join("</code>, <code>")}</code>), <strong>${userBound}</strong> user-bound, <strong>${total}</strong> total.</p>
     <div class="stat-grid">
       ${familyCounts.map((f) => `<div class="stat-card"><div class="v">${f.count}</div><div class="l">${reportEsc(f.label)}</div></div>`).join("\n      ")}
     </div>
 
-    <h2 class="section"><span class="hash">%</span>POPUP CATEGORIES</h2>
-    <p class="subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders ${popupCategories.length} categories with fzf scoring against title + host. Each category is jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot). The modal mirrors the same list since v0.4.15.</p>
+    <h2 class="tutorial-title"><span class="step-hash">%</span>POPUP CATEGORIES</h2>
+    <p class="tutorial-subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders ${popupCategories.length} categories with fzf scoring against title + host. Each category is jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot). The modal mirrors the same list since v0.4.15.</p>
     <ul class="cat-list">
 ${popupCategories.map((c) => `      <li><span class="label">${reportEsc(c.label)}</span><span class="key">${reportEsc(c.key)}</span></li>`).join("\n")}
     </ul>
 
-    <h2 class="section"><span class="hash">^</span>HISTORY &mdash; FRECENCY FORMULA</h2>
-    <p class="subtitle"><code>chrome.history.search({ text: "", maxResults: 5000, startTime: 0 })</code> returns visits in <code>lastVisitTime</code>-desc order, which over-promotes one-off pages. <code>background.js:history-list</code> re-ranks by frecency before returning to popup/modal. Each result carries its <code>frecency</code> field forward so the fzf sort uses it as a tiebreaker.</p>
+    <h2 class="tutorial-title"><span class="step-hash">^</span>HISTORY &mdash; FRECENCY FORMULA</h2>
+    <p class="tutorial-subtitle"><code>chrome.history.search({ text: "", maxResults: 5000, startTime: 0 })</code> returns visits in <code>lastVisitTime</code>-desc order, which over-promotes one-off pages. <code>background.js:history-list</code> re-ranks by frecency before returning to popup/modal. Each result carries its <code>frecency</code> field forward so the fzf sort uses it as a tiebreaker.</p>
     <pre class="code">  <span class="c">// lib/util.js — pure, unit-tested, inlined into modal via UTIL_INLINE</span>
   <span class="k">export function</span> <span class="a">frecencyScore</span>(item, nowMs = Date.now()) {
     <span class="k">if</span> (!item) <span class="k">return</span> 0;
@@ -1682,15 +1600,15 @@ ${popupCategories.map((c) => `      <li><span class="label">${reportEsc(c.label)
     <span class="k">return</span> visits / (hoursAgo + 2);
   }</pre>
 
-    <h2 class="section"><span class="hash">!</span>PERMISSIONS</h2>
-    <p class="subtitle"><strong>${permissions.length}</strong> declared. <code>tests/static.test.js</code> enforces every declared permission is actually used in <code>background.js</code> or <code>popup.js</code> &mdash; no dead permissions.</p>
+    <h2 class="tutorial-title"><span class="step-hash">!</span>PERMISSIONS</h2>
+    <p class="tutorial-subtitle"><strong>${permissions.length}</strong> declared. <code>tests/static.test.js</code> enforces every declared permission is actually used in <code>background.js</code> or <code>popup.js</code> &mdash; no dead permissions.</p>
     <div>
 ${permissions.map((p) => `      <span class="perm-pill">${reportEsc(p)}</span>`).join("\n")}
 ${(manifest.optional_permissions || []).map((p) => `      <span class="perm-pill opt" title="optional_permissions — not requested at install">${reportEsc(p)}</span>`).join("\n")}
     </div>
 
-    <h2 class="section"><span class="hash">*</span>TESTS</h2>
-    <p class="subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>${testCount}</strong> cases across <strong>${testFiles.length}</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
+    <h2 class="tutorial-title"><span class="step-hash">*</span>TESTS</h2>
+    <p class="tutorial-subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>${testCount}</strong> cases across <strong>${testFiles.length}</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
     <table class="file-table">
       <thead><tr><th>File</th><th class="num">Tests</th><th class="num">Lines</th></tr></thead>
       <tbody>
@@ -1703,20 +1621,49 @@ ${testFiles.map((f) => {
       </tbody>
     </table>
 
-    <h2 class="section"><span class="hash">?</span>KEY DESIGN DECISIONS</h2>
+    <h2 class="tutorial-title"><span class="step-hash">?</span>KEY DESIGN DECISIONS</h2>
     <div class="decisions">
 ${designDecisions.map(([h, p]) => `      <div class="card"><h3>${reportEsc(h)}</h3><p>${p}</p></div>`).join("\n")}
     </div>
 
   </main>
 
-  <footer>
-    zpwrchrome v${version} &middot; MIT &middot; MenkeTechnologies &middot;
-    <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a> &middot;
-    regenerate via <code>scripts/gen.sh</code>
-  </footer>
+    <footer style="text-align:center;padding:2rem;font-size:10px;color:var(--text-muted);font-family:'Orbitron',sans-serif;letter-spacing:2px;">
+      ZPWRCHROME v${version} &middot; ${total} COMMANDS &middot; ${testCount} TESTS &middot; ${num(totalJsLines)} JS LINES &middot; MENKETECHNOLOGIES &middot; <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color:var(--cyan);text-decoration:none;">github.com/MenkeTechnologies/zpwrchrome</a> &middot; regenerate via <code>scripts/gen.sh</code>
+    </footer>
+  </div>
+
+  <script>
+    const html = document.documentElement;
+    const btnTheme = document.getElementById('btnTheme');
+    const btnCrt = document.getElementById('btnCrt');
+    const btnNeon = document.getElementById('btnNeon');
+    const crtH = document.getElementById('crtH');
+    const crtV = document.getElementById('crtV');
+    btnTheme?.addEventListener('click', () => {
+      html.setAttribute('data-theme', html.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+    });
+    btnCrt?.addEventListener('click', () => {
+      btnCrt.classList.toggle('active');
+      const on = btnCrt.classList.contains('active');
+      if (crtH) crtH.style.display = on ? '' : 'none';
+      if (crtV) crtV.style.display = on ? '' : 'none';
+    });
+    btnNeon?.addEventListener('click', () => {
+      btnNeon.classList.toggle('active');
+      document.querySelector('.app')?.classList.toggle('neon-off');
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.bar-fill').forEach(bar => {
+        const w = bar.style.width;
+        bar.style.width = '0';
+        requestAnimationFrame(() => { requestAnimationFrame(() => { bar.style.width = w; }); });
+      });
+    });
+  </script>
 </body>
 </html>
+
 `;
 
 writeFileSync(join(ROOT, "docs/report.html"), report);
