@@ -160,7 +160,7 @@ test("report.html HTML line stat matches popup.html + manager.html", () => {
 
 test("report.html includes an SVG architecture diagram with the three process groups", () => {
   // Pinned so a gen.mjs regression can't silently delete the section.
-  assert.match(report, /<h2 class="section">[\s\S]*?ARCHITECTURE<\/h2>/);
+  assert.match(report, /<h2 class="tutorial-title">[\s\S]*?ARCHITECTURE<\/h2>/);
   assert.match(report, /<svg class="arch"/);
   // Three labeled groups: browser, native host, filesystem.
   assert.match(report, />CHROME \(host browser\)</);
