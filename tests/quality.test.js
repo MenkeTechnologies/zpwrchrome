@@ -155,8 +155,12 @@ test("every chrome.storage.local.set key is read somewhere", () => {
   const sources = [
     "background.js",
     "popup.js",
-    "scripts-manager/manager.js"
-  ].map((f) => ({ file: f, src: read(f) }));
+    "scripts-manager/manager.js",
+    "lib/ui-scheme.js"   // reads ui.scheme (get + storage.onChanged) written by background.js
+  // Strip optional chaining (e.g. chrome.storage?.local?.get?.(…)) so the
+  // read/write regexes below match whether or not a source uses `?.`. Optional
+  // CALLS (`get?.(`) collapse to `get(`; optional property access to `.`.
+  ].map((f) => ({ file: f, src: read(f).replace(/\?\.\(/g, "(").replace(/\?\./g, ".") }));
 
   const writes = new Set();
   const reads  = new Set();
@@ -183,7 +187,7 @@ test("every chrome.storage.local.set key is read somewhere", () => {
       for (const lit of m[2].matchAll(/["']([^"']+)["']/g)) reads.add(lit[1]);
     }
     // chrome.storage.X.get(VAR)  — variable
-    for (const m of src.matchAll(/chrome\.storage\.(local|session|sync)\.get\(\s*([A-Z_][\w$]*)\s*\)/g)) {
+    for (const m of src.matchAll(/chrome\.storage\.(local|session|sync)\.get\(\s*([A-Z_][\w$]*)\s*[,)]/g)) {
       const cre = new RegExp("const\\s+" + m[2] + "\\s*=\\s*[\"']([^\"']+)[\"']");
       const cm = src.match(cre);
       if (cm) reads.add(cm[1]);
