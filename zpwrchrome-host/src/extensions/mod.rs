@@ -11,6 +11,7 @@
 //! compatibility with the upstream is preserved.
 
 pub mod dl;
+pub mod host;
 pub mod otp;
 pub mod run_command;
 pub mod search;

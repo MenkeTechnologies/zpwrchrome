@@ -1,6 +1,6 @@
 [package]
 name = "zpwrchrome-host"
-version = "0.9.10"
+version = "0.10.0"
 edition = "2021"
 authors = ["MenkeTechnologies <linux.dev25@gmail.com>"]
 description = "Native messaging host for the zpwrchrome Chrome extension. Rust port of browserpass-native (PROTOCOL.md v3.1.2) + extension actions for OTP, whole-store search, identity/CC autofill, and a file-state segmented download manager."
@@ -44,6 +44,12 @@ ureq = { version = "2.10", default-features = false, features = ["tls", "native-
 # zcite-core's own dirs::data_dir()-based profile path exactly — no hand-rolled per-OS
 # path logic to drift out of sync. Foundational, vendorable.
 dirs = "6"
+
+# Shared local-host capability library. We consume only the light half via
+# `zwire_host::api` (filesystem crawl + exec) for the `host.crawl` / `host.exec`
+# actions, so `default-features = false` keeps its heavy `portable-pty` /
+# `sysinfo` deps out of our tree — verified with `cargo tree`.
+zwire-host = { git = "https://github.com/MenkeTechnologies/zwire-host", tag = "v0.3.0", default-features = false }
 
 # Used in spawn_worker to detach the worker from Chrome's inherited stdio
 # FDs — without setsid + close(>=3), the worker keeps Chrome's stdout pipe
