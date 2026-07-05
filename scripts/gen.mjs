@@ -1029,6 +1029,7 @@ ${permissions.map((p) => `        <span class="pill">${escape(p)}</span>`).join(
     zpwrchrome v${version} · MIT · MenkeTechnologies ·
     <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a>
   </footer>
+  <script src="hud-theme.js"></script>
 </body>
 </html>
 `;
@@ -1664,6 +1665,7 @@ ${designDecisions.map(([h, p]) => `      <div class="card"><h3>${reportEsc(h)}</
       });
     });
   </script>
+  <script src="hud-theme.js"></script>
 </body>
 </html>
 
