@@ -1677,10 +1677,15 @@ function shouldInterceptDownload(item) {
   return true;
 }
 
+// URLs we re-issue as a normal Chrome download after a BP-host failure — must
+// NOT be intercepted again (that would loop).
+const zbFallbackDl = new Set();
+
 if (chrome.downloads && chrome.downloads.onCreated) {
   chrome.downloads.onCreated.addListener(async (item) => {
     diagPush("dl.takeover.onCreated", { id: item?.id, url: item?.url, filename: item?.filename });
     if (!shouldInterceptDownload(item))   { diagPush("dl.takeover.skip", { reason: "not_intercepted", url: item?.url }); return; }
+    if (item && zbFallbackDl.has(item.url)) { zbFallbackDl.delete(item.url); diagPush("dl.takeover.skip", { reason: "chrome_fallback" }); return; }
     if (!(await isTakeOverEnabled()))     { diagPush("dl.takeover.skip", { reason: "disabled" }); return; }
 
     // Cancel Chrome's download immediately. Erase from history so the
@@ -1751,6 +1756,11 @@ if (chrome.downloads && chrome.downloads.onCreated) {
     } catch (e) {
       diagPush("dl.takeover.failed", { url: item?.url, err: String(e?.message || e), code: e?.code });
       console.warn("[zpwrchrome] download takeover failed:", e?.message || e);
+      // The BP native host is unreachable (e.g. not installed) — the original
+      // Chrome download was already cancelled, so re-issue it via Chrome so the
+      // file isn't silently lost. zbFallbackDl stops us re-intercepting it.
+      try { zbFallbackDl.add(item.url); await chrome.downloads.download({ url: item.url }); }
+      catch (e2) { zbFallbackDl.delete(item.url); diagPush("dl.takeover.fallback_failed", { err: String(e2?.message || e2) }); }
     }
   });
 }
@@ -4047,3 +4057,53 @@ if (chrome.notifications?.onClosed) {
     await chrome.storage.session.remove(notifId);
   });
 }
+
+/* ---------------------------------------------------------------------------
+ * Colorscheme sync with the global zwire HUD.
+ * hud-internal owns the scheme (native file ~/.zwire/hud-scheme drives the
+ * compiled color mixer). We mirror it into our own chrome.storage.local
+ * "ui.scheme", which lib/ui-scheme.js already fans out to every zpwrchrome
+ * page. A scheme picked in our own theme injector is pushed back to the HUD.
+ * Separate extensions can't share storage, so this rides runtime messaging.
+ * ------------------------------------------------------------------------- */
+(() => {
+  const HUD_ID = "omcgnnjfmbmpdlofklbpddkhnfibfhgg";
+  const UI_SCHEME_KEY = "ui.scheme";
+  let fromHud = null;   // last scheme we applied because the HUD told us to
+
+  function applyFromHud(scheme) {
+    if (!scheme) return;
+    fromHud = scheme;                       // so our storage listener won't echo it back
+    try { chrome.storage.local.set({ [UI_SCHEME_KEY]: scheme }); } catch (e) {}
+  }
+
+  // Pull the current HUD scheme on worker start.
+  try {
+    chrome.runtime.sendMessage(HUD_ID, { type: "zb-scheme-get" }, (r) => {
+      void chrome.runtime.lastError;
+      if (r && r.scheme) applyFromHud(r.scheme);
+    });
+  } catch (e) {}
+  try { chrome.runtime.onStartup?.addListener?.(() => {
+    try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-scheme-get" }, (r) => { void chrome.runtime.lastError; if (r && r.scheme) applyFromHud(r.scheme); }); } catch (e) {}
+  }); } catch (e) {}
+
+  // Live push from the HUD when the user repaints the browser.
+  try {
+    chrome.runtime.onMessageExternal.addListener((msg, sender) => {
+      if (!sender || sender.id !== HUD_ID || !msg) return;
+      if (msg.type === "zb-scheme" && msg.scheme) applyFromHud(msg.scheme);
+    });
+  } catch (e) {}
+
+  // A pick in OUR theme injector (writes ui.scheme) → tell the HUD so the whole
+  // browser chrome follows. Skip the echo of a scheme the HUD just pushed to us.
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes[UI_SCHEME_KEY]) return;
+      const scheme = changes[UI_SCHEME_KEY].newValue;
+      if (!scheme || scheme === fromHud) { fromHud = null; return; }
+      try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-scheme-set", scheme }, () => { void chrome.runtime.lastError; }); } catch (e) {}
+    });
+  } catch (e) {}
+})();
