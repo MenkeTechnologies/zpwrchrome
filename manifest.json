@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "zpwrchrome",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6OhpJMWcVtB0WUKsK5kzNBEX0mKzrbXq8TgVgffkBZ0LfBE5+VWFH0f33xn6tY01d1nBPbXJtYNO5oE06UWObwCgvRyeYqBCCW3BPCIOFSKPpGyHswcxE+QKyIvt+zIwO8FN+VJgqnyc8ibUUFaFwPRzBlrwcPqRRnQHS8FKlH0WbqLS12zBwSI6/WLO1qJfmW2UEjhbsy26APKfPwaY6mZfzR7v8QcRJ3XKhPviCfqQ8+91LUmXzDbffYqp64uPnyXqcbyM55/9QXaHTRQx2aDe5fPJfooxoyaIAYfMKlPtmQ18we3p25aQZDz3thAAMWK0lXAEQsIizGu6qjAAJwIDAQAB",
   "short_name": "zpwrchrome",
-  "version": "0.22.13",
+  "version": "0.22.17",
   "description": "Browser power-tool: UNIX `pass` integration (browserpass-compatible) + segmented download manager (default Chrome takeover) + JetBrains-style tab switcher with MRU/scenes/opener-tree/minimap + fzf history search + Tampermonkey-equivalent userscripts + full-page screenshot + Wappalyzer-compatible tech detection + cyberpunk page-theme injector + Turn Off the Lights cinema dimmer + JSON viewer + User-Agent switcher + find-in-all-tabs. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
   "minimum_chrome_version": "127",
-
   "permissions": [
     "tabs",
     "tabGroups",
@@ -29,72 +29,120 @@
     "alarms",
     "declarativeNetRequestWithHostAccess"
   ],
-
   "options_ui": {
     "page": "scripts-manager/manager.html",
     "open_in_tab": true
   },
-  "host_permissions": ["<all_urls>"],
-
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
-
+  "externally_connectable": {
+    "ids": [
+      "omcgnnjfmbmpdlofklbpddkhnfibfhgg"
+    ]
+  },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
-      "js": ["modal/content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "*://chrome.google.com/webstore/*",
+        "*://chromewebstore.google.com/*"
+      ],
+      "js": [
+        "modal/content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
-      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
-      "js": ["modal/json-viewer.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "*://chrome.google.com/webstore/*",
+        "*://chromewebstore.google.com/*"
+      ],
+      "js": [
+        "modal/json-viewer.js"
+      ],
       "run_at": "document_end",
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
-      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
-      "js": ["modal/xml-viewer.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "*://chrome.google.com/webstore/*",
+        "*://chromewebstore.google.com/*"
+      ],
+      "js": [
+        "modal/xml-viewer.js"
+      ],
       "run_at": "document_end",
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
-      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
-      "js": ["modal/cyber-theme.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "*://chrome.google.com/webstore/*",
+        "*://chromewebstore.google.com/*"
+      ],
+      "js": [
+        "modal/cyber-theme.js"
+      ],
       "run_at": "document_start",
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
-      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
-      "js": ["modal/lights-off.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "*://chrome.google.com/webstore/*",
+        "*://chromewebstore.google.com/*"
+      ],
+      "js": [
+        "modal/lights-off.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
-      "exclude_matches": ["*://chrome.google.com/webstore/*", "*://chromewebstore.google.com/*"],
-      "js": ["modal/reader-mode.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "*://chrome.google.com/webstore/*",
+        "*://chromewebstore.google.com/*"
+      ],
+      "js": [
+        "modal/reader-mode.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
   ],
-
   "web_accessible_resources": [
     {
-      "resources": ["modal/content.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "modal/content.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
-
   "action": {
-    "default_title": "zpwrchrome — recent tabs",
+    "default_title": "zpwrchrome \u2014 recent tabs",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
@@ -103,14 +151,12 @@
       "128": "icons/icon128.png"
     }
   },
-
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-
   "commands": {
     "_execute_action": {
       "suggested_key": {
@@ -126,8 +172,12 @@
       },
       "description": "Switch to the previously active tab (MRU)"
     },
-    "restore-last-closed":  { "description": "Restore the most recently closed tab" },
-    "recent-modal":         { "description": "Open the recent-tabs popup (same as Alt+T — user-bindable)" },
+    "restore-last-closed": {
+      "description": "Restore the most recently closed tab"
+    },
+    "recent-modal": {
+      "description": "Open the recent-tabs popup (same as Alt+T \u2014 user-bindable)"
+    },
     "open-history": {
       "suggested_key": {
         "default": "Ctrl+Y",
@@ -135,68 +185,156 @@
       },
       "description": "Open the popup focused on the History category (fzf-search browsing history)"
     },
-
-    "search-tabs":         { "description": "Open popup focused on the tab search box" },
-
-    "mru-next":            { "description": "Cycle forward through MRU stack" },
-    "mru-prev":            { "description": "Cycle backward through MRU stack" },
-
-    "jump-to-1": { "description": "Jump to tab #1 in current window" },
-    "jump-to-2": { "description": "Jump to tab #2 in current window" },
-    "jump-to-3": { "description": "Jump to tab #3 in current window" },
-    "jump-to-4": { "description": "Jump to tab #4 in current window" },
-    "jump-to-5": { "description": "Jump to tab #5 in current window" },
-    "jump-to-6": { "description": "Jump to tab #6 in current window" },
-    "jump-to-7": { "description": "Jump to tab #7 in current window" },
-    "jump-to-8": { "description": "Jump to tab #8 in current window" },
-    "jump-to-9": { "description": "Jump to last tab in current window" },
-
-    "duplicate-tab":       { "description": "Duplicate the active tab" },
-    "pin-tab":             { "description": "Toggle pin on the active tab" },
-    "mute-tab":            { "description": "Toggle mute on the active tab" },
-    "move-to-new-window":  { "description": "Detach active tab to a new window" },
-    "close-others":        { "description": "Close all other tabs in current window" },
-    "close-right":         { "description": "Close all tabs to the right of the active tab" },
-    "close-duplicates":    { "description": "Close tabs with duplicate URLs (keeps leftmost)" },
-    "reload-all":          { "description": "Reload every tab in current window" },
-    "sort-by-url":         { "description": "Sort tabs in current window by URL" },
-    "group-by-domain":     { "description": "Group tabs in current window by domain (Chrome tab groups)" },
-    "copy-url":            { "description": "Copy active tab URL to clipboard" },
-    "copy-title-md":       { "description": "Copy active tab as Markdown link" },
-    "bookmark-tab":        { "description": "Bookmark active tab to Other Bookmarks" },
-
-    "manage-scripts":      { "description": "Open the userscript manager (Tampermonkey-style)" },
-
-    "save-scene-prompt":   { "description": "Open popup focused on save-scene input" },
-    "restore-scene-1":     { "description": "Restore scene #1 (newest) — opens a new window with saved tabs" },
-    "restore-scene-2":     { "description": "Restore scene #2" },
-    "restore-scene-3":     { "description": "Restore scene #3" },
-    "restore-scene-4":     { "description": "Restore scene #4" },
-    "restore-scene-5":     { "description": "Restore scene #5" },
-
-    "pass-open-popup":     { "description": "Open popup focused on the PASS category (matches credentials for the active tab from ~/.password-store via the zpwrchrome native host)" },
+    "search-tabs": {
+      "description": "Open popup focused on the tab search box"
+    },
+    "mru-next": {
+      "description": "Cycle forward through MRU stack"
+    },
+    "mru-prev": {
+      "description": "Cycle backward through MRU stack"
+    },
+    "jump-to-1": {
+      "description": "Jump to tab #1 in current window"
+    },
+    "jump-to-2": {
+      "description": "Jump to tab #2 in current window"
+    },
+    "jump-to-3": {
+      "description": "Jump to tab #3 in current window"
+    },
+    "jump-to-4": {
+      "description": "Jump to tab #4 in current window"
+    },
+    "jump-to-5": {
+      "description": "Jump to tab #5 in current window"
+    },
+    "jump-to-6": {
+      "description": "Jump to tab #6 in current window"
+    },
+    "jump-to-7": {
+      "description": "Jump to tab #7 in current window"
+    },
+    "jump-to-8": {
+      "description": "Jump to tab #8 in current window"
+    },
+    "jump-to-9": {
+      "description": "Jump to last tab in current window"
+    },
+    "duplicate-tab": {
+      "description": "Duplicate the active tab"
+    },
+    "pin-tab": {
+      "description": "Toggle pin on the active tab"
+    },
+    "mute-tab": {
+      "description": "Toggle mute on the active tab"
+    },
+    "move-to-new-window": {
+      "description": "Detach active tab to a new window"
+    },
+    "close-others": {
+      "description": "Close all other tabs in current window"
+    },
+    "close-right": {
+      "description": "Close all tabs to the right of the active tab"
+    },
+    "close-duplicates": {
+      "description": "Close tabs with duplicate URLs (keeps leftmost)"
+    },
+    "reload-all": {
+      "description": "Reload every tab in current window"
+    },
+    "sort-by-url": {
+      "description": "Sort tabs in current window by URL"
+    },
+    "group-by-domain": {
+      "description": "Group tabs in current window by domain (Chrome tab groups)"
+    },
+    "copy-url": {
+      "description": "Copy active tab URL to clipboard"
+    },
+    "copy-title-md": {
+      "description": "Copy active tab as Markdown link"
+    },
+    "bookmark-tab": {
+      "description": "Bookmark active tab to Other Bookmarks"
+    },
+    "manage-scripts": {
+      "description": "Open the userscript manager (Tampermonkey-style)"
+    },
+    "save-scene-prompt": {
+      "description": "Open popup focused on save-scene input"
+    },
+    "restore-scene-1": {
+      "description": "Restore scene #1 (newest) \u2014 opens a new window with saved tabs"
+    },
+    "restore-scene-2": {
+      "description": "Restore scene #2"
+    },
+    "restore-scene-3": {
+      "description": "Restore scene #3"
+    },
+    "restore-scene-4": {
+      "description": "Restore scene #4"
+    },
+    "restore-scene-5": {
+      "description": "Restore scene #5"
+    },
+    "pass-open-popup": {
+      "description": "Open popup focused on the PASS category (matches credentials for the active tab from ~/.password-store via the zpwrchrome native host)"
+    },
     "pass-fill": {
       "suggested_key": {
         "default": "Ctrl+Shift+L",
-        "mac":     "Command+Shift+L"
+        "mac": "Command+Shift+L"
       },
-      "description": "Autofill the best-matching `pass` credential into the active tab's login form (requires the native host) — customize at chrome://extensions/shortcuts"
+      "description": "Autofill the best-matching `pass` credential into the active tab's login form (requires the native host) \u2014 customize at chrome://extensions/shortcuts"
     },
-    "pass-copy-pw":        { "description": "Copy the best-matching `pass` password for the active tab to the clipboard (auto-clears after 45 s)" },
-    "pass-copy-user":      { "description": "Copy the best-matching `pass` username for the active tab to the clipboard" },
-    "pass-copy-otp":       { "description": "Copy the TOTP code for the best-matching `pass` entry to the clipboard" },
-    "pass-open-url":       { "description": "Navigate the active tab to the URL stored in the best-matching `pass` entry (parses url/link/website/web/site keys)" },
-    "pass-fill-identity":  { "description": "Fill whatever identity fields the active tab has — profile (name/address/email/phone/…) AND credit-card (cc-number/cc-exp/cc-csc/cardholder/…) in one keystroke. Picks the best-matching profile/* and creditcard/* entries (picker if multiple, last-used cached per host)." },
-    "pass-fill-profile":   { "description": "Fill profile fields only (name, address, email, phone, …) on the active tab from a `profile/*` entry in `pass`. Quick-pick overlay when multiple profiles exist." },
-    "pass-fill-cc":        { "description": "Fill credit-card fields only (cc-number, cc-exp, cc-csc, cardholder, …) on the active tab from a `creditcard/*` entry in `pass`. Quick-pick overlay when multiple cards exist." },
-
-    "find-in-all-tabs":     { "description": "Full-text search across every open tab — opens a search UI, scrapes innerText from every http(s) tab in parallel, fuzzy-filters as you type, Enter activates the chosen tab and scrolls to the match (no DevTools required)" },
-    "lights-off":           { "description": "Turn off the lights — dim the entire active page with a near-black overlay while lifting any video elements above it (cinema-mode for YouTube and beyond). Click the overlay or press Esc to undim" },
-    "reader-mode":          { "description": "Reader mode — strip the active page to its main article and render it in a strykelang HUD overlay with adjustable typography. Click × in the top bar or press Esc to close" },
-    "screenshot-full-page": { "description": "Full-page screenshot — scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts)" },
-    "dl-paste-url":        { "description": "Download the URL currently on the clipboard via the zpwrchrome segmented downloader" },
-    "dl-show-queue":       { "description": "Open the zpwrchrome download manager queue view" },
-    "dl-pause-all":        { "description": "Pause every active download in the zpwrchrome download manager" },
-    "dl-resume-all":       { "description": "Resume every paused download in the zpwrchrome download manager" }
+    "pass-copy-pw": {
+      "description": "Copy the best-matching `pass` password for the active tab to the clipboard (auto-clears after 45 s)"
+    },
+    "pass-copy-user": {
+      "description": "Copy the best-matching `pass` username for the active tab to the clipboard"
+    },
+    "pass-copy-otp": {
+      "description": "Copy the TOTP code for the best-matching `pass` entry to the clipboard"
+    },
+    "pass-open-url": {
+      "description": "Navigate the active tab to the URL stored in the best-matching `pass` entry (parses url/link/website/web/site keys)"
+    },
+    "pass-fill-identity": {
+      "description": "Fill whatever identity fields the active tab has \u2014 profile (name/address/email/phone/\u2026) AND credit-card (cc-number/cc-exp/cc-csc/cardholder/\u2026) in one keystroke. Picks the best-matching profile/* and creditcard/* entries (picker if multiple, last-used cached per host)."
+    },
+    "pass-fill-profile": {
+      "description": "Fill profile fields only (name, address, email, phone, \u2026) on the active tab from a `profile/*` entry in `pass`. Quick-pick overlay when multiple profiles exist."
+    },
+    "pass-fill-cc": {
+      "description": "Fill credit-card fields only (cc-number, cc-exp, cc-csc, cardholder, \u2026) on the active tab from a `creditcard/*` entry in `pass`. Quick-pick overlay when multiple cards exist."
+    },
+    "find-in-all-tabs": {
+      "description": "Full-text search across every open tab \u2014 opens a search UI, scrapes innerText from every http(s) tab in parallel, fuzzy-filters as you type, Enter activates the chosen tab and scrolls to the match (no DevTools required)"
+    },
+    "lights-off": {
+      "description": "Turn off the lights \u2014 dim the entire active page with a near-black overlay while lifting any video elements above it (cinema-mode for YouTube and beyond). Click the overlay or press Esc to undim"
+    },
+    "reader-mode": {
+      "description": "Reader mode \u2014 strip the active page to its main article and render it in a strykelang HUD overlay with adjustable typography. Click \u00d7 in the top bar or press Esc to close"
+    },
+    "screenshot-full-page": {
+      "description": "Full-page screenshot \u2014 scrolls the active tab in viewport-sized steps and stitches into one PNG (no extra permissions required; customize at chrome://extensions/shortcuts)"
+    },
+    "dl-paste-url": {
+      "description": "Download the URL currently on the clipboard via the zpwrchrome segmented downloader"
+    },
+    "dl-show-queue": {
+      "description": "Open the zpwrchrome download manager queue view"
+    },
+    "dl-pause-all": {
+      "description": "Pause every active download in the zpwrchrome download manager"
+    },
+    "dl-resume-all": {
+      "description": "Resume every paused download in the zpwrchrome download manager"
+    }
   }
 }
