@@ -4060,7 +4060,7 @@ if (chrome.notifications?.onClosed) {
 
 /* ---------------------------------------------------------------------------
  * Colorscheme sync with the global zwire HUD.
- * hud-internal owns the scheme (native file ~/.zwire/hud-scheme drives the
+ * hud-internal owns the scheme (native file <app-data>/zwire/hud-scheme drives the
  * compiled color mixer). We mirror it into our own chrome.storage.local
  * "ui.scheme", which lib/ui-scheme.js already fans out to every zpwrchrome
  * page. A scheme picked in our own theme injector is pushed back to the HUD.
