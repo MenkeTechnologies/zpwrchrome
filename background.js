@@ -4092,8 +4092,20 @@ if (chrome.notifications?.onClosed) {
   // the light flag (chrome.storage zb_ui); mirror it into our "ui.light" so
   // lib/ui-scheme.js can flip every zpwrchrome page light.
   const UI_LIGHT_KEY = "ui.light";
-  function applyUiFromHud(ui) { try { chrome.storage.local.set({ [UI_LIGHT_KEY]: !!(ui && ui.light) }); } catch (e) {} }
+  let fromHudLight = null;   // last light value the HUD pushed — don't echo it back
+  function applyUiFromHud(ui) { const light = !!(ui && ui.light); fromHudLight = light; try { chrome.storage.local.set({ [UI_LIGHT_KEY]: light }); } catch (e) {} }
   try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-ui-get" }, (r) => { void chrome.runtime.lastError; if (r && r.ui) applyUiFromHud(r.ui); }); } catch (e) {}
+
+  // A light toggle in OUR theme injector (writes ui.light) → tell the HUD to go
+  // light globally so the whole browser follows. Skip the HUD's own echo.
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes[UI_LIGHT_KEY]) return;
+      const light = !!changes[UI_LIGHT_KEY].newValue;
+      if (light === fromHudLight) { fromHudLight = null; return; }
+      try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-ui-set", light }, () => { void chrome.runtime.lastError; }); } catch (e) {}
+    });
+  } catch (e) {}
 
   // Live push from the HUD when the user repaints the browser or toggles light/fx.
   try {
