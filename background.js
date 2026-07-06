@@ -4088,11 +4088,19 @@ if (chrome.notifications?.onClosed) {
     try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-scheme-get" }, (r) => { void chrome.runtime.lastError; if (r && r.scheme) applyFromHud(r.scheme); }); } catch (e) {}
   }); } catch (e) {}
 
-  // Live push from the HUD when the user repaints the browser.
+  // Light/effects sync — same cross-extension bridge as the scheme. The HUD owns
+  // the light flag (chrome.storage zb_ui); mirror it into our "ui.light" so
+  // lib/ui-scheme.js can flip every zpwrchrome page light.
+  const UI_LIGHT_KEY = "ui.light";
+  function applyUiFromHud(ui) { try { chrome.storage.local.set({ [UI_LIGHT_KEY]: !!(ui && ui.light) }); } catch (e) {} }
+  try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-ui-get" }, (r) => { void chrome.runtime.lastError; if (r && r.ui) applyUiFromHud(r.ui); }); } catch (e) {}
+
+  // Live push from the HUD when the user repaints the browser or toggles light/fx.
   try {
     chrome.runtime.onMessageExternal.addListener((msg, sender) => {
       if (!sender || sender.id !== HUD_ID || !msg) return;
       if (msg.type === "zb-scheme" && msg.scheme) applyFromHud(msg.scheme);
+      if (msg.type === "zb-ui" && msg.ui) applyUiFromHud(msg.ui);
     });
   } catch (e) {}
 
