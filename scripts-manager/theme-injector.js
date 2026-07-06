@@ -3,7 +3,7 @@
 import "../lib/page-nav.js";
 import { buildThemeCss } from "../lib/cyber-theme-css.js";
 import { COLOR_SCHEMES, SCHEME_IDS, DEFAULT_SCHEME, themeFor } from "../lib/color-schemes.js";
-import { UI_SCHEME_KEY } from "../lib/ui-scheme.js";
+import { UI_SCHEME_KEY, UI_LIGHT_KEY } from "../lib/ui-scheme.js";
 
 const STATE_KEY = "theme.injector";
 const $ = (id) => document.getElementById(id);
@@ -143,14 +143,28 @@ async function save() {
 }
 
 async function load() {
-  const bag = await chrome.storage.local.get([STATE_KEY, UI_SCHEME_KEY]);
+  const bag = await chrome.storage.local.get([STATE_KEY, UI_SCHEME_KEY, UI_LIGHT_KEY]);
   if (bag?.[STATE_KEY]) state.bag = { ...state.bag, ...bag[STATE_KEY] };
   // ui.scheme is the source of truth for the chosen scheme; recompute the
   // palette from the id so a vendored-color change can never serve stale hex.
   state.bag.scheme = bag?.[UI_SCHEME_KEY] || state.bag.scheme || DEFAULT_SCHEME;
   state.bag.palette = themeFor(state.bag.scheme);
+  const lt = $("lightMode"); if (lt) lt.checked = !!bag?.[UI_LIGHT_KEY];
   render();
 }
+
+// Light mode is a global HUD setting mirrored into ui.light. Writing it here
+// recolors every zpwrchrome page (lib/ui-scheme.js) AND tells the HUD to flip
+// the whole browser (background.js → zb-ui-set). Keep the toggle in sync when
+// it's changed from the HUD or another page.
+$("lightMode")?.addEventListener("change", (ev) => {
+  chrome.storage.local.set({ [UI_LIGHT_KEY]: !!ev.target.checked });
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes[UI_LIGHT_KEY]) {
+    const t = $("lightMode"); if (t) t.checked = !!changes[UI_LIGHT_KEY].newValue;
+  }
+});
 
 buildSchemeGrid();
 
