@@ -15,24 +15,31 @@ use std::fs;
 
 /// Port of `listDirectories()` from `request/tree.go:18`.
 pub fn listDirectories(request: &request) {
-    let mut responseData = response::MakeTreeResponse();                        // go:19
+    let mut responseData = response::MakeTreeResponse(); // go:19
 
-    for store in request.Settings.Stores.values() {                             // go:21
+    for store in request.Settings.Stores.values() {
+        // go:21
         let mut store = store.clone();
-        let normalizedStorePath = match normalizePasswordStorePath(&store.Path) { // go:22
+        let normalizedStorePath = match normalizePasswordStorePath(&store.Path) {
+            // go:22
             Ok(p) => p,
-            Err(e) => {                                                         // go:23-37
+            Err(e) => {
+                // go:23-37
                 eprintln!(
                     "The password store '{:?}' is not accessible at its location: {}",
                     store, e
                 );
-                response::SendErrorAndExit(                                     // go:28-37
+                response::SendErrorAndExit(
+                    // go:28-37
                     errors::Code::InaccessiblePasswordStore,
                     Some(response::params_of(&[
-                        (errors::field::MESSAGE,    "The password store is not accessible"),
-                        (errors::field::ACTION,     "tree"),
-                        (errors::field::ERROR,      &e),
-                        (errors::field::STORE_ID,   &store.ID),
+                        (
+                            errors::field::MESSAGE,
+                            "The password store is not accessible",
+                        ),
+                        (errors::field::ACTION, "tree"),
+                        (errors::field::ERROR, &e),
+                        (errors::field::STORE_ID, &store.ID),
                         (errors::field::STORE_NAME, &store.Name),
                         (errors::field::STORE_PATH, &store.Path),
                     ])),
@@ -40,44 +47,55 @@ pub fn listDirectories(request: &request) {
             }
         };
 
-        store.Path = normalizedStorePath.to_string_lossy().into_owned();        // go:40
+        store.Path = normalizedStorePath.to_string_lossy().into_owned(); // go:40
 
         // var mu sync.Mutex                                                    // go:42
         // directories := []string{}                                            // go:43
-        let mut directories: Vec<String> = Vec::new();                          // go:43
+        let mut directories: Vec<String> = Vec::new(); // go:43
         if let Err(e) = collect_dirs(&normalizedStorePath, &normalizedStorePath, &mut directories) {
             // err = fastwalk.FastWalk(...) failure                             // go:60
             eprintln!(
                 "Unable to list the directory tree in the password store '{:?}' at its location: {}",
                 store, e
             );
-            response::SendErrorAndExit(                                         // go:62-76
+            response::SendErrorAndExit(
+                // go:62-76
                 errors::Code::UnableToListDirectoriesInPasswordStore,
                 Some(response::params_of(&[
-                    (errors::field::MESSAGE,    "Unable to list the directory tree in the password store"),
-                    (errors::field::ACTION,     "tree"),
-                    (errors::field::ERROR,      &e),
-                    (errors::field::STORE_ID,   &store.ID),
+                    (
+                        errors::field::MESSAGE,
+                        "Unable to list the directory tree in the password store",
+                    ),
+                    (errors::field::ACTION, "tree"),
+                    (errors::field::ERROR, &e),
+                    (errors::field::STORE_ID, &store.ID),
                     (errors::field::STORE_NAME, &store.Name),
                     (errors::field::STORE_PATH, &store.Path),
                 ])),
             );
         }
 
-        for directory in directories.iter_mut() {                               // go:79 for i, directory := range directories
-            *directory = directory.replace('\\', "/");                          // go:98 strings.Replace(..., "\\", "/", -1)
+        for directory in directories.iter_mut() {
+            // go:79 for i, directory := range directories
+            *directory = directory.replace('\\', "/"); // go:98 strings.Replace(..., "\\", "/", -1)
         }
 
-        directories.sort();                                                      // go:102 sort.Strings(directories)
-        responseData.Directories.insert(store.ID.clone(), directories);          // go:103
+        directories.sort(); // go:102 sort.Strings(directories)
+        responseData
+            .Directories
+            .insert(store.ID.clone(), directories); // go:103
     }
 
-    response::SendOk(responseData);                                             // go:106
+    response::SendOk(responseData); // go:106
 }
 
 // Inlined std::fs walker — analog of Go's `fastwalk.FastWalk` closure.        // (rust)
 // Collects every subdirectory of `root`, skipping `.git` (mirrors Go).        // (rust)
-fn collect_dirs(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) -> Result<(), String> {
+fn collect_dirs(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    out: &mut Vec<String>,
+) -> Result<(), String> {
     let rd = fs::read_dir(dir).map_err(|e| format!("{e}"))?;
     for entry in rd {
         let entry = entry.map_err(|e| format!("{e}"))?;
@@ -86,7 +104,8 @@ fn collect_dirs(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<Str
         if !ft.is_dir() {
             continue;
         }
-        if path.file_name() == Some(OsStr::new(".git")) {                       // go:51 filepath.Base(path) == ".git"
+        if path.file_name() == Some(OsStr::new(".git")) {
+            // go:51 filepath.Base(path) == ".git"
             continue;
         }
         let rel = path

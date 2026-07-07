@@ -36,7 +36,10 @@ pub fn zcite_save(value: &Value) {
         _ => response::SendErrorAndExit(
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
-                (field::MESSAGE, "zcite.save: missing or invalid `item` (expected a CSL-JSON object or array)"),
+                (
+                    field::MESSAGE,
+                    "zcite.save: missing or invalid `item` (expected a CSL-JSON object or array)",
+                ),
                 (field::ACTION, "zcite.save"),
             ])),
         ),

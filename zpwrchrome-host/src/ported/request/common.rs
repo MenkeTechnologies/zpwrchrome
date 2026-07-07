@@ -10,14 +10,16 @@ use std::path::PathBuf;
 
 /// Port of `normalizePasswordStorePath()` from `request/common.go:11`.
 pub fn normalizePasswordStorePath(storePath: &str) -> Result<PathBuf, String> {
-    let mut storePath = storePath.to_string();                                  // go:11 storePath string (mutable)
+    let mut storePath = storePath.to_string(); // go:11 storePath string (mutable)
 
-    if storePath.is_empty() {                                                   // go:12
-        return Err("The store path cannot be empty".to_string());               // go:13
+    if storePath.is_empty() {
+        // go:12
+        return Err("The store path cannot be empty".to_string()); // go:13
     }
 
-    if storePath.starts_with("~/") {                                            // go:16 strings.HasPrefix(storePath, "~/")
-        storePath = format!("$HOME/{}", &storePath[2..]);                       // go:17 filepath.Join("$HOME", storePath[2:])
+    if storePath.starts_with("~/") {
+        // go:16 strings.HasPrefix(storePath, "~/")
+        storePath = format!("$HOME/{}", &storePath[2..]); // go:17 filepath.Join("$HOME", storePath[2:])
     }
     // storePath = os.ExpandEnv(storePath)                                      // go:19
     // Inlined env expansion (Rust stdlib has no os.ExpandEnv). Handles         // (rust)
@@ -27,13 +29,18 @@ pub fn normalizePasswordStorePath(storePath: &str) -> Result<PathBuf, String> {
         let mut out = String::with_capacity(s.len());
         let mut chars = s.chars().peekable();
         while let Some(c) = chars.next() {
-            if c != '$' { out.push(c); continue; }
+            if c != '$' {
+                out.push(c);
+                continue;
+            }
             match chars.peek() {
                 Some(&'{') => {
                     chars.next();
                     let mut name = String::new();
                     for ch in chars.by_ref() {
-                        if ch == '}' { break; }
+                        if ch == '}' {
+                            break;
+                        }
                         name.push(ch);
                     }
                     out.push_str(&std::env::var(&name).unwrap_or_default());
@@ -44,7 +51,9 @@ pub fn normalizePasswordStorePath(storePath: &str) -> Result<PathBuf, String> {
                         if next.is_ascii_alphanumeric() || next == '_' {
                             name.push(next);
                             chars.next();
-                        } else { break; }
+                        } else {
+                            break;
+                        }
                     }
                     out.push_str(&std::env::var(&name).unwrap_or_default());
                 }
@@ -54,16 +63,18 @@ pub fn normalizePasswordStorePath(storePath: &str) -> Result<PathBuf, String> {
         storePath = out;
     }
 
-    let directStorePath = fs::canonicalize(&storePath)                          // go:21 filepath.EvalSymlinks(storePath)
-        .map_err(|e| format!("{e}"))?;                                          // go:22-24
-    let storePath = directStorePath;                                            // go:25 storePath = directStorePath
+    let directStorePath = fs::canonicalize(&storePath) // go:21 filepath.EvalSymlinks(storePath)
+        .map_err(|e| format!("{e}"))?; // go:22-24
+    let storePath = directStorePath; // go:25 storePath = directStorePath
 
-    let stat = fs::metadata(&storePath)                                         // go:27 os.Stat(storePath)
-        .map_err(|e| format!("{e}"))?;                                          // go:28-30
-    if !stat.is_dir() {                                                         // go:31 !stat.IsDir()
-        return Err("The specified path exists, but is not a directory".to_string()); // go:32
+    let stat = fs::metadata(&storePath) // go:27 os.Stat(storePath)
+        .map_err(|e| format!("{e}"))?; // go:28-30
+    if !stat.is_dir() {
+        // go:31 !stat.IsDir()
+        return Err("The specified path exists, but is not a directory".to_string());
+        // go:32
     }
-    Ok(storePath)                                                                // go:34
+    Ok(storePath) // go:34
 }
 
 #[allow(non_snake_case)]

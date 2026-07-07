@@ -70,7 +70,12 @@ fn run_env(request: &Value, env_pairs: &[(&str, &str)]) -> RoundTrip {
         .unwrap();
     drop(child.stdin.take());
     let mut out = Vec::new();
-    child.stdout.as_mut().unwrap().read_to_end(&mut out).unwrap();
+    child
+        .stdout
+        .as_mut()
+        .unwrap()
+        .read_to_end(&mut out)
+        .unwrap();
     let status = child.wait().unwrap();
     RoundTrip {
         response: read_one_frame(&out),
@@ -130,7 +135,10 @@ fn save_with_empty_contents_returns_code_27() {
     let r = run(&req);
     assert_eq!(r.exit_code, 27);
     assert_eq!(r.response["code"], 27);
-    assert_eq!(r.response["params"]["message"], "The entry contents is missing");
+    assert_eq!(
+        r.response["params"]["message"],
+        "The entry contents is missing"
+    );
 }
 
 #[test]
@@ -195,7 +203,9 @@ fn tree_returns_sorted_subdirs_relative_to_store_root() {
     });
     let r = run(&req);
     assert_eq!(r.exit_code, 0);
-    let dirs = r.response["data"]["directories"]["main"].as_array().unwrap();
+    let dirs = r.response["data"]["directories"]["main"]
+        .as_array()
+        .unwrap();
     let names: Vec<&str> = dirs.iter().map(|v| v.as_str().unwrap()).collect();
     assert_eq!(names, vec!["a", "a/b", "c"]);
     let _ = fs::remove_dir_all(&d);
@@ -221,8 +231,14 @@ fn delete_removes_file_and_cleans_empty_parent_dirs() {
     });
     let r = run(&req);
     assert_eq!(r.exit_code, 0, "response={:?}", r.response);
-    assert!(!d.join("a").join("b").exists(), "empty parent b/ should be removed");
-    assert!(d.join("a").exists(), "a/ has a sibling keepme so it must stay");
+    assert!(
+        !d.join("a").join("b").exists(),
+        "empty parent b/ should be removed"
+    );
+    assert!(
+        d.join("a").exists(),
+        "a/ has a sibling keepme so it must stay"
+    );
     let _ = fs::remove_dir_all(&d);
 }
 
@@ -275,8 +291,14 @@ fn version_flag_prints_dotted_triple_and_exits_zero() {
     let out = Command::new(bin()).arg("-version").output().unwrap();
     assert!(out.status.success());
     let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains("3.1.2"), "expected '3.1.2' in version output: {s}");
-    assert!(s.contains("Browserpass host app version"), "version banner missing: {s}");
+    assert!(
+        s.contains("3.1.2"),
+        "expected '3.1.2' in version output: {s}"
+    );
+    assert!(
+        s.contains("Browserpass host app version"),
+        "version banner missing: {s}"
+    );
 }
 
 #[test]
