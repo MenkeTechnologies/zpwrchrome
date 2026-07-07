@@ -271,7 +271,7 @@ fn install_nm_manifest(ext_ids: &[&str]) -> std::io::Result<usize> {
     let home = std::env::var("HOME")
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::NotFound, "HOME not set"))?;
 
-    let dirs: Vec<std::path::PathBuf> = if cfg!(target_os = "macos") {
+    let mut dirs: Vec<std::path::PathBuf> = if cfg!(target_os = "macos") {
         vec![
             format!("{home}/Library/Application Support/Google/Chrome/NativeMessagingHosts").into(),
             format!("{home}/Library/Application Support/Chromium/NativeMessagingHosts").into(),
@@ -286,6 +286,39 @@ fn install_nm_manifest(ext_ids: &[&str]) -> std::io::Result<usize> {
             format!("{home}/.config/microsoft-edge/NativeMessagingHosts").into(),
         ]
     };
+
+    // zwire is a Chromium fork launched against its own --user-data-dir, so it
+    // reads native-messaging manifests from <profile>/NativeMessagingHosts/, not
+    // the shared browser config dirs above. Register there too. The profile lives
+    // under the zwire state dir, but that dir differs by how zwire was launched:
+    // the packaged macOS .app uses base::DIR_APP_DATA keyed on the bundle id
+    // (com.menketechnologies.zwire), while the shell launcher (bin/zwire, via
+    // scripts/state-dir.sh) uses the bare "zwire"/$XDG_CONFIG_HOME name. Cover
+    // both — the parent-exists gate below skips whichever isn't present, so we
+    // never litter. $ZWIRE_STATE overrides everything, same as the launcher.
+    let zwire_states: Vec<String> = match std::env::var("ZWIRE_STATE") {
+        Ok(s) if !s.is_empty() => vec![s],
+        _ => {
+            if cfg!(target_os = "macos") {
+                vec![
+                    format!("{home}/Library/Application Support/com.menketechnologies.zwire"),
+                    format!("{home}/Library/Application Support/zwire"),
+                ]
+            } else {
+                let base = std::env::var("XDG_CONFIG_HOME")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| format!("{home}/.config"));
+                vec![
+                    format!("{base}/com.menketechnologies.zwire"),
+                    format!("{base}/zwire"),
+                ]
+            }
+        }
+    };
+    for state in &zwire_states {
+        dirs.push(format!("{state}/profile/NativeMessagingHosts").into());
+    }
 
     let origins: Vec<String> = ext_ids.iter()
         .map(|id| format!("    \"chrome-extension://{id}/\""))
