@@ -4067,63 +4067,74 @@ if (chrome.notifications?.onClosed) {
  * Separate extensions can't share storage, so this rides runtime messaging.
  * ------------------------------------------------------------------------- */
 (() => {
-  const HUD_ID = "omcgnnjfmbmpdlofklbpddkhnfibfhgg";
+  // zpwrchrome subscribes DIRECTLY to the zwire-host theme bus — the single
+  // source of truth (~/.zwire/global.toml), shared by the whole zwire fleet.
+  // One persistent connectNative port `sub`s to scheme + ui; the host sends a
+  // snapshot on subscribe + every change after, from ANY app. This replaces the
+  // old cross-extension pull/push to the HUD (which was fragile and often
+  // desynced). We mirror into our own ui.scheme / ui.light so lib/ui-scheme.js
+  // repaints every zpwrchrome page. Works standalone too: if the host isn't
+  // present (zpwrchrome loaded outside zwire), connect() just retries harmlessly.
+  const HOST = "com.zwire.hud";
   const UI_SCHEME_KEY = "ui.scheme";
-  let fromHud = null;   // last scheme we applied because the HUD told us to
+  const UI_LIGHT_KEY = "ui.light";
+  // Echo guards: the value the host last pushed, so our storage writer below
+  // doesn't send it straight back and loop.
+  let fromHostScheme = null, fromHostLight = null;
 
-  function applyFromHud(scheme) {
+  function applyScheme(scheme) {
     if (!scheme) return;
-    fromHud = scheme;                       // so our storage listener won't echo it back
+    fromHostScheme = scheme;
     try { chrome.storage.local.set({ [UI_SCHEME_KEY]: scheme }); } catch (e) {}
   }
+  function applyUi(ui) {
+    const light = !!(ui && ui.light);
+    fromHostLight = light;
+    try { chrome.storage.local.set({ [UI_LIGHT_KEY]: light }); } catch (e) {}
+  }
 
-  // Pull the current HUD scheme on worker start.
-  try {
-    chrome.runtime.sendMessage(HUD_ID, { type: "zb-scheme-get" }, (r) => {
+  // STANDALONE-SAFE: zpwrchrome also runs in vanilla Chrome (no zwire, no host).
+  // There, connectNative finds no host and the port disconnects immediately; we
+  // back off (up to 5 min) so we don't spin, and zpwrchrome's own theme keeps
+  // working from its ui.scheme / ui.light storage (its picker + lib/ui-scheme.js
+  // are untouched). Inside zwire the host answers the `sub` at once (snapshot),
+  // which resets the backoff — so live fleet sync is immediate.
+  let _retry = 1500;
+  function connect() {
+    let port, gotMsg = false;
+    try { port = chrome.runtime.connectNative(HOST); } catch (e) { _retry = Math.min(_retry * 2, 300000); setTimeout(connect, _retry); return; }
+    port.onMessage.addListener((m) => {
+      gotMsg = true; _retry = 1500;   // a live host reset the backoff
+      if (!m || m.ev !== "pub") return;
+      if (m.topic === "scheme" && m.data && m.data.scheme) applyScheme(m.data.scheme);
+      else if (m.topic === "ui" && m.data) applyUi(m.data);
+    });
+    port.onDisconnect.addListener(() => {
       void chrome.runtime.lastError;
-      if (r && r.scheme) applyFromHud(r.scheme);
+      if (!gotMsg) _retry = Math.min(_retry * 2, 300000);   // never connected → likely no host (standalone)
+      setTimeout(connect, _retry);
     });
-  } catch (e) {}
-  try { chrome.runtime.onStartup?.addListener?.(() => {
-    try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-scheme-get" }, (r) => { void chrome.runtime.lastError; if (r && r.scheme) applyFromHud(r.scheme); }); } catch (e) {}
-  }); } catch (e) {}
+    try { port.postMessage({ cmd: "sub", topic: "scheme" }); port.postMessage({ cmd: "sub", topic: "ui" }); } catch (e) {}
+  }
+  connect();
 
-  // Light/effects sync — same cross-extension bridge as the scheme. The HUD owns
-  // the light flag (chrome.storage zb_ui); mirror it into our "ui.light" so
-  // lib/ui-scheme.js can flip every zpwrchrome page light.
-  const UI_LIGHT_KEY = "ui.light";
-  let fromHudLight = null;   // last light value the HUD pushed — don't echo it back
-  function applyUiFromHud(ui) { const light = !!(ui && ui.light); fromHudLight = light; try { chrome.storage.local.set({ [UI_LIGHT_KEY]: light }); } catch (e) {} }
-  try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-ui-get" }, (r) => { void chrome.runtime.lastError; if (r && r.ui) applyUiFromHud(r.ui); }); } catch (e) {}
-
-  // A light toggle in OUR theme injector (writes ui.light) → tell the HUD to go
-  // light globally so the whole browser follows. Skip the HUD's own echo.
+  // A pick/toggle in OUR theme injector (writes ui.scheme / ui.light) → write the
+  // host, which persists it + fans it out to the whole fleet. Skip the host's echo.
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== "local" || !changes[UI_LIGHT_KEY]) return;
-      const light = !!changes[UI_LIGHT_KEY].newValue;
-      if (light === fromHudLight) { fromHudLight = null; return; }
-      try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-ui-set", light }, () => { void chrome.runtime.lastError; }); } catch (e) {}
-    });
-  } catch (e) {}
-
-  // Live push from the HUD when the user repaints the browser or toggles light/fx.
-  try {
-    chrome.runtime.onMessageExternal.addListener((msg, sender) => {
-      if (!sender || sender.id !== HUD_ID || !msg) return;
-      if (msg.type === "zb-scheme" && msg.scheme) applyFromHud(msg.scheme);
-      if (msg.type === "zb-ui" && msg.ui) applyUiFromHud(msg.ui);
-    });
-  } catch (e) {}
-
-  // A pick in OUR theme injector (writes ui.scheme) → tell the HUD so the whole
-  // browser chrome follows. Skip the echo of a scheme the HUD just pushed to us.
-  try {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== "local" || !changes[UI_SCHEME_KEY]) return;
-      const scheme = changes[UI_SCHEME_KEY].newValue;
-      if (!scheme || scheme === fromHud) { fromHud = null; return; }
-      try { chrome.runtime.sendMessage(HUD_ID, { type: "zb-scheme-set", scheme }, () => { void chrome.runtime.lastError; }); } catch (e) {}
+      if (area !== "local") return;
+      if (changes[UI_SCHEME_KEY]) {
+        const scheme = changes[UI_SCHEME_KEY].newValue;
+        if (scheme && scheme !== fromHostScheme) {
+          try { chrome.runtime.sendNativeMessage(HOST, { scheme }, () => { void chrome.runtime.lastError; }); } catch (e) {}
+        }
+      }
+      if (changes[UI_LIGHT_KEY]) {
+        const light = !!changes[UI_LIGHT_KEY].newValue;
+        if (light !== fromHostLight) {
+          try { chrome.runtime.sendNativeMessage(HOST, { ui: { light } }, () => { void chrome.runtime.lastError; }); } catch (e) {}
+        }
+      }
     });
   } catch (e) {}
 })();
