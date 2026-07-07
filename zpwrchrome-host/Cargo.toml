@@ -49,7 +49,7 @@ dirs = "6"
 # `zwire_host::api` (filesystem crawl + exec) for the `host.crawl` / `host.exec`
 # actions, so `default-features = false` keeps its heavy `portable-pty` /
 # `sysinfo` deps out of our tree — verified with `cargo tree`.
-zwire-host = { git = "https://github.com/MenkeTechnologies/zwire-host", tag = "v0.3.0", default-features = false }
+zwire-host = { version = "0.3", default-features = false }
 
 # Used in spawn_worker to detach the worker from Chrome's inherited stdio
 # FDs — without setsid + close(>=3), the worker keeps Chrome's stdout pipe
