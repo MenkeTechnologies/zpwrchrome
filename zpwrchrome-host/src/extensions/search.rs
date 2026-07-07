@@ -31,7 +31,7 @@ pub struct SearchMatch {
     #[serde(rename = "store")]
     pub Store: String,
     #[serde(rename = "path")]
-    pub Path:  String,
+    pub Path: String,
 }
 
 #[derive(Serialize, Debug, Default)]
@@ -56,10 +56,10 @@ pub fn search(request: &request) {
                 response::SendErrorAndExit(
                     errors::Code::InaccessiblePasswordStore,
                     Some(response::params_of(&[
-                        (field::MESSAGE,    "The password store is not accessible"),
-                        (field::ACTION,     "search"),
-                        (field::ERROR,      &e),
-                        (field::STORE_ID,   &store.ID),
+                        (field::MESSAGE, "The password store is not accessible"),
+                        (field::ACTION, "search"),
+                        (field::ERROR, &e),
+                        (field::STORE_ID, &store.ID),
                         (field::STORE_NAME, &store.Name),
                         (field::STORE_PATH, &store.Path),
                     ])),
@@ -72,10 +72,13 @@ pub fn search(request: &request) {
             response::SendErrorAndExit(
                 errors::Code::UnableToListFilesInPasswordStore,
                 Some(response::params_of(&[
-                    (field::MESSAGE,    "Unable to list the files in the password store"),
-                    (field::ACTION,     "search"),
-                    (field::ERROR,      &e),
-                    (field::STORE_ID,   &store.ID),
+                    (
+                        field::MESSAGE,
+                        "Unable to list the files in the password store",
+                    ),
+                    (field::ACTION, "search"),
+                    (field::ERROR, &e),
+                    (field::STORE_ID, &store.ID),
                     (field::STORE_NAME, &store.Name),
                     (field::STORE_PATH, &store.Path),
                 ])),
@@ -85,7 +88,7 @@ pub fn search(request: &request) {
         for path in search_in(&entries, &query) {
             results.push(SearchMatch {
                 Store: store.ID.clone(),
-                Path:  path,
+                Path: path,
             });
         }
     }

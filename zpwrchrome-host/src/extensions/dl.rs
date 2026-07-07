@@ -48,16 +48,16 @@ const FLAG_CHECK_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct JobState {
-    pub gid:        u64,
-    pub url:        String,
-    pub dest:       String,
-    pub total:      u64,
-    pub done:       u64,
-    pub status:     String,         // pending|active|paused|done|failed|cancelled
+    pub gid: u64,
+    pub url: String,
+    pub dest: String,
+    pub total: u64,
+    pub done: u64,
+    pub status: String, // pending|active|paused|done|failed|cancelled
     #[serde(default)]
-    pub err:        Option<String>,
-    pub segments:   u32,
-    pub started_at: u64,            // unix seconds
+    pub err: Option<String>,
+    pub segments: u32,
+    pub started_at: u64, // unix seconds
     #[serde(default)]
     pub elapsed_ms: u64,
     /// Accumulated milliseconds spent in the paused state across the lifetime
@@ -68,11 +68,11 @@ pub struct JobState {
     #[serde(default)]
     pub paused_offset_ms: u64,
     #[serde(default)]
-    pub paused:     bool,
+    pub paused: bool,
     #[serde(default)]
-    pub cancelled:  bool,
+    pub cancelled: bool,
     #[serde(default)]
-    pub cookies:    String,
+    pub cookies: String,
     #[serde(default, rename = "userAgent")]
     pub user_agent: String,
     /// PID of the worker process currently running this gid. Used by
@@ -93,7 +93,9 @@ pub fn cache_dir() -> std::io::Result<PathBuf> {
     let base = std::env::var("XDG_CACHE_HOME")
         .ok()
         .or_else(|| std::env::var("HOME").ok().map(|h| format!("{h}/.cache")))
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no XDG_CACHE_HOME/HOME"))?;
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "no XDG_CACHE_HOME/HOME")
+        })?;
     let dir = PathBuf::from(base).join("zpwrchrome").join("dl");
     fs::create_dir_all(&dir)?;
     Ok(dir)
@@ -106,15 +108,14 @@ pub fn state_path(gid: u64) -> std::io::Result<PathBuf> {
 pub fn read_state(gid: u64) -> std::io::Result<JobState> {
     let path = state_path(gid)?;
     let body = fs::read_to_string(&path)?;
-    serde_json::from_str(&body)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    serde_json::from_str(&body).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
 /// Atomic state-file write: serialize → tmp file → rename. Safe against
 /// concurrent readers (rename is atomic on Unix).
 pub fn write_state_atomic(state: &JobState) -> std::io::Result<()> {
     let path = state_path(state.gid)?;
-    let tmp  = path.with_extension("json.tmp");
+    let tmp = path.with_extension("json.tmp");
     let body = serde_json::to_vec_pretty(state)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     fs::write(&tmp, &body)?;
@@ -126,15 +127,22 @@ pub fn write_state_atomic(state: &JobState) -> std::io::Result<()> {
 /// 5-second-timeout advisory lock. Sufficient for the low-contention case
 /// of one `dl.add` per browser action.
 pub fn next_gid() -> std::io::Result<u64> {
-    let dir  = cache_dir()?;
+    let dir = cache_dir()?;
     let lock = dir.join("lock");
     let start = Instant::now();
     loop {
-        match fs::OpenOptions::new().write(true).create_new(true).open(&lock) {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+        {
             Ok(_) => break,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 if start.elapsed() > Duration::from_secs(5) {
-                    return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "lock timeout"));
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "lock timeout",
+                    ));
                 }
                 thread::sleep(Duration::from_millis(10));
             }
@@ -208,14 +216,22 @@ pub fn expand_home(p: &str) -> PathBuf {
 pub fn guess_filename(url: &str) -> Option<String> {
     let trimmed = url.trim_end_matches('/');
     let after_scheme = trimmed.split("://").nth(1).unwrap_or(trimmed);
-    let path = after_scheme.split('/').skip(1).collect::<Vec<_>>().join("/");
+    let path = after_scheme
+        .split('/')
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join("/");
     let basename = path.rsplit('/').next().unwrap_or("");
     let no_query = basename.split('?').next().unwrap_or("");
-    let no_frag  = no_query.split('#').next().unwrap_or("");
-    if no_frag.is_empty() { return None; }
+    let no_frag = no_query.split('#').next().unwrap_or("");
+    if no_frag.is_empty() {
+        return None;
+    }
     let decoded = percent_decode(no_frag);
     let cleaned = sanitize_filename(&decoded);
-    if cleaned.is_empty() { return None; }
+    if cleaned.is_empty() {
+        return None;
+    }
     // Keep the URL's own basename when it's either a real filename (already
     // has an extension) or a clean bare stem we can later graft a Content-Type
     // extension onto — e.g. ".../image?id=42" → "image" → "image.jpg", far
@@ -234,8 +250,14 @@ pub fn guess_filename(url: &str) -> Option<String> {
 /// empty/separator-only strings, and absurd lengths.
 fn looks_like_clean_stem(s: &str) -> bool {
     let len = s.chars().count();
-    if len == 0 || len > 80 { return false; }
-    if s.chars().any(|c| matches!(c, '&' | '=' | '%' | '?' | '/' | '\\')) { return false; }
+    if len == 0 || len > 80 {
+        return false;
+    }
+    if s.chars()
+        .any(|c| matches!(c, '&' | '=' | '%' | '?' | '/' | '\\'))
+    {
+        return false;
+    }
     // Require at least one alphanumeric so "---" or "." alone don't qualify.
     s.chars().any(|c| c.is_ascii_alphanumeric())
 }
@@ -244,12 +266,23 @@ fn looks_like_clean_stem(s: &str) -> bool {
 /// gave us nothing usable — "image" / "video" / "audio" / "document" beats a
 /// raw "download-{timestamp}". The extension is grafted separately.
 pub fn generic_stem_for_content_type(content_type: &str) -> &'static str {
-    let mime = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
-    if      mime.starts_with("image/") { "image" }
-    else if mime.starts_with("video/") { "video" }
-    else if mime.starts_with("audio/") { "audio" }
-    else if mime == "application/pdf"  { "document" }
-    else                               { "download" }
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if mime.starts_with("image/") {
+        "image"
+    } else if mime.starts_with("video/") {
+        "video"
+    } else if mime.starts_with("audio/") {
+        "audio"
+    } else if mime == "application/pdf" {
+        "document"
+    } else {
+        "download"
+    }
 }
 
 /// True when `name` already carries a plausible file extension — a final dot
@@ -281,29 +314,29 @@ pub fn ext_for_content_type(content_type: &str) -> Option<&'static str> {
         .trim()
         .to_ascii_lowercase();
     let ext = match mime.as_str() {
-        "image/jpeg" | "image/jpg"                   => "jpg",
-        "image/png"                                  => "png",
-        "image/gif"                                  => "gif",
-        "image/webp"                                 => "webp",
-        "image/avif"                                 => "avif",
-        "image/svg+xml"                              => "svg",
-        "image/bmp" | "image/x-bmp"                  => "bmp",
-        "image/tiff"                                 => "tiff",
-        "image/x-icon" | "image/vnd.microsoft.icon"  => "ico",
-        "image/heic"                                 => "heic",
-        "video/mp4"                                  => "mp4",
-        "video/webm"                                 => "webm",
-        "video/quicktime"                            => "mov",
-        "audio/mpeg"                                 => "mp3",
-        "audio/ogg" | "application/ogg"              => "ogg",
-        "audio/wav" | "audio/x-wav"                  => "wav",
-        "application/pdf"                            => "pdf",
-        "application/zip"                            => "zip",
-        "application/gzip"                           => "gz",
-        "application/json"                           => "json",
-        "text/plain"                                 => "txt",
-        "text/html"                                  => "html",
-        "text/css"                                   => "css",
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/png" => "png",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/avif" => "avif",
+        "image/svg+xml" => "svg",
+        "image/bmp" | "image/x-bmp" => "bmp",
+        "image/tiff" => "tiff",
+        "image/x-icon" | "image/vnd.microsoft.icon" => "ico",
+        "image/heic" => "heic",
+        "video/mp4" => "mp4",
+        "video/webm" => "webm",
+        "video/quicktime" => "mov",
+        "audio/mpeg" => "mp3",
+        "audio/ogg" | "application/ogg" => "ogg",
+        "audio/wav" | "audio/x-wav" => "wav",
+        "application/pdf" => "pdf",
+        "application/zip" => "zip",
+        "application/gzip" => "gz",
+        "application/json" => "json",
+        "text/plain" => "txt",
+        "text/html" => "html",
+        "text/css" => "css",
         "application/javascript" | "text/javascript" => "js",
         _ => return None,
     };
@@ -316,15 +349,28 @@ pub fn ext_for_content_type(content_type: &str) -> Option<&'static str> {
 /// just buys us a clean "download-{ts}.bin" placeholder until then.
 pub fn looks_like_query_garbage(s: &str) -> bool {
     let len = s.chars().count();
-    if len == 0 || len > 80 { return true; }
+    if len == 0 || len > 80 {
+        return true;
+    }
     // Many query separators / equals signs = obviously a query string body.
     let amp_eq = s.chars().filter(|c| matches!(*c, '&' | '=')).count();
-    if amp_eq >= 3 { return true; }
+    if amp_eq >= 3 {
+        return true;
+    }
     // No extension at all (or extension is itself > 8 chars / has = & %) is suspect.
     let after_last_dot = s.rsplit('.').next().unwrap_or("");
-    if !s.contains('.') { return true; }
-    if after_last_dot.is_empty() || after_last_dot.len() > 8 { return true; }
-    if after_last_dot.chars().any(|c| matches!(c, '=' | '&' | '%' | '?')) { return true; }
+    if !s.contains('.') {
+        return true;
+    }
+    if after_last_dot.is_empty() || after_last_dot.len() > 8 {
+        return true;
+    }
+    if after_last_dot
+        .chars()
+        .any(|c| matches!(c, '=' | '&' | '%' | '?'))
+    {
+        return true;
+    }
     false
 }
 
@@ -365,21 +411,29 @@ pub fn parse_content_disposition_filename(header: &str) -> Option<String> {
             let orig = &part[part.len() - rest.len()..];
             let mut it = orig.splitn(3, '\'');
             let _charset = it.next().unwrap_or("");
-            let _lang    = it.next().unwrap_or("");
-            let value    = it.next().unwrap_or("");
+            let _lang = it.next().unwrap_or("");
+            let value = it.next().unwrap_or("");
             let decoded = percent_decode(value);
             star = Some(decoded);
         } else if let Some(rest) = lower.strip_prefix("filename=") {
             let orig = &part[part.len() - rest.len()..];
             let v = orig.trim_matches('"').trim();
-            if !v.is_empty() { best = Some(v.to_string()); }
+            if !v.is_empty() {
+                best = Some(v.to_string());
+            }
         }
     }
     // RFC 5987 says filename* takes precedence over filename.
     let raw = star.or(best)?;
     // Strip any path component to avoid traversal.
-    let name = raw.rsplit(|c| c == '/' || c == '\\').next().unwrap_or("").to_string();
-    if name.is_empty() { return None; }
+    let name = raw
+        .rsplit(|c| c == '/' || c == '\\')
+        .next()
+        .unwrap_or("")
+        .to_string();
+    if name.is_empty() {
+        return None;
+    }
     Some(sanitize_filename(&name))
 }
 
@@ -400,7 +454,9 @@ pub fn parse_content_disposition_filename(header: &str) -> Option<String> {
 /// is empty — callers can safely pass `&settings.namingMask` regardless
 /// of whether it was set.
 pub fn apply_naming_mask(mask: &str, basename: &str, url: &str) -> String {
-    if mask.is_empty() { return basename.to_string(); }
+    if mask.is_empty() {
+        return basename.to_string();
+    }
     // Split basename into stem + extension.
     let (stem, ext) = match basename.rsplit_once('.') {
         Some((s, e)) if !s.is_empty() => (s.to_string(), e.to_string()),
@@ -409,47 +465,61 @@ pub fn apply_naming_mask(mask: &str, basename: &str, url: &str) -> String {
     // Parse URL — best effort. Host = part between :// and next /:?#.
     let host = {
         let after = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
-        let h = after.split(|c: char| matches!(c, '/' | '?' | '#' | ':')).next().unwrap_or("");
+        let h = after
+            .split(|c: char| matches!(c, '/' | '?' | '#' | ':'))
+            .next()
+            .unwrap_or("");
         h.to_string()
     };
     let path = {
         let after = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
         let p = after.splitn(2, '/').nth(1).unwrap_or("");
-        p.split(|c: char| matches!(c, '?' | '#')).next().unwrap_or("").to_string()
+        p.split(|c: char| matches!(c, '?' | '#'))
+            .next()
+            .unwrap_or("")
+            .to_string()
     };
     let subdirs = match path.rsplit_once('/') {
         Some((d, _)) => d.to_string(),
-        None         => String::new(),
+        None => String::new(),
     };
     let flat = path.replace('/', "_");
 
     // Current UTC time via libc::gmtime_r to avoid pulling chrono.
     let (date, time) = {
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as libc::time_t).unwrap_or(0);
+        let t = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as libc::time_t)
+            .unwrap_or(0);
         #[cfg(unix)]
         unsafe {
             let mut tm: libc::tm = std::mem::zeroed();
             libc::gmtime_r(&t, &mut tm);
             (
-                format!("{:04}-{:02}-{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday),
+                format!(
+                    "{:04}-{:02}-{:02}",
+                    tm.tm_year + 1900,
+                    tm.tm_mon + 1,
+                    tm.tm_mday
+                ),
                 format!("{:02}{:02}{:02}", tm.tm_hour, tm.tm_min, tm.tm_sec),
             )
         }
         #[cfg(not(unix))]
-        { (String::from("0000-00-00"), String::from("000000")) }
+        {
+            (String::from("0000-00-00"), String::from("000000"))
+        }
     };
 
-    mask
-        .replace("*name*",    &stem)
-        .replace("*ext*",     &ext)
-        .replace("*host*",    &host)
-        .replace("*url*",     &path)
-        .replace("*flat*",    &flat)
+    mask.replace("*name*", &stem)
+        .replace("*ext*", &ext)
+        .replace("*host*", &host)
+        .replace("*url*", &path)
+        .replace("*flat*", &flat)
         .replace("*subdirs*", &subdirs)
-        .replace("*date*",    &date)
-        .replace("*time*",    &time)
-        .replace("*size*",    "?")
+        .replace("*date*", &date)
+        .replace("*time*", &time)
+        .replace("*size*", "?")
 }
 
 pub fn sanitize_filename(s: &str) -> String {
@@ -473,7 +543,9 @@ pub fn unique_dest_path(dir: &std::path::Path, basename: &str) -> PathBuf {
     };
     for n in 1..=9999u32 {
         let cand = dir.join(format!("{stem} ({n}){ext}"));
-        if !cand.exists() { return cand; }
+        if !cand.exists() {
+            return cand;
+        }
     }
     candidate
 }
@@ -483,15 +555,15 @@ pub fn unique_dest_path(dir: &std::path::Path, basename: &str) -> PathBuf {
 #[derive(Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct DlRequest {
-    pub action:   String,
-    pub url:      String,
-    pub dir:      String,
-    pub name:     String,
+    pub action: String,
+    pub url: String,
+    pub dir: String,
+    pub name: String,
     pub segments: Option<u32>,
-    pub cookies:  String,
+    pub cookies: String,
     #[serde(rename = "userAgent")]
     pub userAgent: String,
-    pub gid:      u64,
+    pub gid: u64,
     // Clear-action args:
     //   scope: "done" | "failed" | "missing" | "all"
     //   deleteFromDisk: also unlink the dest file for cleared `done` jobs
@@ -506,10 +578,15 @@ pub struct DlRequest {
 }
 
 #[derive(Serialize, Debug)]
-pub struct DlAddResponse    { pub gid: u64, pub dest: String }
+pub struct DlAddResponse {
+    pub gid: u64,
+    pub dest: String,
+}
 
 #[derive(Serialize, Debug)]
-pub struct DlListResponse   { pub jobs: Vec<JobView> }
+pub struct DlListResponse {
+    pub jobs: Vec<JobView>,
+}
 
 /// Per-job view sent to the extension. Wraps JobState with computed
 /// presence info (whether `dest` is still on disk) so the UI can hide
@@ -517,40 +594,43 @@ pub struct DlListResponse   { pub jobs: Vec<JobView> }
 #[derive(Serialize, Debug, Clone)]
 pub struct JobView {
     #[serde(flatten)]
-    pub state:       JobState,
+    pub state: JobState,
     pub dest_exists: bool,
 }
 
 #[derive(Serialize, Debug)]
-pub struct DlActionResponse { pub gid: u64, pub status: String }
+pub struct DlActionResponse {
+    pub gid: u64,
+    pub status: String,
+}
 
 #[derive(Serialize, Debug)]
 pub struct DlClearResponse {
-    pub cleared:        Vec<u64>,
-    pub deletedOnDisk:  Vec<String>,
+    pub cleared: Vec<u64>,
+    pub deletedOnDisk: Vec<String>,
 }
 
 pub fn dispatch_dl(action: &str, value: &Value) {
     let req: DlRequest = serde_json::from_value(value.clone()).unwrap_or_default();
     match action {
-        "dl.add"     => dl_add(&req),
-        "dl.list"    => dl_list(),
-        "dl.pause"   => dl_pause(&req),
-        "dl.resume"  => dl_resume(&req),
-        "dl.cancel"  => dl_cancel(&req),
+        "dl.add" => dl_add(&req),
+        "dl.list" => dl_list(),
+        "dl.pause" => dl_pause(&req),
+        "dl.resume" => dl_resume(&req),
+        "dl.cancel" => dl_cancel(&req),
         "dl.restart" => dl_restart(&req),
-        "dl.clear"   => dl_clear(&req),
-        "dl.remove"  => dl_remove(&req),
-        "dl.openDir"        => dl_open_dir(&req),
-        "dl.openFile"       => dl_open_file(&req),
-        "dl.writeFile"      => dl_write_file(value),
+        "dl.clear" => dl_clear(&req),
+        "dl.remove" => dl_remove(&req),
+        "dl.openDir" => dl_open_dir(&req),
+        "dl.openFile" => dl_open_file(&req),
+        "dl.writeFile" => dl_write_file(value),
         "dl.writeFileChunk" => dl_write_file_chunk(value),
         _ => {
             response::SendErrorAndExit(
                 errors::Code::InvalidRequestAction,
                 Some(response::params_of(&[
                     (field::MESSAGE, "Unknown dl action"),
-                    (field::ACTION,  action),
+                    (field::ACTION, action),
                 ])),
             );
         }
@@ -563,7 +643,7 @@ pub fn dl_add(req: &DlRequest) {
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.add: missing url"),
-                (field::ACTION,  "dl.add"),
+                (field::ACTION, "dl.add"),
             ])),
         );
     }
@@ -578,15 +658,14 @@ pub fn dl_add(req: &DlRequest) {
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.add: cannot create download dir"),
-                (field::ACTION,  "dl.add"),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, "dl.add"),
+                (field::ERROR, &e.to_string()),
             ])),
         );
     }
 
     let name = if req.name.is_empty() {
-        guess_filename(&req.url)
-            .unwrap_or_else(|| format!("download-{}", now_secs()))
+        guess_filename(&req.url).unwrap_or_else(|| format!("download-{}", now_secs()))
     } else {
         req.name.clone()
     };
@@ -603,8 +682,8 @@ pub fn dl_add(req: &DlRequest) {
                 errors::Code::InaccessiblePasswordStore,
                 Some(response::params_of(&[
                     (field::MESSAGE, "dl.add: next_gid failed"),
-                    (field::ACTION,  "dl.add"),
-                    (field::ERROR,   &e.to_string()),
+                    (field::ACTION, "dl.add"),
+                    (field::ERROR, &e.to_string()),
                 ])),
             );
         }
@@ -613,19 +692,19 @@ pub fn dl_add(req: &DlRequest) {
     let segments = req.segments.unwrap_or(DEFAULT_SEGMENTS).clamp(1, 16);
     let state = JobState {
         gid,
-        url:        req.url.clone(),
-        dest:       dest.to_string_lossy().into_owned(),
-        total:      0,
-        done:       0,
-        status:     "pending".into(),
-        err:        None,
+        url: req.url.clone(),
+        dest: dest.to_string_lossy().into_owned(),
+        total: 0,
+        done: 0,
+        status: "pending".into(),
+        err: None,
         segments,
         started_at: now_secs(),
         elapsed_ms: 0,
         paused_offset_ms: 0,
-        paused:     false,
-        cancelled:  false,
-        cookies:    req.cookies.clone(),
+        paused: false,
+        cancelled: false,
+        cookies: req.cookies.clone(),
         user_agent: req.userAgent.clone(),
         worker_pid: 0,
     };
@@ -634,8 +713,8 @@ pub fn dl_add(req: &DlRequest) {
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.add: cannot write state file"),
-                (field::ACTION,  "dl.add"),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, "dl.add"),
+                (field::ERROR, &e.to_string()),
             ])),
         );
     }
@@ -645,20 +724,30 @@ pub fn dl_add(req: &DlRequest) {
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.add: cannot spawn worker"),
-                (field::ACTION,  "dl.add"),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, "dl.add"),
+                (field::ERROR, &e.to_string()),
             ])),
         );
     }
 
-    response::SendOk(DlAddResponse { gid, dest: state.dest });
+    response::SendOk(DlAddResponse {
+        gid,
+        dest: state.dest,
+    });
 }
 
 pub fn dl_list() {
-    let jobs: Vec<JobView> = list_all_jobs().unwrap_or_default().into_iter().map(|s| {
-        let dest_exists = !s.dest.is_empty() && std::path::Path::new(&s.dest).exists();
-        JobView { state: s, dest_exists }
-    }).collect();
+    let jobs: Vec<JobView> = list_all_jobs()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| {
+            let dest_exists = !s.dest.is_empty() && std::path::Path::new(&s.dest).exists();
+            JobView {
+                state: s,
+                dest_exists,
+            }
+        })
+        .collect();
     response::SendOk(DlListResponse { jobs });
 }
 
@@ -673,7 +762,10 @@ pub fn dl_pause(req: &DlRequest) {
             s.status = "paused".into();
         }
     });
-    response::SendOk(DlActionResponse { gid: req.gid, status: "paused".into() });
+    response::SendOk(DlActionResponse {
+        gid: req.gid,
+        status: "paused".into(),
+    });
 }
 
 /// Return true if a process with this PID still exists. `kill(pid, 0)`
@@ -681,18 +773,26 @@ pub fn dl_pause(req: &DlRequest) {
 /// Returns false for pid==0 (never claimed).
 #[cfg(unix)]
 fn worker_alive(pid: u32) -> bool {
-    if pid == 0 { return false; }
+    if pid == 0 {
+        return false;
+    }
     unsafe { libc::kill(pid as i32, 0) == 0 }
 }
 #[cfg(not(unix))]
-fn worker_alive(_pid: u32) -> bool { false }   // be conservative; respawn
+fn worker_alive(_pid: u32) -> bool {
+    false
+} // be conservative; respawn
 
 /// Hard-stop a live worker so a restart can reset the file without two
 /// processes writing the same dest. SIGTERM with no handler in the worker
 /// terminates it immediately — no further writes after this returns.
 #[cfg(unix)]
 fn kill_worker(pid: u32) {
-    if pid != 0 { unsafe { libc::kill(pid as i32, libc::SIGTERM); } }
+    if pid != 0 {
+        unsafe {
+            libc::kill(pid as i32, libc::SIGTERM);
+        }
+    }
 }
 #[cfg(not(unix))]
 fn kill_worker(_pid: u32) {}
@@ -709,8 +809,8 @@ pub fn dl_resume(req: &DlRequest) {
     let (need_spawn, prior_pid, prior_status) = match read_state(req.gid) {
         Ok(s) => {
             let terminal = matches!(s.status.as_str(), "failed" | "cancelled");
-            let dead     = !worker_alive(s.worker_pid);
-            let need     = terminal || dead;
+            let dead = !worker_alive(s.worker_pid);
+            let need = terminal || dead;
             (need, s.worker_pid, s.status)
         }
         Err(_) => (false, 0, String::new()),
@@ -732,7 +832,10 @@ pub fn dl_resume(req: &DlRequest) {
             crate::diag::log(&format!("RESUME_SPAWN_ERR gid={} err={e}", req.gid));
         }
     }
-    response::SendOk(DlActionResponse { gid: req.gid, status: "resumed".into() });
+    response::SendOk(DlActionResponse {
+        gid: req.gid,
+        status: "resumed".into(),
+    });
 }
 
 pub fn dl_cancel(req: &DlRequest) {
@@ -740,7 +843,10 @@ pub fn dl_cancel(req: &DlRequest) {
         s.cancelled = true;
         s.status = "cancelled".into();
     });
-    response::SendOk(DlActionResponse { gid: req.gid, status: "cancelled".into() });
+    response::SendOk(DlActionResponse {
+        gid: req.gid,
+        status: "cancelled".into(),
+    });
 }
 
 /// Re-download from byte zero, whatever the current status.
@@ -757,8 +863,8 @@ pub fn dl_restart(req: &DlRequest) {
             response::SendErrorAndExit(
                 errors::Code::InvalidPasswordStore,
                 Some(response::params_of(&[
-                    (field::MESSAGE,  "Unknown gid"),
-                    (field::ACTION,   "dl.restart"),
+                    (field::MESSAGE, "Unknown gid"),
+                    (field::ACTION, "dl.restart"),
                     (field::STORE_ID, &req.gid.to_string()),
                 ])),
             );
@@ -786,7 +892,10 @@ pub fn dl_restart(req: &DlRequest) {
     if let Err(e) = spawn_worker(req.gid) {
         crate::diag::log(&format!("RESTART_SPAWN_ERR gid={} err={e}", req.gid));
     }
-    response::SendOk(DlActionResponse { gid: req.gid, status: "restarted".into() });
+    response::SendOk(DlActionResponse {
+        gid: req.gid,
+        status: "restarted".into(),
+    });
 }
 
 // Clear state files in bulk. scope picks which jobs:
@@ -809,9 +918,13 @@ pub fn dl_open_dir(req: &DlRequest) {
     //                              auto-create — that would expose a "fake"
     //                              folder the user never had. Verify the
     //                              path actually exists and refuse otherwise.
-    let opener = if cfg!(target_os = "macos") { "open" }
-                 else if cfg!(target_os = "windows") { "explorer" }
-                 else { "xdg-open" };
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
 
     if req.dir.is_empty() {
         let target = default_download_dir();
@@ -822,8 +935,8 @@ pub fn dl_open_dir(req: &DlRequest) {
                 errors::Code::InaccessiblePasswordStore,
                 Some(response::params_of(&[
                     (field::MESSAGE, "dl.openDir: failed to spawn opener"),
-                    (field::ACTION,  "dl.openDir"),
-                    (field::ERROR,   &e.to_string()),
+                    (field::ACTION, "dl.openDir"),
+                    (field::ERROR, &e.to_string()),
                 ])),
             ),
         }
@@ -835,15 +948,21 @@ pub fn dl_open_dir(req: &DlRequest) {
         response::SendErrorAndExit(
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
-                (field::MESSAGE, "dl.openDir: path does not exist (file deleted or moved)"),
-                (field::ACTION,  "dl.openDir"),
-                (field::ERROR,   &raw.to_string_lossy()),
+                (
+                    field::MESSAGE,
+                    "dl.openDir: path does not exist (file deleted or moved)",
+                ),
+                (field::ACTION, "dl.openDir"),
+                (field::ERROR, &raw.to_string_lossy()),
             ])),
         );
     }
     // Reveal mode: open the containing folder of a file, or the folder itself.
     let target = if raw_path.is_file() {
-        raw_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| raw_path.to_path_buf())
+        raw_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| raw_path.to_path_buf())
     } else {
         raw_path.to_path_buf()
     };
@@ -852,8 +971,8 @@ pub fn dl_open_dir(req: &DlRequest) {
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.openDir: parent folder no longer exists"),
-                (field::ACTION,  "dl.openDir"),
-                (field::ERROR,   &target.to_string_lossy()),
+                (field::ACTION, "dl.openDir"),
+                (field::ERROR, &target.to_string_lossy()),
             ])),
         );
     }
@@ -863,8 +982,8 @@ pub fn dl_open_dir(req: &DlRequest) {
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.openDir: failed to spawn opener"),
-                (field::ACTION,  "dl.openDir"),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, "dl.openDir"),
+                (field::ERROR, &e.to_string()),
             ])),
         ),
     }
@@ -882,9 +1001,12 @@ pub fn dl_open_dir(req: &DlRequest) {
 pub fn dl_write_file(value: &Value) {
     #[derive(Deserialize)]
     struct WriteReq {
-        #[serde(default)] dir:    String,
-        #[serde(default)] name:   String,
-        #[serde(default)] base64: String,
+        #[serde(default)]
+        dir: String,
+        #[serde(default)]
+        name: String,
+        #[serde(default)]
+        base64: String,
     }
     let req: WriteReq = match serde_json::from_value(value.clone()) {
         Ok(r) => r,
@@ -893,8 +1015,8 @@ pub fn dl_write_file(value: &Value) {
                 errors::Code::ParseRequest,
                 Some(response::params_of(&[
                     (field::MESSAGE, "dl.writeFile: malformed request"),
-                    (field::ACTION,  "dl.writeFile"),
-                    (field::ERROR,   &e.to_string()),
+                    (field::ACTION, "dl.writeFile"),
+                    (field::ERROR, &e.to_string()),
                 ])),
             );
         }
@@ -904,7 +1026,7 @@ pub fn dl_write_file(value: &Value) {
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.writeFile: missing name"),
-                (field::ACTION,  "dl.writeFile"),
+                (field::ACTION, "dl.writeFile"),
             ])),
         );
     }
@@ -915,8 +1037,8 @@ pub fn dl_write_file(value: &Value) {
                 errors::Code::ParseRequest,
                 Some(response::params_of(&[
                     (field::MESSAGE, "dl.writeFile: bad base64"),
-                    (field::ACTION,  "dl.writeFile"),
-                    (field::ERROR,   &e),
+                    (field::ACTION, "dl.writeFile"),
+                    (field::ERROR, &e),
                 ])),
             );
         }
@@ -931,8 +1053,8 @@ pub fn dl_write_file(value: &Value) {
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.writeFile: cannot create dir"),
-                (field::ACTION,  "dl.writeFile"),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, "dl.writeFile"),
+                (field::ERROR, &e.to_string()),
             ])),
         );
     }
@@ -942,12 +1064,16 @@ pub fn dl_write_file(value: &Value) {
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.writeFile: write failed"),
-                (field::ACTION,  "dl.writeFile"),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, "dl.writeFile"),
+                (field::ERROR, &e.to_string()),
             ])),
         );
     }
-    crate::diag::log(&format!("WRITE_FILE dest={} bytes={}", dest.display(), bytes.len()));
+    crate::diag::log(&format!(
+        "WRITE_FILE dest={} bytes={}",
+        dest.display(),
+        bytes.len()
+    ));
     response::SendOk(serde_json::json!({
         "dest":  dest.to_string_lossy(),
         "bytes": bytes.len(),
@@ -967,9 +1093,9 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
             b'0'..=b'9' => (c - b'0' + 52) as u32,
             b'+' | b'-' => 62,
             b'/' | b'_' => 63,
-            b'='        => continue,
+            b'=' => continue,
             b' ' | b'\n' | b'\r' | b'\t' => continue,
-            other       => return Err(format!("invalid base64 byte 0x{:02x}", other)),
+            other => return Err(format!("invalid base64 byte 0x{:02x}", other)),
         };
         buf = (buf << 6) | v;
         bits += 6;
@@ -993,12 +1119,18 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
 pub fn dl_write_file_chunk(value: &Value) {
     #[derive(Deserialize)]
     struct ChunkReq {
-        #[serde(default)] sessionId:  String,
-        #[serde(default)] chunkIndex: u32,
-        #[serde(default)] base64:     String,
-        #[serde(default)] final_:     bool,   // serde renamed below
-        #[serde(default)] dir:        String,
-        #[serde(default)] name:       String,
+        #[serde(default)]
+        sessionId: String,
+        #[serde(default)]
+        chunkIndex: u32,
+        #[serde(default)]
+        base64: String,
+        #[serde(default)]
+        final_: bool, // serde renamed below
+        #[serde(default)]
+        dir: String,
+        #[serde(default)]
+        name: String,
     }
     // serde gets `final` from JSON which collides with the Rust keyword.
     // Patch the Value to rename "final" → "final_" so the struct above
@@ -1016,8 +1148,8 @@ pub fn dl_write_file_chunk(value: &Value) {
                 errors::Code::ParseRequest,
                 Some(response::params_of(&[
                     (field::MESSAGE, "dl.writeFileChunk: malformed request"),
-                    (field::ACTION,  "dl.writeFileChunk"),
-                    (field::ERROR,   &e.to_string()),
+                    (field::ACTION, "dl.writeFileChunk"),
+                    (field::ERROR, &e.to_string()),
                 ])),
             );
         }
@@ -1027,7 +1159,7 @@ pub fn dl_write_file_chunk(value: &Value) {
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.writeFileChunk: missing sessionId"),
-                (field::ACTION,  "dl.writeFileChunk"),
+                (field::ACTION, "dl.writeFileChunk"),
             ])),
         );
     }
@@ -1038,8 +1170,8 @@ pub fn dl_write_file_chunk(value: &Value) {
                 errors::Code::ParseRequest,
                 Some(response::params_of(&[
                     (field::MESSAGE, "dl.writeFileChunk: bad base64"),
-                    (field::ACTION,  "dl.writeFileChunk"),
-                    (field::ERROR,   &e),
+                    (field::ACTION, "dl.writeFileChunk"),
+                    (field::ERROR, &e),
                 ])),
             );
         }
@@ -1050,23 +1182,29 @@ pub fn dl_write_file_chunk(value: &Value) {
             response::SendErrorAndExit(
                 errors::Code::InaccessiblePasswordStore,
                 Some(response::params_of(&[
-                    (field::MESSAGE, "dl.writeFileChunk: cannot resolve cache dir"),
-                    (field::ACTION,  "dl.writeFileChunk"),
-                    (field::ERROR,   &e.to_string()),
+                    (
+                        field::MESSAGE,
+                        "dl.writeFileChunk: cannot resolve cache dir",
+                    ),
+                    (field::ACTION, "dl.writeFileChunk"),
+                    (field::ERROR, &e.to_string()),
                 ])),
             );
         }
     };
     // Sanitize sessionId so it can't traverse out of the cache dir.
-    let safe_sid: String = req.sessionId.chars()
+    let safe_sid: String = req
+        .sessionId
+        .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .take(64).collect();
+        .take(64)
+        .collect();
     if safe_sid.is_empty() {
         response::SendErrorAndExit(
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.writeFileChunk: invalid sessionId"),
-                (field::ACTION,  "dl.writeFileChunk"),
+                (field::ACTION, "dl.writeFileChunk"),
             ])),
         );
     }
@@ -1080,15 +1218,16 @@ pub fn dl_write_file_chunk(value: &Value) {
     } else {
         f_open.create(true).append(true);
     }
-    if let Err(e) = f_open.open(&part_path)
+    if let Err(e) = f_open
+        .open(&part_path)
         .and_then(|mut f| f.write_all(&bytes))
     {
         response::SendErrorAndExit(
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.writeFileChunk: cannot append chunk"),
-                (field::ACTION,  "dl.writeFileChunk"),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, "dl.writeFileChunk"),
+                (field::ERROR, &e.to_string()),
             ])),
         );
     }
@@ -1112,8 +1251,11 @@ pub fn dl_write_file_chunk(value: &Value) {
         response::SendErrorAndExit(
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
-                (field::MESSAGE, "dl.writeFileChunk: final chunk missing name"),
-                (field::ACTION,  "dl.writeFileChunk"),
+                (
+                    field::MESSAGE,
+                    "dl.writeFileChunk: final chunk missing name",
+                ),
+                (field::ACTION, "dl.writeFileChunk"),
             ])),
         );
     }
@@ -1127,9 +1269,12 @@ pub fn dl_write_file_chunk(value: &Value) {
         response::SendErrorAndExit(
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
-                (field::MESSAGE, "dl.writeFileChunk: cannot create target dir"),
-                (field::ACTION,  "dl.writeFileChunk"),
-                (field::ERROR,   &e.to_string()),
+                (
+                    field::MESSAGE,
+                    "dl.writeFileChunk: cannot create target dir",
+                ),
+                (field::ACTION, "dl.writeFileChunk"),
+                (field::ERROR, &e.to_string()),
             ])),
         );
     }
@@ -1140,9 +1285,12 @@ pub fn dl_write_file_chunk(value: &Value) {
             response::SendErrorAndExit(
                 errors::Code::InaccessiblePasswordStore,
                 Some(response::params_of(&[
-                    (field::MESSAGE, "dl.writeFileChunk: cannot move part file to dest"),
-                    (field::ACTION,  "dl.writeFileChunk"),
-                    (field::ERROR,   &format!("rename: {e}; copy: {e2}")),
+                    (
+                        field::MESSAGE,
+                        "dl.writeFileChunk: cannot move part file to dest",
+                    ),
+                    (field::ACTION, "dl.writeFileChunk"),
+                    (field::ERROR, &format!("rename: {e}; copy: {e2}")),
                 ])),
             );
         }
@@ -1150,7 +1298,9 @@ pub fn dl_write_file_chunk(value: &Value) {
     let bytes_total = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
     crate::diag::log(&format!(
         "WRITE_FILE_CHUNK_FINAL dest={} sessionId={} bytes={}",
-        dest.display(), safe_sid, bytes_total
+        dest.display(),
+        safe_sid,
+        bytes_total
     ));
     response::SendOk(serde_json::json!({
         "sessionId":  safe_sid,
@@ -1167,33 +1317,40 @@ pub fn dl_open_file(req: &DlRequest) {
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.openFile: missing path"),
-                (field::ACTION,  "dl.openFile"),
+                (field::ACTION, "dl.openFile"),
             ])),
         );
     }
-    let raw  = expand_home(&req.dir);
+    let raw = expand_home(&req.dir);
     let path = std::path::Path::new(&raw);
     if !path.is_file() {
         response::SendErrorAndExit(
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
-                (field::MESSAGE, "dl.openFile: file does not exist (deleted or moved)"),
-                (field::ACTION,  "dl.openFile"),
-                (field::ERROR,   &raw.to_string_lossy()),
+                (
+                    field::MESSAGE,
+                    "dl.openFile: file does not exist (deleted or moved)",
+                ),
+                (field::ACTION, "dl.openFile"),
+                (field::ERROR, &raw.to_string_lossy()),
             ])),
         );
     }
-    let opener = if cfg!(target_os = "macos") { "open" }
-                 else if cfg!(target_os = "windows") { "explorer" }
-                 else { "xdg-open" };
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
     match Command::new(opener).arg(&raw).spawn() {
         Ok(_) => response::SendOk(serde_json::json!({ "opened": raw.to_string_lossy() })),
         Err(e) => response::SendErrorAndExit(
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "dl.openFile: failed to spawn opener"),
-                (field::ACTION,  "dl.openFile"),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, "dl.openFile"),
+                (field::ERROR, &e.to_string()),
             ])),
         ),
     }
@@ -1219,16 +1376,23 @@ pub fn dl_remove(req: &DlRequest) {
     match state_path(req.gid) {
         Ok(p) => {
             let _ = fs::remove_file(&p);
-            crate::diag::log(&format!("REMOVE gid={} state_path={}", req.gid, p.display()));
-            response::SendOk(DlActionResponse { gid: req.gid, status: "removed".into() });
+            crate::diag::log(&format!(
+                "REMOVE gid={} state_path={}",
+                req.gid,
+                p.display()
+            ));
+            response::SendOk(DlActionResponse {
+                gid: req.gid,
+                status: "removed".into(),
+            });
         }
         Err(e) => {
             response::SendErrorAndExit(
                 errors::Code::InaccessiblePasswordStore,
                 Some(response::params_of(&[
                     (field::MESSAGE, "dl.remove: cannot resolve state path"),
-                    (field::ACTION,  "dl.remove"),
-                    (field::ERROR,   &e.to_string()),
+                    (field::ACTION, "dl.remove"),
+                    (field::ERROR, &e.to_string()),
                 ])),
             );
         }
@@ -1238,19 +1402,21 @@ pub fn dl_remove(req: &DlRequest) {
 pub fn dl_clear(req: &DlRequest) {
     let jobs = list_all_jobs().unwrap_or_default();
     let scope = req.scope.as_str();
-    let mut cleared:        Vec<u64>    = Vec::new();
+    let mut cleared: Vec<u64> = Vec::new();
     let mut deleted_on_disk: Vec<String> = Vec::new();
 
     for job in jobs {
         let dest_exists = std::path::Path::new(&job.dest).exists();
         let matches = match scope {
-            "done"    => job.status == "done",
-            "failed"  => job.status == "failed" || job.status == "cancelled",
+            "done" => job.status == "done",
+            "failed" => job.status == "failed" || job.status == "cancelled",
             "missing" => job.status == "done" && !dest_exists,
-            "all"     => true,
-            _         => false,
+            "all" => true,
+            _ => false,
         };
-        if !matches { continue; }
+        if !matches {
+            continue;
+        }
 
         if req.deleteFromDisk && job.status == "done" && dest_exists {
             if std::fs::remove_file(&job.dest).is_ok() {
@@ -1263,7 +1429,10 @@ pub fn dl_clear(req: &DlRequest) {
         cleared.push(job.gid);
     }
 
-    response::SendOk(DlClearResponse { cleared, deletedOnDisk: deleted_on_disk });
+    response::SendOk(DlClearResponse {
+        cleared,
+        deletedOnDisk: deleted_on_disk,
+    });
 }
 
 fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {
@@ -1282,8 +1451,8 @@ fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {
             response::SendErrorAndExit(
                 errors::Code::InvalidPasswordStore,
                 Some(response::params_of(&[
-                    (field::MESSAGE,  "Unknown gid"),
-                    (field::ACTION,   action),
+                    (field::MESSAGE, "Unknown gid"),
+                    (field::ACTION, action),
                     (field::STORE_ID, &gid.to_string()),
                 ])),
             );
@@ -1296,8 +1465,8 @@ fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {
             errors::Code::InaccessiblePasswordStore,
             Some(response::params_of(&[
                 (field::MESSAGE, "cannot write state file"),
-                (field::ACTION,  action),
-                (field::ERROR,   &e.to_string()),
+                (field::ACTION, action),
+                (field::ERROR, &e.to_string()),
             ])),
         );
     }
@@ -1308,16 +1477,27 @@ fn mutate_state(gid: u64, action: &str, f: impl FnOnce(&mut JobState)) {
 /// at `<cache>/gid_NNNNNN.mlock` for the duration of the returned guard.
 /// On `drop`, the lockfile is removed. Same retry pattern as `next_gid`'s
 /// dir-level lock — bounded 5-second wait, 10 ms polling.
-struct GidLock { path: PathBuf }
+struct GidLock {
+    path: PathBuf,
+}
 impl Drop for GidLock {
-    fn drop(&mut self) { let _ = fs::remove_file(&self.path); }
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }
 fn with_gid_lock(gid: u64) -> Option<GidLock> {
-    let dir = match cache_dir() { Ok(d) => d, Err(_) => return None };
+    let dir = match cache_dir() {
+        Ok(d) => d,
+        Err(_) => return None,
+    };
     let path = dir.join(format!("gid_{gid:06}.mlock"));
     let start = Instant::now();
     loop {
-        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
             Ok(_) => return Some(GidLock { path }),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 if start.elapsed() > Duration::from_secs(5) {
@@ -1327,7 +1507,7 @@ fn with_gid_lock(gid: u64) -> Option<GidLock> {
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
-            Err(_) => return None,   // best-effort; mutate_state still proceeds
+            Err(_) => return None, // best-effort; mutate_state still proceeds
         }
     }
 }
@@ -1368,7 +1548,7 @@ fn spawn_worker(gid: u64) -> std::io::Result<()> {
             // sweep guarantees the worker holds none of Chrome's FDs.
             let max_fd = match libc::sysconf(libc::_SC_OPEN_MAX) {
                 n if n > 0 => n as i32,
-                _          => 1024,
+                _ => 1024,
             };
             for fd in 3..max_fd {
                 libc::close(fd);
@@ -1377,14 +1557,20 @@ fn spawn_worker(gid: u64) -> std::io::Result<()> {
         });
     }
     let child = cmd.spawn()?;
-    crate::diag::log(&format!("SPAWN_WORKER_OK gid={gid} child_pid={}", child.id()));
+    crate::diag::log(&format!(
+        "SPAWN_WORKER_OK gid={gid} child_pid={}",
+        child.id()
+    ));
     Ok(())
 }
 
 // ─── Worker process ─────────────────────────────────────────────────────────
 
 pub fn run_worker(gid: u64) -> std::io::Result<()> {
-    crate::diag::log(&format!("WORKER_START gid={gid} pid={}", std::process::id()));
+    crate::diag::log(&format!(
+        "WORKER_START gid={gid} pid={}",
+        std::process::id()
+    ));
     let mut state = read_state(gid)?;
     state.status = "active".into();
     let start_instant = Instant::now();
@@ -1400,7 +1586,7 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     // run_worker (probe → run_segmented/single → terminal) sees the same
     // truth check_control would.
     if let Ok(disk) = read_state(gid) {
-        state.paused    = disk.paused;
+        state.paused = disk.paused;
         state.cancelled = disk.cancelled;
     }
 
@@ -1421,7 +1607,11 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     // GET. Keep the size we already knew rather than dropping the UI to "/ ?"
     // and — critically — disarming the truncation gate, which is gated on
     // total > 0. For a first run state.total is 0, so this is a no-op there.
-    let total = if probe.total > 0 { probe.total } else { state.total };
+    let total = if probe.total > 0 {
+        probe.total
+    } else {
+        state.total
+    };
     state.total = total;
 
     // Rename dest to a Content-Disposition-derived name when (a) the server
@@ -1431,22 +1621,27 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     // already exists with data (rare race), to avoid losing partial bytes.
     if let Some(srv_name) = probe.content_disposition_filename {
         let cur_name = std::path::Path::new(&state.dest)
-            .file_name().and_then(|n| n.to_str()).unwrap_or("");
-        let is_placeholder = cur_name.starts_with("download-")
-            || looks_like_query_garbage(cur_name);
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        let is_placeholder =
+            cur_name.starts_with("download-") || looks_like_query_garbage(cur_name);
         let dest_path = std::path::Path::new(&state.dest);
         let already_has_data = match fs::metadata(dest_path) {
             Ok(m) => m.len() > 0,
             Err(_) => false,
         };
         if !already_has_data && (cur_name != srv_name || is_placeholder) {
-            let parent = dest_path.parent()
+            let parent = dest_path
+                .parent()
                 .unwrap_or(std::path::Path::new("."))
                 .to_path_buf();
             let new_dest = unique_dest_path(&parent, &srv_name);
             crate::diag::log(&format!(
                 "WORKER_RENAME gid={} from={} to={}",
-                state.gid, cur_name, new_dest.display(),
+                state.gid,
+                cur_name,
+                new_dest.display(),
             ));
             state.dest = new_dest.to_string_lossy().into_owned();
         }
@@ -1460,13 +1655,17 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     // lacks an extension, so names that already have one are left untouched.
     if let Some(ct) = probe.content_type.as_deref() {
         let cur_name = std::path::Path::new(&state.dest)
-            .file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
         if !cur_name.is_empty() && !has_file_extension(&cur_name) {
             if let Some(ext) = ext_for_content_type(ct) {
                 let dest_path = std::path::Path::new(&state.dest);
                 let already_has_data = matches!(fs::metadata(dest_path), Ok(m) if m.len() > 0);
                 if !already_has_data {
-                    let parent = dest_path.parent()
+                    let parent = dest_path
+                        .parent()
                         .unwrap_or(std::path::Path::new("."))
                         .to_path_buf();
                     // A raw "download-{ts}" placeholder carries no information —
@@ -1481,7 +1680,10 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
                     let new_dest = unique_dest_path(&parent, &format!("{stem}.{ext}"));
                     crate::diag::log(&format!(
                         "WORKER_EXT gid={} ct={} from={} to={}",
-                        state.gid, ct, cur_name, new_dest.display(),
+                        state.gid,
+                        ct,
+                        cur_name,
+                        new_dest.display(),
                     ));
                     state.dest = new_dest.to_string_lossy().into_owned();
                 }
@@ -1491,7 +1693,7 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     flush_worker(&state)?;
     // Re-sync paused/cancelled from disk after the probe (could be ~seconds).
     if let Ok(disk) = read_state(gid) {
-        state.paused    = disk.paused;
+        state.paused = disk.paused;
         state.cancelled = disk.cancelled;
     }
     // If the user cancelled while we were probing, surface that immediately
@@ -1502,7 +1704,7 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
 
     let do_segments = total >= MIN_SEGMENT_BYTES && accept_ranges && state.segments > 1;
     let result = if cancelled_during_probe {
-        Ok(())   // skip the download — terminal block below sees cancelled=true and writes "cancelled"
+        Ok(()) // skip the download — terminal block below sees cancelled=true and writes "cancelled"
     } else if do_segments {
         run_segmented(&mut state, total, start_instant)
     } else {
@@ -1514,7 +1716,7 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
     // in the segmented path, so without this re-read a cancel that arrives
     // after the segments completed would get clobbered to status="done".
     if let Ok(disk) = read_state(state.gid) {
-        state.cancelled       = disk.cancelled || state.cancelled;
+        state.cancelled = disk.cancelled || state.cancelled;
         state.paused_offset_ms = disk.paused_offset_ms.max(state.paused_offset_ms);
     }
     match result {
@@ -1537,25 +1739,29 @@ pub fn run_worker(gid: u64) -> std::io::Result<()> {
                 // corrupt archive.
                 state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
                 let done = state.done;
-                let pct = done * 100 / total;   // total > 0 guaranteed by the branch guard
-                let _ = finish_err(&mut state,
-                    format!("incomplete: {done} of {total} bytes ({pct}%)"));
+                let pct = done * 100 / total; // total > 0 guaranteed by the branch guard
+                let _ = finish_err(
+                    &mut state,
+                    format!("incomplete: {done} of {total} bytes ({pct}%)"),
+                );
             } else {
                 state.status = "done".into();
                 state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
                 let _ = flush_worker(&state);
             }
         }
-        Err(e) => { let _ = finish_err(&mut state, e); }
+        Err(e) => {
+            let _ = finish_err(&mut state, e);
+        }
     }
     Ok(())
 }
 
 struct ProbeResult {
-    total:                        u64,
-    accept_ranges:                bool,
+    total: u64,
+    accept_ranges: bool,
     content_disposition_filename: Option<String>,
-    content_type:                 Option<String>,
+    content_type: Option<String>,
 }
 
 /// Discover Content-Length + Range support + Content-Disposition for a URL.
@@ -1573,8 +1779,12 @@ struct ProbeResult {
 /// header; Content-Length is the full size and Range is unsupported.
 fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResult, String> {
     fn apply_headers(mut r: ureq::Request, cookies: &str, user_agent: &str) -> ureq::Request {
-        if !cookies.is_empty()    { r = r.set("Cookie", cookies); }
-        if !user_agent.is_empty() { r = r.set("User-Agent", user_agent); }
+        if !cookies.is_empty() {
+            r = r.set("Cookie", cookies);
+        }
+        if !user_agent.is_empty() {
+            r = r.set("User-Agent", user_agent);
+        }
         r
     }
     // First attempt: HEAD. A HEAD that succeeds but omits Content-Length
@@ -1589,13 +1799,16 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
     let mut head_ct: Option<String> = None;
     let head_req = apply_headers(ureq::head(url), cookies, user_agent);
     if let Ok(resp) = head_req.call() {
-        let total = resp.header("Content-Length")
+        let total = resp
+            .header("Content-Length")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
-        head_accept_ranges = resp.header("Accept-Ranges")
+        head_accept_ranges = resp
+            .header("Accept-Ranges")
             .map(|v| v.eq_ignore_ascii_case("bytes"))
             .unwrap_or(false);
-        head_cd = resp.header("Content-Disposition")
+        head_cd = resp
+            .header("Content-Disposition")
             .and_then(parse_content_disposition_filename);
         head_ct = resp.header("Content-Type").map(str::to_string);
         if total > 0 {
@@ -1608,20 +1821,21 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
         }
     }
     // Fallback: Range GET. Discard the body — we only need headers.
-    let get_req = apply_headers(ureq::get(url), cookies, user_agent)
-        .set("Range", "bytes=0-0");
+    let get_req = apply_headers(ureq::get(url), cookies, user_agent).set("Range", "bytes=0-0");
     let resp = match get_req.call() {
         Ok(r) => r,
         Err(e) => return Err(e.to_string()),
     };
     let status = resp.status();
-    let cd = resp.header("Content-Disposition")
+    let cd = resp
+        .header("Content-Disposition")
         .and_then(parse_content_disposition_filename)
         .or(head_cd);
     let ct = resp.header("Content-Type").map(str::to_string).or(head_ct);
     if status == 206 {
         // Parse Content-Range: "bytes 0-0/12345"
-        let total = resp.header("Content-Range")
+        let total = resp
+            .header("Content-Range")
             .and_then(|s| s.rsplit('/').next().map(str::to_string))
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
@@ -1640,7 +1854,8 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
         // we abort the read and just record total size. Honor HEAD's
         // Accept-Ranges: a server can advertise ranges yet answer a
         // bytes=0-0 probe with 200 (some do this only for tiny ranges).
-        let total = resp.header("Content-Length")
+        let total = resp
+            .header("Content-Length")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
         drop(resp);
@@ -1663,15 +1878,23 @@ fn finish_err(state: &mut JobState, msg: String) -> std::io::Result<()> {
 // pause/cancel flags issued by other BP host invocations.
 fn check_control(state: &mut JobState) -> ControlSignal {
     if let Ok(disk) = read_state(state.gid) {
-        state.paused    = disk.paused;
+        state.paused = disk.paused;
         state.cancelled = disk.cancelled;
     }
-    if state.cancelled    { return ControlSignal::Cancelled; }
-    if state.paused       { return ControlSignal::Paused;    }
+    if state.cancelled {
+        return ControlSignal::Cancelled;
+    }
+    if state.paused {
+        return ControlSignal::Paused;
+    }
     ControlSignal::Continue
 }
 
-enum ControlSignal { Continue, Paused, Cancelled }
+enum ControlSignal {
+    Continue,
+    Paused,
+    Cancelled,
+}
 
 // Wall-clock since worker start MINUS time spent in the paused state.
 // Saturating subtraction guards against clock skew where paused_offset_ms
@@ -1692,10 +1915,10 @@ fn effective_elapsed_ms(start: Instant, paused_offset_ms: u64) -> u64 {
 pub fn flush_progress(state: &JobState) -> std::io::Result<()> {
     match read_state(state.gid) {
         Ok(mut disk) => {
-            disk.done             = state.done;
-            disk.elapsed_ms       = state.elapsed_ms;
+            disk.done = state.done;
+            disk.elapsed_ms = state.elapsed_ms;
             disk.paused_offset_ms = state.paused_offset_ms;
-            disk.worker_pid       = state.worker_pid;
+            disk.worker_pid = state.worker_pid;
             // We're being called from the worker's active read path — if
             // disk still says "pending" (e.g. dl_resume after a prior
             // pause/fail/cancel and the worker hasn't hit a transition
@@ -1718,11 +1941,11 @@ pub fn flush_progress(state: &JobState) -> std::io::Result<()> {
 pub fn flush_status(state: &JobState) -> std::io::Result<()> {
     match read_state(state.gid) {
         Ok(mut disk) => {
-            disk.done             = state.done;
-            disk.elapsed_ms       = state.elapsed_ms;
+            disk.done = state.done;
+            disk.elapsed_ms = state.elapsed_ms;
             disk.paused_offset_ms = state.paused_offset_ms;
-            disk.worker_pid       = state.worker_pid;
-            disk.status           = state.status.clone();
+            disk.worker_pid = state.worker_pid;
+            disk.status = state.status.clone();
             write_state_atomic(&disk)
         }
         Err(_) => write_state_atomic(state),
@@ -1741,7 +1964,7 @@ pub fn flush_worker(state: &JobState) -> std::io::Result<()> {
     match read_state(state.gid) {
         Ok(disk) => {
             let mut merged = state.clone();
-            merged.paused    = disk.paused;
+            merged.paused = disk.paused;
             merged.cancelled = disk.cancelled;
             write_state_atomic(&merged)
         }
@@ -1749,7 +1972,12 @@ pub fn flush_worker(state: &JobState) -> std::io::Result<()> {
     }
 }
 
-fn run_single(state: &mut JobState, total: u64, accept_ranges: bool, start_instant: Instant) -> Result<(), String> {
+fn run_single(
+    state: &mut JobState,
+    total: u64,
+    accept_ranges: bool,
+    start_instant: Instant,
+) -> Result<(), String> {
     fs::OpenOptions::new()
         .create(true)
         .write(true)
@@ -1765,7 +1993,9 @@ fn run_single(state: &mut JobState, total: u64, accept_ranges: bool, start_insta
     let resumable = accept_ranges && total > 0;
     let mut stalls: u32 = 0;
     loop {
-        if state.cancelled { return Ok(()); }
+        if state.cancelled {
+            return Ok(());
+        }
         let use_range = resumable && downloaded > 0;
         if !use_range && downloaded > 0 {
             downloaded = 0;
@@ -1777,7 +2007,11 @@ fn run_single(state: &mut JobState, total: u64, accept_ranges: bool, start_insta
                 .map_err(|e| format!("retruncate: {e}"))?;
         }
         let progress_before = downloaded;
-        let range = if use_range { Some((downloaded, total.saturating_sub(1))) } else { None };
+        let range = if use_range {
+            Some((downloaded, total.saturating_sub(1)))
+        } else {
+            None
+        };
         match stream_into_file(state, range, &mut downloaded, total, start_instant) {
             Ok(()) => return Ok(()),
             Err(SegErr::Permanent(m)) => return Err(m),
@@ -1787,8 +2021,12 @@ fn run_single(state: &mut JobState, total: u64, accept_ranges: bool, start_insta
                     stalls = 0;
                 } else {
                     stalls += 1;
-                    if stalls >= MAX_RETRIES { return Err(format!("after {MAX_RETRIES} retries: {m}")); }
-                    thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.saturating_pow(stalls)));
+                    if stalls >= MAX_RETRIES {
+                        return Err(format!("after {MAX_RETRIES} retries: {m}"));
+                    }
+                    thread::sleep(Duration::from_millis(
+                        BASE_BACKOFF_MS * 3u64.saturating_pow(stalls),
+                    ));
                 }
             }
         }
@@ -1816,14 +2054,20 @@ fn run_segmented(state: &mut JobState, total: u64, start_instant: Instant) -> Re
     let mut handles = Vec::with_capacity(segments as usize);
     for i in 0..segments {
         let start_byte = i * seg_size;
-        let end_byte = if i + 1 == segments { total - 1 } else { (i + 1) * seg_size - 1 };
+        let end_byte = if i + 1 == segments {
+            total - 1
+        } else {
+            (i + 1) * seg_size - 1
+        };
         let done_total = Arc::clone(&done_total);
         let dest = dest.clone();
         let url = url.clone();
         let cookies = cookies.clone();
         let ua = ua.clone();
         handles.push(thread::spawn(move || {
-            run_segment(gid, &url, &dest, &cookies, &ua, start_byte, end_byte, done_total)
+            run_segment(
+                gid, &url, &dest, &cookies, &ua, start_byte, end_byte, done_total,
+            )
         }));
     }
 
@@ -1886,7 +2130,8 @@ fn progress_pump(gid: u64, done_total: Arc<AtomicU64>, start_instant: Instant) {
             // last written before pause began.
         } else {
             if let Some(p) = pause_started.take() {
-                state.paused_offset_ms = state.paused_offset_ms
+                state.paused_offset_ms = state
+                    .paused_offset_ms
                     .saturating_add(p.elapsed().as_millis() as u64);
             }
             state.elapsed_ms = effective_elapsed_ms(start_instant, state.paused_offset_ms);
@@ -1915,8 +2160,12 @@ fn stream_into_file(
     start_instant: Instant,
 ) -> Result<(), SegErr> {
     let mut req = ureq::get(&state.url);
-    if !state.cookies.is_empty()    { req = req.set("Cookie", &state.cookies); }
-    if !state.user_agent.is_empty() { req = req.set("User-Agent", &state.user_agent); }
+    if !state.cookies.is_empty() {
+        req = req.set("Cookie", &state.cookies);
+    }
+    if !state.user_agent.is_empty() {
+        req = req.set("User-Agent", &state.user_agent);
+    }
     if let Some((from, end)) = range {
         req = req.set("Range", &format!("bytes={from}-{end}"));
     }
@@ -1955,9 +2204,12 @@ fn stream_into_file(
                     thread::sleep(FLAG_CHECK_INTERVAL);
                     let _ = check_control(state);
                 }
-                state.paused_offset_ms = state.paused_offset_ms
+                state.paused_offset_ms = state
+                    .paused_offset_ms
                     .saturating_add(pause_start.elapsed().as_millis() as u64);
-                if state.cancelled { return Err(SegErr::Cancelled); }
+                if state.cancelled {
+                    return Err(SegErr::Cancelled);
+                }
                 state.status = "active".into();
                 let _ = flush_status(state);
             }
@@ -1969,8 +2221,9 @@ fn stream_into_file(
                 // bytes arrived. Treat as transient so run_single resumes
                 // (ranged) instead of recording a truncated file as "done".
                 if total > 0 && *downloaded < total {
-                    return Err(SegErr::Transient(
-                        format!("truncated: got {downloaded} of {total} bytes")));
+                    return Err(SegErr::Transient(format!(
+                        "truncated: got {downloaded} of {total} bytes"
+                    )));
                 }
                 return Ok(());
             }
@@ -2013,32 +2266,49 @@ fn run_segment(
     let mut stalls: u32 = 0;
     loop {
         if let Ok(s) = read_state(gid) {
-            if s.cancelled { return Ok(()); }
+            if s.cancelled {
+                return Ok(());
+            }
             while s.paused {
                 thread::sleep(FLAG_CHECK_INTERVAL);
                 let s2 = read_state(gid).unwrap_or(s.clone());
-                if s2.cancelled { return Ok(()); }
-                if !s2.paused { break; }
+                if s2.cancelled {
+                    return Ok(());
+                }
+                if !s2.paused {
+                    break;
+                }
             }
         }
         let from = seg_start + downloaded_in_seg;
-        if from > seg_end { return Ok(()); }   // every requested byte is on disk
+        if from > seg_end {
+            return Ok(());
+        } // every requested byte is on disk
         let progress_before = downloaded_in_seg;
-        let mut req = ureq::get(url)
-            .set("Range", &format!("bytes={from}-{seg_end}"));
-        if !cookies.is_empty()    { req = req.set("Cookie", cookies); }
-        if !user_agent.is_empty() { req = req.set("User-Agent", user_agent); }
+        let mut req = ureq::get(url).set("Range", &format!("bytes={from}-{seg_end}"));
+        if !cookies.is_empty() {
+            req = req.set("Cookie", cookies);
+        }
+        if !user_agent.is_empty() {
+            req = req.set("User-Agent", user_agent);
+        }
         let resp = match req.call() {
             Ok(r) => r,
             Err(e) => {
                 let transient = matches!(&e, ureq::Error::Transport(_))
                     || matches!(&e, ureq::Error::Status(c, _) if *c >= 500);
-                if !transient { return Err(format!("segment {seg_start}..{seg_end}: GET: {e}")); }
+                if !transient {
+                    return Err(format!("segment {seg_start}..{seg_end}: GET: {e}"));
+                }
                 stalls += 1;
                 if stalls >= MAX_RETRIES {
-                    return Err(format!("segment {seg_start}..{seg_end} after {MAX_RETRIES} retries: GET: {e}"));
+                    return Err(format!(
+                        "segment {seg_start}..{seg_end} after {MAX_RETRIES} retries: GET: {e}"
+                    ));
                 }
-                thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.saturating_pow(stalls)));
+                thread::sleep(Duration::from_millis(
+                    BASE_BACKOFF_MS * 3u64.saturating_pow(stalls),
+                ));
                 continue;
             }
         };
@@ -2054,16 +2324,22 @@ fn run_segment(
         let mut read_err: Option<String> = None;
         loop {
             if let Ok(s) = read_state(gid) {
-                if s.cancelled { return Ok(()); }
+                if s.cancelled {
+                    return Ok(());
+                }
                 while s.paused {
                     thread::sleep(FLAG_CHECK_INTERVAL);
                     let s2 = read_state(gid).unwrap_or(s.clone());
-                    if s2.cancelled { return Ok(()); }
-                    if !s2.paused { break; }
+                    if s2.cancelled {
+                        return Ok(());
+                    }
+                    if !s2.paused {
+                        break;
+                    }
                 }
             }
             match reader.read(&mut buf) {
-                Ok(0) => break,   // EOF — completeness is verified after the loop
+                Ok(0) => break, // EOF — completeness is verified after the loop
                 Ok(n) => {
                     if let Err(e) = f.write_all(&buf[..n]) {
                         return Err(format!("segment write: {e}"));
@@ -2071,11 +2347,14 @@ fn run_segment(
                     downloaded_in_seg += n as u64;
                     done_total.fetch_add(n as u64, Ordering::Relaxed);
                 }
-                Err(e) => { read_err = Some(format!("read: {e}")); break; }
+                Err(e) => {
+                    read_err = Some(format!("read: {e}"));
+                    break;
+                }
             }
         }
         if downloaded_in_seg >= expected {
-            return Ok(());   // segment fully transferred
+            return Ok(()); // segment fully transferred
         }
         // Short: a read error, or a premature EOF that earlier reported the
         // segment "done" when only part of the range arrived. Resume. Forward
@@ -2086,15 +2365,23 @@ fn run_segment(
         } else {
             stalls += 1;
             if stalls >= MAX_RETRIES {
-                let why = read_err.unwrap_or_else(||
-                    format!("truncated: got {downloaded_in_seg} of {expected} bytes"));
-                return Err(format!("segment {seg_start}..{seg_end} after {MAX_RETRIES} retries: {why}"));
+                let why = read_err.unwrap_or_else(|| {
+                    format!("truncated: got {downloaded_in_seg} of {expected} bytes")
+                });
+                return Err(format!(
+                    "segment {seg_start}..{seg_end} after {MAX_RETRIES} retries: {why}"
+                ));
             }
-            thread::sleep(Duration::from_millis(BASE_BACKOFF_MS * 3u64.saturating_pow(stalls)));
+            thread::sleep(Duration::from_millis(
+                BASE_BACKOFF_MS * 3u64.saturating_pow(stalls),
+            ));
         }
     }
 }
 
 fn now_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }

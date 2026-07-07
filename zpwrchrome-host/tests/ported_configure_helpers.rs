@@ -20,15 +20,21 @@ fn default_path_uses_password_store_dir_env_when_set() {
     let _g = ENV_LOCK.lock().unwrap();
     let old = std::env::var("PASSWORD_STORE_DIR").ok();
     unsafe { std::env::set_var("PASSWORD_STORE_DIR", "/tmp/zp-port-defstore") };
-    assert_eq!(getDefaultPasswordStorePath().unwrap(), PathBuf::from("/tmp/zp-port-defstore"));
-    if let Some(v) = old { unsafe { std::env::set_var("PASSWORD_STORE_DIR", v) }; }
-    else                 { unsafe { std::env::remove_var("PASSWORD_STORE_DIR") }; }
+    assert_eq!(
+        getDefaultPasswordStorePath().unwrap(),
+        PathBuf::from("/tmp/zp-port-defstore")
+    );
+    if let Some(v) = old {
+        unsafe { std::env::set_var("PASSWORD_STORE_DIR", v) };
+    } else {
+        unsafe { std::env::remove_var("PASSWORD_STORE_DIR") };
+    }
 }
 
 #[test]
 fn default_path_falls_back_to_home_password_store() {
     let _g = ENV_LOCK.lock().unwrap();
-    let old_psd  = std::env::var("PASSWORD_STORE_DIR").ok();
+    let old_psd = std::env::var("PASSWORD_STORE_DIR").ok();
     let old_home = std::env::var("HOME").ok();
     unsafe { std::env::remove_var("PASSWORD_STORE_DIR") };
     unsafe { std::env::set_var("HOME", "/tmp/zp-port-fakehome") };
@@ -36,8 +42,14 @@ fn default_path_falls_back_to_home_password_store() {
         getDefaultPasswordStorePath().unwrap(),
         PathBuf::from("/tmp/zp-port-fakehome/.password-store")
     );
-    if let Some(v) = old_psd  { unsafe { std::env::set_var("PASSWORD_STORE_DIR", v) } } else { unsafe { std::env::remove_var("PASSWORD_STORE_DIR") } };
-    if let Some(v) = old_home { unsafe { std::env::set_var("HOME", v) } };
+    if let Some(v) = old_psd {
+        unsafe { std::env::set_var("PASSWORD_STORE_DIR", v) }
+    } else {
+        unsafe { std::env::remove_var("PASSWORD_STORE_DIR") }
+    };
+    if let Some(v) = old_home {
+        unsafe { std::env::set_var("HOME", v) }
+    };
 }
 
 #[test]

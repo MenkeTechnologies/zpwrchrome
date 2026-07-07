@@ -15,24 +15,31 @@ use std::path::PathBuf;
 
 /// Port of `listFiles()` from `request/list.go:14`.
 pub fn listFiles(request: &request) {
-    let mut responseData = response::MakeListResponse();                        // go:15
+    let mut responseData = response::MakeListResponse(); // go:15
 
-    for store in request.Settings.Stores.values() {                             // go:17
+    for store in request.Settings.Stores.values() {
+        // go:17
         let mut store = store.clone();
-        let normalizedStorePath = match normalizePasswordStorePath(&store.Path) { // go:18
+        let normalizedStorePath = match normalizePasswordStorePath(&store.Path) {
+            // go:18
             Ok(p) => p,
-            Err(e) => {                                                         // go:19-33
+            Err(e) => {
+                // go:19-33
                 eprintln!(
                     "The password store '{:?}' is not accessible at its location: {}",
                     store, e
                 );
-                response::SendErrorAndExit(                                     // go:24-33
+                response::SendErrorAndExit(
+                    // go:24-33
                     errors::Code::InaccessiblePasswordStore,
                     Some(response::params_of(&[
-                        (errors::field::MESSAGE,    "The password store is not accessible"),
-                        (errors::field::ACTION,     "list"),
-                        (errors::field::ERROR,      &e),
-                        (errors::field::STORE_ID,   &store.ID),
+                        (
+                            errors::field::MESSAGE,
+                            "The password store is not accessible",
+                        ),
+                        (errors::field::ACTION, "list"),
+                        (errors::field::ERROR, &e),
+                        (errors::field::STORE_ID, &store.ID),
                         (errors::field::STORE_NAME, &store.Name),
                         (errors::field::STORE_PATH, &store.Path),
                     ])),
@@ -40,7 +47,7 @@ pub fn listFiles(request: &request) {
             }
         };
 
-        store.Path = normalizedStorePath.to_string_lossy().into_owned();        // go:36
+        store.Path = normalizedStorePath.to_string_lossy().into_owned(); // go:36
 
         // files, err := zglob.GlobFollowSymlinks(                              // go:38
         //     filepath.Join(store.Path, "/**/*.gpg"))                          // go:38
@@ -52,35 +59,44 @@ pub fn listFiles(request: &request) {
                 "Unable to list the files in the password store '{:?}' at its location: {}",
                 store, e
             );
-            response::SendErrorAndExit(                                         // go:40-54
+            response::SendErrorAndExit(
+                // go:40-54
                 errors::Code::UnableToListFilesInPasswordStore,
                 Some(response::params_of(&[
-                    (errors::field::MESSAGE,    "Unable to list the files in the password store"),
-                    (errors::field::ACTION,     "list"),
-                    (errors::field::ERROR,      &e),
-                    (errors::field::STORE_ID,   &store.ID),
+                    (
+                        errors::field::MESSAGE,
+                        "Unable to list the files in the password store",
+                    ),
+                    (errors::field::ACTION, "list"),
+                    (errors::field::ERROR, &e),
+                    (errors::field::STORE_ID, &store.ID),
                     (errors::field::STORE_NAME, &store.Name),
                     (errors::field::STORE_PATH, &store.Path),
                 ])),
             );
         }
 
-        for file in files.iter_mut() {                                          // go:56 for i, file := range files
+        for file in files.iter_mut() {
+            // go:56 for i, file := range files
             // Normalize Windows paths (already forward-slash on Unix; the      // go:73 strings.Replace(relativePath, "\\", "/", -1)
             // inline walker emits forward slashes via path.display).
             *file = file.replace('\\', "/");
         }
 
-        files.sort();                                                            // go:77 sort.Strings(files)
-        responseData.Files.insert(store.ID.clone(), files);                      // go:78
+        files.sort(); // go:77 sort.Strings(files)
+        responseData.Files.insert(store.ID.clone(), files); // go:78
     }
 
-    response::SendOk(responseData);                                             // go:81
+    response::SendOk(responseData); // go:81
 }
 
 // Inlined std::fs walker — analog of Go's `zglob.GlobFollowSymlinks`.          // (rust)
 // Yields entry paths relative to `root`, with forward slashes.                 // (rust)
-fn collect_gpg(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) -> Result<(), String> {
+fn collect_gpg(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    out: &mut Vec<String>,
+) -> Result<(), String> {
     let rd = fs::read_dir(dir).map_err(|e| format!("{e}"))?;
     for entry in rd {
         let entry = entry.map_err(|e| format!("{e}"))?;

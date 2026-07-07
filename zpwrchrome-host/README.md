@@ -113,7 +113,7 @@ That installs `zpwrchrome-host` into `$CARGO_HOME/bin`. Then register the NM man
 zpwrchrome-host --install <ext-id>
 ```
 
-The installer writes `com.menketechnologies.zpwrchrome.json` into every detected Chromium-family browser config dir on macOS / Linux (Chrome / Chromium / Brave / Edge / Arc / Vivaldi). `allowed_origins` is set to `chrome-extension://<ext-id>/` so only the calling extension can spawn the host. Reload the extension after running it.
+The installer writes `com.menketechnologies.zpwrchrome.json` into every detected Chromium-family browser config dir on macOS / Linux (Chrome / Chromium / Brave / Edge). It also registers into [`zwire`](https://github.com/MenkeTechnologies/zwire)'s own profile — the canonical state dir (`~/Library/Application Support/com.menketechnologies.zwire/profile/NativeMessagingHosts` on macOS, `${XDG_CONFIG_HOME:-~/.config}/zwire/...` elsewhere, matching `scripts/state-dir.sh`) is created even before zwire's first launch, so the host is reachable on the very first run; `$ZWIRE_STATE` overrides it. `allowed_origins` is set to `chrome-extension://<ext-id>/` so only the calling extension can spawn the host. Reload the extension after running it.
 
 ### Use with upstream browserpass-extension
 

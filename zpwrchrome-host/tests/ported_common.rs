@@ -23,7 +23,10 @@ fn tempdir(tag: &str) -> PathBuf {
 #[test]
 fn rejects_empty_path() {
     let err = normalizePasswordStorePath("").unwrap_err();
-    assert!(err.contains("empty"), "expected 'empty' in error, got {err}");
+    assert!(
+        err.contains("empty"),
+        "expected 'empty' in error, got {err}"
+    );
 }
 
 #[test]
@@ -77,7 +80,9 @@ fn rejects_path_that_is_a_file() {
     fs::write(&f, "x").unwrap();
     let err = normalizePasswordStorePath(&f.to_string_lossy()).unwrap_err();
     assert!(
-        err.contains("not a directory") || err.contains("Not a directory") || err.contains("specified path"),
+        err.contains("not a directory")
+            || err.contains("Not a directory")
+            || err.contains("specified path"),
         "unexpected error message: {err}"
     );
     let _ = fs::remove_dir_all(&d);

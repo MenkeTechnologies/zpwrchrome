@@ -14,9 +14,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use zpwrchrome_host::extensions::dl::{
-    cache_dir, default_download_dir, flush_progress, flush_status, flush_worker,
-    guess_filename, list_all_jobs, next_gid, read_state, sanitize_filename,
-    state_path, unique_dest_path, write_state_atomic, JobState,
+    cache_dir, default_download_dir, flush_progress, flush_status, flush_worker, guess_filename,
+    list_all_jobs, next_gid, read_state, sanitize_filename, state_path, unique_dest_path,
+    write_state_atomic, JobState,
 };
 
 // Single shared lock around env-var mutation across tests (cargo runs tests
@@ -69,33 +69,33 @@ fn write_then_read_state_round_trips_all_fields() {
     let d = isolated_cache("rw-state");
     unsafe { std::env::set_var("ZPWRCHROME_DL_CACHE_DIR", &d) };
     let state = JobState {
-        gid:        7,
-        url:        "https://example.com/file.zip".into(),
-        dest:       "/tmp/file.zip".into(),
-        total:      4_194_304,
-        done:       1_048_576,
-        status:     "active".into(),
-        err:        None,
-        segments:   4,
+        gid: 7,
+        url: "https://example.com/file.zip".into(),
+        dest: "/tmp/file.zip".into(),
+        total: 4_194_304,
+        done: 1_048_576,
+        status: "active".into(),
+        err: None,
+        segments: 4,
         started_at: 1_700_000_000,
         elapsed_ms: 1234,
         paused_offset_ms: 0,
-        paused:     false,
-        cancelled:  false,
-        cookies:    "session=abc".into(),
+        paused: false,
+        cancelled: false,
+        cookies: "session=abc".into(),
         user_agent: "test/0.1".into(),
         worker_pid: 0,
     };
     write_state_atomic(&state).unwrap();
     let got = read_state(7).unwrap();
-    assert_eq!(got.gid,        state.gid);
-    assert_eq!(got.url,        state.url);
-    assert_eq!(got.dest,       state.dest);
-    assert_eq!(got.total,      state.total);
-    assert_eq!(got.done,       state.done);
-    assert_eq!(got.status,     state.status);
-    assert_eq!(got.segments,   state.segments);
-    assert_eq!(got.cookies,    state.cookies);
+    assert_eq!(got.gid, state.gid);
+    assert_eq!(got.url, state.url);
+    assert_eq!(got.dest, state.dest);
+    assert_eq!(got.total, state.total);
+    assert_eq!(got.done, state.done);
+    assert_eq!(got.status, state.status);
+    assert_eq!(got.segments, state.segments);
+    assert_eq!(got.cookies, state.cookies);
     assert_eq!(got.user_agent, state.user_agent);
     unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
     let _ = fs::remove_dir_all(&d);
@@ -122,10 +122,21 @@ fn list_all_jobs_returns_every_state_file_sorted_by_gid() {
     let d = isolated_cache("list-all");
     unsafe { std::env::set_var("ZPWRCHROME_DL_CACHE_DIR", &d) };
     let make = |gid: u64, status: &str| JobState {
-        gid, url: format!("https://x/{gid}"), dest: format!("/tmp/{gid}"),
-        total: 0, done: 0, status: status.into(), err: None,
-        segments: 1, started_at: 0, elapsed_ms: 0, paused_offset_ms: 0,
-        paused: false, cancelled: false, cookies: String::new(), user_agent: String::new(),
+        gid,
+        url: format!("https://x/{gid}"),
+        dest: format!("/tmp/{gid}"),
+        total: 0,
+        done: 0,
+        status: status.into(),
+        err: None,
+        segments: 1,
+        started_at: 0,
+        elapsed_ms: 0,
+        paused_offset_ms: 0,
+        paused: false,
+        cancelled: false,
+        cookies: String::new(),
+        user_agent: String::new(),
         worker_pid: 0,
     };
     write_state_atomic(&make(3, "active")).unwrap();
@@ -170,30 +181,39 @@ fn read_state_errors_on_missing_gid() {
 
 #[test]
 fn guess_filename_pulls_basename_from_url() {
-    assert_eq!(guess_filename("https://example.com/a/b/foo.zip"), Some("foo.zip".into()));
-    assert_eq!(guess_filename("https://example.com/foo.tar.gz"),  Some("foo.tar.gz".into()));
+    assert_eq!(
+        guess_filename("https://example.com/a/b/foo.zip"),
+        Some("foo.zip".into())
+    );
+    assert_eq!(
+        guess_filename("https://example.com/foo.tar.gz"),
+        Some("foo.tar.gz".into())
+    );
 }
 
 #[test]
 fn guess_filename_strips_query_and_fragment() {
-    assert_eq!(guess_filename("https://x/a.exe?v=2"),       Some("a.exe".into()));
-    assert_eq!(guess_filename("https://x/a.exe#sig"),       Some("a.exe".into()));
-    assert_eq!(guess_filename("https://x/a.exe?v=2#sig"),   Some("a.exe".into()));
+    assert_eq!(guess_filename("https://x/a.exe?v=2"), Some("a.exe".into()));
+    assert_eq!(guess_filename("https://x/a.exe#sig"), Some("a.exe".into()));
+    assert_eq!(
+        guess_filename("https://x/a.exe?v=2#sig"),
+        Some("a.exe".into())
+    );
 }
 
 #[test]
 fn guess_filename_none_for_root() {
     assert_eq!(guess_filename("https://example.com/"), None);
-    assert_eq!(guess_filename("https://example.com"),  None);
+    assert_eq!(guess_filename("https://example.com"), None);
 }
 
 #[test]
 fn sanitize_strips_path_and_control_chars() {
-    assert_eq!(sanitize_filename("foo/bar"),     "foo_bar");
-    assert_eq!(sanitize_filename("a:b*c?d"),     "a_b_c_d");
-    assert_eq!(sanitize_filename("a\\b\"c"),     "a_b_c");
-    assert_eq!(sanitize_filename("a\nb"),        "a_b");
-    assert_eq!(sanitize_filename("a\0b"),        "a_b");
+    assert_eq!(sanitize_filename("foo/bar"), "foo_bar");
+    assert_eq!(sanitize_filename("a:b*c?d"), "a_b_c_d");
+    assert_eq!(sanitize_filename("a\\b\"c"), "a_b_c");
+    assert_eq!(sanitize_filename("a\nb"), "a_b");
+    assert_eq!(sanitize_filename("a\0b"), "a_b");
 }
 
 #[test]
@@ -239,12 +259,22 @@ fn paused_offset_ms_round_trips_and_defaults_zero_on_old_state() {
     let d = isolated_cache("paused-offset");
     unsafe { std::env::set_var("ZPWRCHROME_DL_CACHE_DIR", &d) };
     let state = JobState {
-        gid: 42, url: "https://x/y".into(), dest: "/tmp/y".into(),
-        total: 100, done: 50, status: "paused".into(), err: None,
-        segments: 1, started_at: 0, elapsed_ms: 5000,
+        gid: 42,
+        url: "https://x/y".into(),
+        dest: "/tmp/y".into(),
+        total: 100,
+        done: 50,
+        status: "paused".into(),
+        err: None,
+        segments: 1,
+        started_at: 0,
+        elapsed_ms: 5000,
         paused_offset_ms: 12_345,
-        paused: true, cancelled: false,
-        cookies: String::new(), user_agent: String::new(), worker_pid: 0,
+        paused: true,
+        cancelled: false,
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 0,
     };
     write_state_atomic(&state).unwrap();
     let got = read_state(42).unwrap();
@@ -259,10 +289,16 @@ fn paused_offset_ms_round_trips_and_defaults_zero_on_old_state() {
         "started_at": 0, "elapsed_ms": 0, "paused": false, "cancelled": false,
         "cookies": "", "userAgent": "", "worker_pid": 0,
     });
-    fs::write(state_path(99).unwrap(), serde_json::to_string(&old_json).unwrap()).unwrap();
+    fs::write(
+        state_path(99).unwrap(),
+        serde_json::to_string(&old_json).unwrap(),
+    )
+    .unwrap();
     let old = read_state(99).unwrap();
-    assert_eq!(old.paused_offset_ms, 0,
-        "old state files must deserialize with paused_offset_ms defaulting to 0");
+    assert_eq!(
+        old.paused_offset_ms, 0,
+        "old state files must deserialize with paused_offset_ms defaulting to 0"
+    );
     unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
     let _ = fs::remove_dir_all(&d);
 }
@@ -278,11 +314,22 @@ fn flush_progress_preserves_status_paused_cancelled_set_by_other_writers() {
 
     // Disk state — simulates dl.cancel having just landed.
     let on_disk = JobState {
-        gid: 7, url: "https://x/y".into(), dest: "/tmp/y".into(),
-        total: 100, done: 10, status: "cancelled".into(), err: None,
-        segments: 1, started_at: 0, elapsed_ms: 1000, paused_offset_ms: 0,
-        paused: false, cancelled: true,
-        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+        gid: 7,
+        url: "https://x/y".into(),
+        dest: "/tmp/y".into(),
+        total: 100,
+        done: 10,
+        status: "cancelled".into(),
+        err: None,
+        segments: 1,
+        started_at: 0,
+        elapsed_ms: 1000,
+        paused_offset_ms: 0,
+        paused: false,
+        cancelled: true,
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 42,
     };
     write_state_atomic(&on_disk).unwrap();
 
@@ -290,19 +337,39 @@ fn flush_progress_preserves_status_paused_cancelled_set_by_other_writers() {
     // because dl.cancel arrived between the worker's last check_control
     // sync and now.
     let local = JobState {
-        gid: 7, url: "https://x/y".into(), dest: "/tmp/y".into(),
-        total: 100, done: 60, status: "active".into(), err: None,
-        segments: 1, started_at: 0, elapsed_ms: 5000, paused_offset_ms: 0,
-        paused: false, cancelled: false,
-        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+        gid: 7,
+        url: "https://x/y".into(),
+        dest: "/tmp/y".into(),
+        total: 100,
+        done: 60,
+        status: "active".into(),
+        err: None,
+        segments: 1,
+        started_at: 0,
+        elapsed_ms: 5000,
+        paused_offset_ms: 0,
+        paused: false,
+        cancelled: false,
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 42,
     };
     flush_progress(&local).unwrap();
 
     let after = read_state(7).unwrap();
-    assert_eq!(after.status,    "cancelled", "periodic flush must NOT overwrite status from dl.cancel");
-    assert_eq!(after.cancelled, true,        "periodic flush must NOT overwrite cancelled=true from dl.cancel");
-    assert_eq!(after.done,      60,          "worker-owned done field must update");
-    assert_eq!(after.elapsed_ms,5000,        "worker-owned elapsed_ms must update");
+    assert_eq!(
+        after.status, "cancelled",
+        "periodic flush must NOT overwrite status from dl.cancel"
+    );
+    assert_eq!(
+        after.cancelled, true,
+        "periodic flush must NOT overwrite cancelled=true from dl.cancel"
+    );
+    assert_eq!(after.done, 60, "worker-owned done field must update");
+    assert_eq!(
+        after.elapsed_ms, 5000,
+        "worker-owned elapsed_ms must update"
+    );
 
     unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
     let _ = fs::remove_dir_all(&d);
@@ -321,27 +388,55 @@ fn flush_status_writes_status_but_preserves_paused_cancelled() {
     // Disk: cancelled flag set by dl.cancel right before the worker
     // transitioned to "active" (its resume-write).
     let on_disk = JobState {
-        gid: 8, url: "https://x/y".into(), dest: "/tmp/y".into(),
-        total: 100, done: 10, status: "paused".into(), err: None,
-        segments: 1, started_at: 0, elapsed_ms: 1000, paused_offset_ms: 500,
-        paused: false, cancelled: true,   // dl.cancel just flipped these
-        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+        gid: 8,
+        url: "https://x/y".into(),
+        dest: "/tmp/y".into(),
+        total: 100,
+        done: 10,
+        status: "paused".into(),
+        err: None,
+        segments: 1,
+        started_at: 0,
+        elapsed_ms: 1000,
+        paused_offset_ms: 500,
+        paused: false,
+        cancelled: true, // dl.cancel just flipped these
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 42,
     };
     write_state_atomic(&on_disk).unwrap();
 
     let local = JobState {
-        gid: 8, url: "https://x/y".into(), dest: "/tmp/y".into(),
-        total: 100, done: 50, status: "active".into(), err: None,
-        segments: 1, started_at: 0, elapsed_ms: 5500, paused_offset_ms: 500,
-        paused: false, cancelled: false,   // stale
-        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+        gid: 8,
+        url: "https://x/y".into(),
+        dest: "/tmp/y".into(),
+        total: 100,
+        done: 50,
+        status: "active".into(),
+        err: None,
+        segments: 1,
+        started_at: 0,
+        elapsed_ms: 5500,
+        paused_offset_ms: 500,
+        paused: false,
+        cancelled: false, // stale
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 42,
     };
     flush_status(&local).unwrap();
 
     let after = read_state(8).unwrap();
-    assert_eq!(after.status,    "active",  "flush_status should write the worker's transition status");
-    assert_eq!(after.cancelled, true,      "flush_status must preserve cancelled=true that dl.cancel wrote");
-    assert_eq!(after.done,      50);
+    assert_eq!(
+        after.status, "active",
+        "flush_status should write the worker's transition status"
+    );
+    assert_eq!(
+        after.cancelled, true,
+        "flush_status must preserve cancelled=true that dl.cancel wrote"
+    );
+    assert_eq!(after.done, 50);
 }
 
 #[test]
@@ -356,42 +451,85 @@ fn flush_worker_preserves_paused_cancelled_set_by_dl_handlers() {
 
     // Disk: dl.pause just landed — paused=true, status="paused".
     let on_disk = JobState {
-        gid: 11, url: "https://x/y".into(), dest: "/tmp/old".into(),
-        total: 0, done: 0, status: "paused".into(), err: None,
-        segments: 4, started_at: 0, elapsed_ms: 0, paused_offset_ms: 0,
-        paused: true, cancelled: false,
-        cookies: String::new(), user_agent: String::new(), worker_pid: 0,
+        gid: 11,
+        url: "https://x/y".into(),
+        dest: "/tmp/old".into(),
+        total: 0,
+        done: 0,
+        status: "paused".into(),
+        err: None,
+        segments: 4,
+        started_at: 0,
+        elapsed_ms: 0,
+        paused_offset_ms: 0,
+        paused: true,
+        cancelled: false,
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 0,
     };
     write_state_atomic(&on_disk).unwrap();
 
     // Worker's stale local state — its in-memory view is the just-spun-up
     // active+renamed snapshot, oblivious to the user's pause.
     let local = JobState {
-        gid: 11, url: "https://x/y".into(), dest: "/tmp/renamed.zip".into(),
-        total: 5_000_000, done: 0, status: "active".into(), err: None,
-        segments: 4, started_at: 1_700_000_000, elapsed_ms: 12, paused_offset_ms: 0,
-        paused: false, cancelled: false,
-        cookies: String::new(), user_agent: String::new(), worker_pid: 99999,
+        gid: 11,
+        url: "https://x/y".into(),
+        dest: "/tmp/renamed.zip".into(),
+        total: 5_000_000,
+        done: 0,
+        status: "active".into(),
+        err: None,
+        segments: 4,
+        started_at: 1_700_000_000,
+        elapsed_ms: 12,
+        paused_offset_ms: 0,
+        paused: false,
+        cancelled: false,
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 99999,
     };
     flush_worker(&local).unwrap();
 
     let after = read_state(11).unwrap();
-    assert_eq!(after.paused,    true,        "dl.pause's paused=true must survive worker's full-state flush");
-    assert_eq!(after.status,    "active",    "worker still owns status here — it should write 'active'");
-    assert_eq!(after.dest,      "/tmp/renamed.zip", "worker-owned field (dest) updates");
-    assert_eq!(after.total,     5_000_000,   "worker-owned field (total) updates");
-    assert_eq!(after.worker_pid,99999,       "worker-owned field (worker_pid) updates");
+    assert_eq!(
+        after.paused, true,
+        "dl.pause's paused=true must survive worker's full-state flush"
+    );
+    assert_eq!(
+        after.status, "active",
+        "worker still owns status here — it should write 'active'"
+    );
+    assert_eq!(
+        after.dest, "/tmp/renamed.zip",
+        "worker-owned field (dest) updates"
+    );
+    assert_eq!(after.total, 5_000_000, "worker-owned field (total) updates");
+    assert_eq!(
+        after.worker_pid, 99999,
+        "worker-owned field (worker_pid) updates"
+    );
 
     // Same setup but disk now has cancelled=true (dl.cancel just landed).
     let on_disk_cancel = JobState {
-        gid: 11, paused: false, cancelled: true, status: "cancelled".into(),
+        gid: 11,
+        paused: false,
+        cancelled: true,
+        status: "cancelled".into(),
         ..on_disk.clone()
     };
     write_state_atomic(&on_disk_cancel).unwrap();
     flush_worker(&local).unwrap();
     let after2 = read_state(11).unwrap();
-    assert_eq!(after2.cancelled, true,  "dl.cancel's cancelled=true must survive worker flush");
-    assert_eq!(after2.paused,    false, "paused flag also taken from disk, not local");
+    assert_eq!(
+        after2.cancelled, true,
+        "dl.cancel's cancelled=true must survive worker flush"
+    );
+    assert_eq!(
+        after2.paused, false,
+        "paused flag also taken from disk, not local"
+    );
 
     unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
     let _ = fs::remove_dir_all(&d);
@@ -411,11 +549,22 @@ fn flush_progress_reconciles_stale_pending_to_active() {
 
     // Disk: dl_resume left status="pending" with paused=false.
     let on_disk = JobState {
-        gid: 21, url: "https://x/y".into(), dest: "/tmp/y".into(),
-        total: 100, done: 10, status: "pending".into(), err: None,
-        segments: 4, started_at: 0, elapsed_ms: 0, paused_offset_ms: 0,
-        paused: false, cancelled: false,
-        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+        gid: 21,
+        url: "https://x/y".into(),
+        dest: "/tmp/y".into(),
+        total: 100,
+        done: 10,
+        status: "pending".into(),
+        err: None,
+        segments: 4,
+        started_at: 0,
+        elapsed_ms: 0,
+        paused_offset_ms: 0,
+        paused: false,
+        cancelled: false,
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 42,
     };
     write_state_atomic(&on_disk).unwrap();
 
@@ -423,11 +572,22 @@ fn flush_progress_reconciles_stale_pending_to_active() {
     // just re-read from disk after a paused→resumed cycle. flush_progress
     // alone has to reconcile.
     let local = JobState {
-        gid: 21, url: "https://x/y".into(), dest: "/tmp/y".into(),
-        total: 100, done: 55, status: "pending".into(), err: None,
-        segments: 4, started_at: 0, elapsed_ms: 5500, paused_offset_ms: 0,
-        paused: false, cancelled: false,
-        cookies: String::new(), user_agent: String::new(), worker_pid: 42,
+        gid: 21,
+        url: "https://x/y".into(),
+        dest: "/tmp/y".into(),
+        total: 100,
+        done: 55,
+        status: "pending".into(),
+        err: None,
+        segments: 4,
+        started_at: 0,
+        elapsed_ms: 5500,
+        paused_offset_ms: 0,
+        paused: false,
+        cancelled: false,
+        cookies: String::new(),
+        user_agent: String::new(),
+        worker_pid: 42,
     };
     flush_progress(&local).unwrap();
 
@@ -445,8 +605,10 @@ fn flush_progress_reconciles_stale_pending_to_active() {
     write_state_atomic(&paused_pending).unwrap();
     flush_progress(&local).unwrap();
     let after2 = read_state(21).unwrap();
-    assert_eq!(after2.status, "pending",
-        "flush_progress must NOT touch status when paused=true on disk");
+    assert_eq!(
+        after2.status, "pending",
+        "flush_progress must NOT touch status when paused=true on disk"
+    );
 
     unsafe { std::env::remove_var("ZPWRCHROME_DL_CACHE_DIR") };
     let _ = fs::remove_dir_all(&d);
@@ -457,7 +619,13 @@ fn default_download_dir_uses_env_override() {
     let _g = ENV_LOCK.lock().unwrap();
     let old = std::env::var("ZPWRCHROME_DL_DIR").ok();
     unsafe { std::env::set_var("ZPWRCHROME_DL_DIR", "/tmp/zp-dlcache-test") };
-    assert_eq!(default_download_dir(), PathBuf::from("/tmp/zp-dlcache-test"));
-    if let Some(v) = old { unsafe { std::env::set_var("ZPWRCHROME_DL_DIR", v) }; }
-    else                 { unsafe { std::env::remove_var("ZPWRCHROME_DL_DIR") }; }
+    assert_eq!(
+        default_download_dir(),
+        PathBuf::from("/tmp/zp-dlcache-test")
+    );
+    if let Some(v) = old {
+        unsafe { std::env::set_var("ZPWRCHROME_DL_DIR", v) };
+    } else {
+        unsafe { std::env::remove_var("ZPWRCHROME_DL_DIR") };
+    }
 }

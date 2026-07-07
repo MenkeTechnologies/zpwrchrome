@@ -18,51 +18,55 @@ use std::io::{self, Write};
 pub type Params = BTreeMap<&'static str, String>;
 
 #[derive(Serialize, Debug)]
-pub struct okResponse {                                                       // go:12
+pub struct okResponse {
+    // go:12
     #[serde(rename = "status")]
-    pub Status:  &'static str,                                                // go:13
+    pub Status: &'static str, // go:13
     #[serde(rename = "version")]
-    pub Version: u64,                                                         // go:14
+    pub Version: u64, // go:14
     #[serde(rename = "data")]
-    pub Data:    Value,                                                       // go:15  Data interface{}
+    pub Data: Value, // go:15  Data interface{}
 }
 
 #[derive(Serialize, Debug)]
-pub struct errorResponse {                                                    // go:18
+pub struct errorResponse {
+    // go:18
     #[serde(rename = "status")]
-    pub Status:  &'static str,                                                // go:19
+    pub Status: &'static str, // go:19
     #[serde(rename = "code")]
-    pub Code:    i32,                                                         // go:20  errors.Code
+    pub Code: i32, // go:20  errors.Code
     #[serde(rename = "version")]
-    pub Version: u64,                                                         // go:21
+    pub Version: u64, // go:21
     #[serde(rename = "params")]
-    pub Params:  Option<Params>,                                              // go:22  interface{} — nil-able map
+    pub Params: Option<Params>, // go:22  interface{} — nil-able map
 }
 
 // ConfigureResponse a response format for the "configure" request            // go:25
 #[derive(Serialize, Debug, Default)]
 pub struct ConfigureResponse {
     #[serde(rename = "defaultStore")]
-    pub DefaultStore: DefaultStoreField,                                      // go:27-30
+    pub DefaultStore: DefaultStoreField, // go:27-30
     #[serde(rename = "storeSettings")]
-    pub StoreSettings: BTreeMap<String, String>,                              // go:31
+    pub StoreSettings: BTreeMap<String, String>, // go:31
 }
 
 #[derive(Serialize, Debug, Default)]
-pub struct DefaultStoreField {                                                // go:27 (anonymous in Go)
+pub struct DefaultStoreField {
+    // go:27 (anonymous in Go)
     #[serde(rename = "path")]
-    pub Path:     String,                                                     // go:28
+    pub Path: String, // go:28
     #[serde(rename = "settings")]
-    pub Settings: String,                                                     // go:29
+    pub Settings: String, // go:29
 }
 
 /// Port of `MakeConfigureResponse()` from `response/response.go:35`.
 ///
 // MakeConfigureResponse initializes an empty configure response              // go:34
 pub fn MakeConfigureResponse() -> ConfigureResponse {
-    ConfigureResponse {                                                       // go:36
+    ConfigureResponse {
+        // go:36
         DefaultStore: DefaultStoreField::default(),
-        StoreSettings: BTreeMap::new(),                                       // go:37  make(map[string]string)
+        StoreSettings: BTreeMap::new(), // go:37  make(map[string]string)
     }
 }
 
@@ -70,15 +74,16 @@ pub fn MakeConfigureResponse() -> ConfigureResponse {
 #[derive(Serialize, Debug, Default)]
 pub struct ListResponse {
     #[serde(rename = "files")]
-    pub Files: BTreeMap<String, Vec<String>>,                                 // go:44
+    pub Files: BTreeMap<String, Vec<String>>, // go:44
 }
 
 /// Port of `MakeListResponse()` from `response/response.go:48`.
 ///
 // MakeListResponse initializes an empty list response                        // go:47
 pub fn MakeListResponse() -> ListResponse {
-    ListResponse {                                                            // go:49
-        Files: BTreeMap::new(),                                               // go:50  make(map[string][]string)
+    ListResponse {
+        // go:49
+        Files: BTreeMap::new(), // go:50  make(map[string][]string)
     }
 }
 
@@ -86,15 +91,16 @@ pub fn MakeListResponse() -> ListResponse {
 #[derive(Serialize, Debug, Default)]
 pub struct TreeResponse {
     #[serde(rename = "directories")]
-    pub Directories: BTreeMap<String, Vec<String>>,                           // go:57
+    pub Directories: BTreeMap<String, Vec<String>>, // go:57
 }
 
 /// Port of `MakeTreeResponse()` from `response/response.go:61`.
 ///
 // MakeTreeResponse initializes an empty tree response                        // go:60
 pub fn MakeTreeResponse() -> TreeResponse {
-    TreeResponse {                                                            // go:62
-        Directories: BTreeMap::new(),                                         // go:63
+    TreeResponse {
+        // go:62
+        Directories: BTreeMap::new(), // go:63
     }
 }
 
@@ -102,36 +108,36 @@ pub fn MakeTreeResponse() -> TreeResponse {
 #[derive(Serialize, Debug, Default)]
 pub struct FetchResponse {
     #[serde(rename = "contents")]
-    pub Contents: String,                                                     // go:70
+    pub Contents: String, // go:70
 }
 
 /// Port of `MakeFetchResponse()` from `response/response.go:74`.
 ///
 // MakeFetchResponse initializes an empty fetch response                      // go:73
 pub fn MakeFetchResponse() -> FetchResponse {
-    FetchResponse::default()                                                  // go:75 &FetchResponse{}
+    FetchResponse::default() // go:75 &FetchResponse{}
 }
 
 // SaveResponse a response format for the "save" request                      // go:80
 #[derive(Serialize, Debug, Default)]
-pub struct SaveResponse {}                                                    // go:81
+pub struct SaveResponse {} // go:81
 
 /// Port of `MakeSaveResponse()` from `response/response.go:85`.
 ///
 // MakeSaveResponse initializes an empty save response                        // go:84
 pub fn MakeSaveResponse() -> SaveResponse {
-    SaveResponse::default()                                                   // go:86
+    SaveResponse::default() // go:86
 }
 
 // DeleteResponse a response format for the "delete" request                  // go:91
 #[derive(Serialize, Debug, Default)]
-pub struct DeleteResponse {}                                                  // go:92
+pub struct DeleteResponse {} // go:92
 
 /// Port of `MakeDeleteResponse()` from `response/response.go:96`.
 ///
 // MakeDeleteResponse initializes an empty delete response                    // go:95
 pub fn MakeDeleteResponse() -> DeleteResponse {
-    DeleteResponse::default()                                                 // go:97
+    DeleteResponse::default() // go:97
 }
 
 /// Port of `SendOk()` from `response/response.go:101`.
@@ -140,11 +146,13 @@ pub fn MakeDeleteResponse() -> DeleteResponse {
 // json format                                                                // (cont)
 pub fn SendOk<T: Serialize>(data: T) {
     let data_value = serde_json::to_value(&data).unwrap_or(Value::Null);
-    let envelope = serde_json::to_value(&okResponse {                         // go:102
-        Status:  "ok",                                                        // go:103
-        Version: version::CODE,                                               // go:104
-        Data:    data_value,                                                  // go:105
-    }).unwrap();
+    let envelope = serde_json::to_value(&okResponse {
+        // go:102
+        Status: "ok",           // go:103
+        Version: version::CODE, // go:104
+        Data: data_value,       // go:105
+    })
+    .unwrap();
     let est = serde_json::to_vec(&envelope).map(|v| v.len()).unwrap_or(0);
     crate::diag::log(&format!("SEND status=ok bytes={est}"));
     SendRaw_value(&envelope);
@@ -155,19 +163,32 @@ pub fn SendOk<T: Serialize>(data: T) {
 // SendErrorAndExit sends an error response to the browser extension in the   // go:109
 // predefined json format and exits with the specified exit code              // (cont)
 pub fn SendErrorAndExit(error_code: errors::Code, params: Option<Params>) -> ! {
-    let envelope = serde_json::to_value(&errorResponse {                      // go:111
-        Status:  "error",                                                     // go:112
-        Code:    error_code.as_i32(),                                         // go:113
-        Version: version::CODE,                                               // go:114
-        Params:  params,                                                      // go:115
-    }).unwrap();
+    let envelope = serde_json::to_value(&errorResponse {
+        // go:111
+        Status: "error",           // go:112
+        Code: error_code.as_i32(), // go:113
+        Version: version::CODE,    // go:114
+        Params: params,            // go:115
+    })
+    .unwrap();
     let summary = serde_json::to_string(&envelope).unwrap_or_default();
-    let summary = if summary.len() > 300 { format!("{}…", &summary[..300]) } else { summary };
-    crate::diag::log(&format!("SEND status=error code={} envelope={}", error_code.as_i32(), summary));
+    let summary = if summary.len() > 300 {
+        format!("{}…", &summary[..300])
+    } else {
+        summary
+    };
+    crate::diag::log(&format!(
+        "SEND status=error code={} envelope={}",
+        error_code.as_i32(),
+        summary
+    ));
     SendRaw_value(&envelope);
 
-    crate::diag::log(&format!("EXIT code={} reason=send_error", error_code.as_i32()));
-    errors::exit_with_code(error_code);                                       // go:118
+    crate::diag::log(&format!(
+        "EXIT code={} reason=send_error",
+        error_code.as_i32()
+    ));
+    errors::exit_with_code(error_code); // go:118
     unreachable!()
 }
 
@@ -182,20 +203,23 @@ pub fn SendRaw<T: Serialize>(response: &T) {
 // Go re-encodes the JSON inside each Send* — Rust port keeps the same        // (rust)
 // behavior conceptually (single encode + framed write per call).             // (rust)
 fn SendRaw_value(value: &Value) {
-    let mut bytes_buffer: Vec<u8> = Vec::new();                               // go:123  var bytesBuffer bytes.Buffer
-    if let Err(e) = serde_json::to_writer(&mut bytes_buffer, value) {          // go:124  json.NewEncoder(...).Encode(response)
-        eprintln!("Unable to encode response for sending: {e}");              // go:125  log.Fatal
+    let mut bytes_buffer: Vec<u8> = Vec::new(); // go:123  var bytesBuffer bytes.Buffer
+    if let Err(e) = serde_json::to_writer(&mut bytes_buffer, value) {
+        // go:124  json.NewEncoder(...).Encode(response)
+        eprintln!("Unable to encode response for sending: {e}"); // go:125  log.Fatal
         std::process::exit(1);
     }
 
-    let mut stdout = io::stdout().lock();                                     // go:127  os.Stdout
+    let mut stdout = io::stdout().lock(); // go:127  os.Stdout
     let len = bytes_buffer.len() as u32;
-    if let Err(e) = stdout.write_all(&len.to_le_bytes()) {                    // go:128  binary.Write(..., binary.LittleEndian, uint32(bytesBuffer.Len()))
-        eprintln!("Unable to send the length of the response: {e}");          // go:129  log.Fatal
+    if let Err(e) = stdout.write_all(&len.to_le_bytes()) {
+        // go:128  binary.Write(..., binary.LittleEndian, uint32(bytesBuffer.Len()))
+        eprintln!("Unable to send the length of the response: {e}"); // go:129  log.Fatal
         std::process::exit(1);
     }
-    if let Err(e) = stdout.write_all(&bytes_buffer) {                         // go:131  bytesBuffer.WriteTo(os.Stdout)
-        eprintln!("Unable to send the response: {e}");                        // go:132  log.Fatal
+    if let Err(e) = stdout.write_all(&bytes_buffer) {
+        // go:131  bytesBuffer.WriteTo(os.Stdout)
+        eprintln!("Unable to send the response: {e}"); // go:132  log.Fatal
         std::process::exit(1);
     }
     let _ = stdout.flush();

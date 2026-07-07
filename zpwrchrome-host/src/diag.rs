@@ -34,7 +34,9 @@ fn log_path() -> Option<PathBuf> {
 }
 
 fn iso_ts() -> String {
-    let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let d = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let total_secs = d.as_secs() as i64;
     let ms = d.subsec_millis();
     // Plain Y-M-D HH:MM:SS in UTC without bringing in chrono — POSIX gmtime via libc.
@@ -45,8 +47,13 @@ fn iso_ts() -> String {
         libc::gmtime_r(&t, &mut tm);
         return format!(
             "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
-            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-            tm.tm_hour, tm.tm_min, tm.tm_sec, ms
+            tm.tm_year + 1900,
+            tm.tm_mon + 1,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec,
+            ms
         );
     }
     #[cfg(not(unix))]
@@ -57,7 +64,9 @@ fn iso_ts() -> String {
 pub fn log(line: &str) {
     let Some(path) = log_path() else { return };
     let pid = std::process::id();
-    let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&path) else { return };
+    let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&path) else {
+        return;
+    };
     let _ = writeln!(f, "{} pid={} {}", iso_ts(), pid, line);
 }
 
@@ -66,10 +75,14 @@ pub fn log(line: &str) {
 pub fn install_panic_hook() {
     let prev = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let msg = info.payload().downcast_ref::<&'static str>().copied()
+        let msg = info
+            .payload()
+            .downcast_ref::<&'static str>()
+            .copied()
             .or_else(|| info.payload().downcast_ref::<String>().map(|s| s.as_str()))
             .unwrap_or("(no payload)");
-        let loc = info.location()
+        let loc = info
+            .location()
             .map(|l| format!("{}:{}", l.file(), l.line()))
             .unwrap_or_else(|| "(no location)".into());
         log(&format!("PANIC at={loc} msg={msg:?}"));
@@ -84,9 +97,13 @@ pub fn log_start(args: &[String]) {
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| "?".into());
     let home = std::env::var("HOME").unwrap_or_else(|_| "(unset)".into());
-    let xdg  = std::env::var("XDG_CACHE_HOME").unwrap_or_else(|_| "(unset)".into());
+    let xdg = std::env::var("XDG_CACHE_HOME").unwrap_or_else(|_| "(unset)".into());
     let path = std::env::var("PATH").unwrap_or_default();
-    let path_short = if path.len() > 200 { format!("{}…", &path[..200]) } else { path };
+    let path_short = if path.len() > 200 {
+        format!("{}…", &path[..200])
+    } else {
+        path
+    };
     log(&format!(
         "START args={:?} cwd={} HOME={} XDG_CACHE_HOME={} PATH={}",
         args, cwd, home, xdg, path_short

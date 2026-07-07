@@ -11,11 +11,11 @@ pub const MINOR: u64 = 1;
 pub const PATCH: u64 = 2;
 
 // Code version as integer                                                   // go:8
-pub const CODE: u64 = MAJOR * 1_000_000 + MINOR * 1_000 + PATCH;             // go:9
+pub const CODE: u64 = MAJOR * 1_000_000 + MINOR * 1_000 + PATCH; // go:9
 
 /// Port of `String()` from `version/version.go:12`.
 ///
 // String version as string                                                  // go:11
 pub fn string() -> String {
-    format!("{}.{}.{}", MAJOR, MINOR, PATCH)                                 // go:13
+    format!("{}.{}.{}", MAJOR, MINOR, PATCH) // go:13
 }
