@@ -1,51 +1,118 @@
 {
   "manifest_version": 3,
-  "name": "zpwrchrome — Cyberpunk HUD theme",
+  "name": "zpwrchrome \u2014 Cyberpunk HUD theme",
   "short_name": "zpwrchrome theme",
-  "version": "0.22.17",
+  "version": "0.22.19",
   "description": "Companion theme for the zpwrchrome extension. Strykelang HUD palette: deep-space ink, neon cyan, magenta scanlines.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
-
   "theme": {
     "images": {
-      "theme_frame":          "images/theme_frame.png",
-      "theme_toolbar":        "images/theme_toolbar.png",
+      "theme_frame": "images/theme_frame.png",
+      "theme_toolbar": "images/theme_toolbar.png",
       "theme_ntp_background": "images/theme_ntp_background.png"
     },
-
     "colors": {
-      "frame":                       [5, 5, 10],
-      "frame_inactive":              [7, 7, 20],
-      "frame_incognito":             [13, 13, 26],
-      "frame_incognito_inactive":    [10, 10, 20],
-
-      "toolbar":                     [10, 10, 20],
-      "toolbar_text":                [224, 240, 255],
-      "toolbar_button_icon":         [5, 217, 232],
-
-      "tab_text":                    [224, 240, 255],
-      "tab_background_text":         [122, 139, 168],
-      "tab_background_text_inactive":[80, 95, 120],
-
-      "bookmark_text":               [5, 217, 232],
-
-      "omnibox_text":                [224, 240, 255],
-      "omnibox_background":          [10, 10, 20],
-
-      "ntp_background":              [5, 5, 10],
-      "ntp_text":                    [224, 240, 255],
-      "ntp_link":                    [5, 217, 232],
-      "ntp_header":                  [255, 42, 109],
-      "ntp_section":                 [13, 13, 26],
-
-      "button_background":           [10, 10, 20]
+      "frame": [
+        5,
+        5,
+        10
+      ],
+      "frame_inactive": [
+        7,
+        7,
+        20
+      ],
+      "frame_incognito": [
+        13,
+        13,
+        26
+      ],
+      "frame_incognito_inactive": [
+        10,
+        10,
+        20
+      ],
+      "toolbar": [
+        10,
+        10,
+        20
+      ],
+      "toolbar_text": [
+        224,
+        240,
+        255
+      ],
+      "toolbar_button_icon": [
+        5,
+        217,
+        232
+      ],
+      "tab_text": [
+        224,
+        240,
+        255
+      ],
+      "tab_background_text": [
+        122,
+        139,
+        168
+      ],
+      "tab_background_text_inactive": [
+        80,
+        95,
+        120
+      ],
+      "bookmark_text": [
+        5,
+        217,
+        232
+      ],
+      "omnibox_text": [
+        224,
+        240,
+        255
+      ],
+      "omnibox_background": [
+        10,
+        10,
+        20
+      ],
+      "ntp_background": [
+        5,
+        5,
+        10
+      ],
+      "ntp_text": [
+        224,
+        240,
+        255
+      ],
+      "ntp_link": [
+        5,
+        217,
+        232
+      ],
+      "ntp_header": [
+        255,
+        42,
+        109
+      ],
+      "ntp_section": [
+        13,
+        13,
+        26
+      ],
+      "button_background": [
+        10,
+        10,
+        20
+      ]
     },
-
     "properties": {
       "ntp_background_alignment": "center",
-      "ntp_background_repeat":    "no-repeat",
-      "ntp_logo_alternate":       1
+      "ntp_background_repeat": "no-repeat",
+      "ntp_logo_alternate": 1
     }
   }
 }
