@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 54 keyboard commands, 12 popup categories, 19 message kinds, 7,448 JS lines, 3,012 tests. Strykelang HUD by MenkeTechnologies.">
+  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 54 keyboard commands, 12 popup categories, 19 message kinds, 7,459 JS lines, 3,012 tests. Strykelang HUD by MenkeTechnologies.">
   <title>zpwrchrome &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -116,11 +116,11 @@
       <code>chrome.userScripts</code>; and a frecency-ranked
       <code>chrome.history</code> search replaces Chrome's built-in
       <code>chrome://history</code> page on <code>Cmd+Y</code>.
-      <strong>7,448 JS lines + 1,113 CSS lines + 23,473 test lines &middot; 54 commands &middot; 19 message handlers &middot; 3012 tests passing</strong>.
+      <strong>7,459 JS lines + 1,113 CSS lines + 23,473 test lines &middot; 54 commands &middot; 19 message handlers &middot; 3012 tests passing</strong>.
     </p>
 
     <div class="stat-grid">
-      <div class="stat-card"><div class="v">7,448</div><div class="l">JS Lines</div></div>
+      <div class="stat-card"><div class="v">7,459</div><div class="l">JS Lines</div></div>
       <div class="stat-card"><div class="v">1,113</div><div class="l">CSS Lines</div></div>
       <div class="stat-card"><div class="v a">54</div><div class="l">Keyboard Commands</div></div>
       <div class="stat-card"><div class="v g">3012</div><div class="l">Tests Passing</div></div>
@@ -131,12 +131,12 @@
       <div class="stat-card"><div class="v">15</div><div class="l">Pure Helpers</div></div>
       <div class="stat-card"><div class="v">377</div><div class="l">Repo Files</div></div>
       <div class="stat-card"><div class="v y">4</div><div class="l">Default-Keyed</div></div>
-      <div class="stat-card"><div class="v">v0.22.19</div><div class="l">Version</div></div>
+      <div class="stat-card"><div class="v">v0.22.20</div><div class="l">Version</div></div>
     </div>
 
     <div>
-      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 32,324 total lines</p>
-      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:23.0%;"></div><span class="bar-label">JS &middot; 7,448 lines &middot; 23.0%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:72.6%;"></div><span class="bar-label">Tests &middot; 23,473 lines &middot; 72.6%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.4%;"></div><span class="bar-label">CSS &middot; 1,113 lines &middot; 3.4%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:0.9%;"></div><span class="bar-label">HTML &middot; 290 lines &middot; 0.9%</span></div>
+      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 32,335 total lines</p>
+      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:23.1%;"></div><span class="bar-label">JS &middot; 7,459 lines &middot; 23.1%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:72.6%;"></div><span class="bar-label">Tests &middot; 23,473 lines &middot; 72.6%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.4%;"></div><span class="bar-label">CSS &middot; 1,113 lines &middot; 3.4%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:0.9%;"></div><span class="bar-label">HTML &middot; 290 lines &middot; 0.9%</span></div>
     </div>
 
     <h2 class="tutorial-title"><span class="step-hash">~</span>SUBSYSTEM BREAKDOWN</h2>
@@ -144,7 +144,7 @@
     <div class="subsystems">
         <div class="card">
           <h3>Service worker</h3>
-          <ul class="files"><li><code>background.js</code> &mdash; 4,130 lines</li></ul>
+          <ul class="files"><li><code>background.js</code> &mdash; 4,141 lines</li></ul>
           <p>MV3 SW. Cross-window MRU tracker, command dispatcher, popup/modal message API, userscript registration, scenes, history, pass + identity fill, segmented downloads, full-page screenshot.</p>
         </div>
         <div class="card">
@@ -224,7 +224,7 @@
     <table class="file-table">
       <thead><tr><th>Path</th><th class="num">Lines</th><th class="num">Bytes</th></tr></thead>
       <tbody>
-        <tr><td><code>background.js</code></td><td class="num">4,130</td><td class="num">171,096</td></tr>
+        <tr><td><code>background.js</code></td><td class="num">4,141</td><td class="num">171,476</td></tr>
         <tr><td><code>popup.js</code></td><td class="num">1,266</td><td class="num">52,052</td></tr>
         <tr><td><code>tests/dl-integration.test.js</code></td><td class="num">1,054</td><td class="num">54,455</td></tr>
         <tr><td><code>modal/content.template.js</code></td><td class="num">959</td><td class="num">38,713</td></tr>
@@ -763,7 +763,7 @@
   </main>
 
     <footer style="text-align:center;padding:2rem;font-size:10px;color:var(--text-muted);font-family:'Orbitron',sans-serif;letter-spacing:2px;">
-      ZPWRCHROME v0.22.19 &middot; 54 COMMANDS &middot; 3012 TESTS &middot; 7,448 JS LINES &middot; MENKETECHNOLOGIES &middot; <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color:var(--cyan);text-decoration:none;">github.com/MenkeTechnologies/zpwrchrome</a> &middot; regenerate via <code>scripts/gen.sh</code>
+      ZPWRCHROME v0.22.20 &middot; 54 COMMANDS &middot; 3012 TESTS &middot; 7,459 JS LINES &middot; MENKETECHNOLOGIES &middot; <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color:var(--cyan);text-decoration:none;">github.com/MenkeTechnologies/zpwrchrome</a> &middot; regenerate via <code>scripts/gen.sh</code>
     </footer>
   </div>
 
