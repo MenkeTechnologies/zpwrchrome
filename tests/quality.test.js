@@ -192,6 +192,15 @@ test("every chrome.storage.local.set key is read somewhere", () => {
       const cm = src.match(cre);
       if (cm) reads.add(cm[1]);
     }
+    // chrome.storage.X.get([VAR1, VAR2, …])  — array of variable keys (resolve each
+    // const to its string). e.g. ui-scheme.js reads get([UI_SCHEME_KEY, UI_LIGHT_KEY]).
+    for (const m of src.matchAll(/chrome\.storage\.(local|session|sync)\.get\(\s*\[\s*([^\]]+)\]/g)) {
+      for (const v of m[2].matchAll(/[A-Z_][\w$]*/g)) {
+        const cre = new RegExp("const\\s+" + v[0] + "\\s*=\\s*[\"']([^\"']+)[\"']");
+        const cm = src.match(cre);
+        if (cm) reads.add(cm[1]);
+      }
+    }
   }
 
   for (const key of writes) {
