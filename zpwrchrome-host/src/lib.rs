@@ -10,7 +10,7 @@
 //! `bin/zpwrchrome_host.rs` *before* falling through to the ported
 //! dispatcher, so the upstream protocol is unchanged.
 
+pub mod diag;
+pub mod extensions;
 pub mod frame;
 pub mod ported;
-pub mod extensions;
-pub mod diag;

@@ -41,30 +41,30 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
-const MAX_TIMEOUT_MS:     u64 = 5 * 60 * 1000;
-const STDOUT_CAP:         usize = 64 * 1024;
-const STDERR_CAP:         usize = 64 * 1024;
-const POLL_INTERVAL:      Duration = Duration::from_millis(25);
+const MAX_TIMEOUT_MS: u64 = 5 * 60 * 1000;
+const STDOUT_CAP: usize = 64 * 1024;
+const STDERR_CAP: usize = 64 * 1024;
+const POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 #[derive(Deserialize, Debug, Default)]
 pub struct RunSpawnRequest {
     #[serde(default)]
-    pub argv:      Vec<String>,
+    pub argv: Vec<String>,
     #[serde(default)]
-    pub cwd:       String,
+    pub cwd: String,
     #[serde(default)]
-    pub env:       HashMap<String, String>,
+    pub env: HashMap<String, String>,
     #[serde(default)]
     pub timeoutMs: Option<u64>,
 }
 
 #[derive(Serialize, Debug)]
 pub struct RunSpawnResponse {
-    pub code:       i32,
-    pub stdout:     String,
-    pub stderr:     String,
+    pub code: i32,
+    pub stdout: String,
+    pub stderr: String,
     pub durationMs: u64,
-    pub truncated:  bool,
+    pub truncated: bool,
 }
 
 /// Public dispatch entry — mirrors the shape of `otp::otp` / `search::search`.
@@ -76,8 +76,8 @@ pub fn run_spawn(value: &Value) {
                 errors::Code::ParseRequest,
                 Some(response::params_of(&[
                     (field::MESSAGE, "run.spawn: invalid request"),
-                    (field::ACTION,  "run.spawn"),
-                    (field::ERROR,   &e.to_string()),
+                    (field::ACTION, "run.spawn"),
+                    (field::ERROR, &e.to_string()),
                 ])),
             );
         }
@@ -87,18 +87,18 @@ pub fn run_spawn(value: &Value) {
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
                 (field::MESSAGE, "run.spawn: argv is empty"),
-                (field::ACTION,  "run.spawn"),
+                (field::ACTION, "run.spawn"),
             ])),
         );
     }
     match exec(&req) {
         Ok(resp) => response::SendOk(resp),
-        Err(e)   => response::SendErrorAndExit(
+        Err(e) => response::SendErrorAndExit(
             errors::Code::InvalidRequestAction,
             Some(response::params_of(&[
                 (field::MESSAGE, "run.spawn: spawn failed"),
-                (field::ACTION,  "run.spawn"),
-                (field::ERROR,   &e),
+                (field::ACTION, "run.spawn"),
+                (field::ERROR, &e),
             ])),
         ),
     }
@@ -116,15 +116,25 @@ pub fn run_spawn(value: &Value) {
 /// or after the kill).
 pub fn exec(req: &RunSpawnRequest) -> Result<RunSpawnResponse, String> {
     let timeout = Duration::from_millis(
-        req.timeoutMs.unwrap_or(DEFAULT_TIMEOUT_MS).min(MAX_TIMEOUT_MS)
+        req.timeoutMs
+            .unwrap_or(DEFAULT_TIMEOUT_MS)
+            .min(MAX_TIMEOUT_MS),
     );
     let start = Instant::now();
 
     let mut cmd = Command::new(&req.argv[0]);
-    if req.argv.len() > 1 { cmd.args(&req.argv[1..]); }
-    if !req.cwd.is_empty() { cmd.current_dir(&req.cwd); }
-    for (k, v) in &req.env { cmd.env(k, v); }
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());
+    if req.argv.len() > 1 {
+        cmd.args(&req.argv[1..]);
+    }
+    if !req.cwd.is_empty() {
+        cmd.current_dir(&req.cwd);
+    }
+    for (k, v) in &req.env {
+        cmd.env(k, v);
+    }
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::null());
 
     // Put the child in its own process group via setsid(2) so a timeout
     // kill reaches grandchildren too. Without this, `sh -c "sleep 30"`
@@ -142,19 +152,37 @@ pub fn exec(req: &RunSpawnRequest) -> Result<RunSpawnResponse, String> {
         });
     }
 
-    let mut child = cmd.spawn().map_err(|e| format!("spawn {}: {e}", req.argv[0]))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("spawn {}: {e}", req.argv[0]))?;
     #[cfg(unix)]
     let child_pgid = child.id() as libc::pid_t;
-    let stdout = child.stdout.take().ok_or_else(|| "no stdout pipe".to_string())?;
-    let stderr = child.stderr.take().ok_or_else(|| "no stderr pipe".to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "no stdout pipe".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "no stderr pipe".to_string())?;
 
-    let out_buf  = Arc::new(Mutex::new(Vec::<u8>::with_capacity(4096)));
-    let err_buf  = Arc::new(Mutex::new(Vec::<u8>::with_capacity(1024)));
+    let out_buf = Arc::new(Mutex::new(Vec::<u8>::with_capacity(4096)));
+    let err_buf = Arc::new(Mutex::new(Vec::<u8>::with_capacity(1024)));
     let out_trun = Arc::new(Mutex::new(false));
     let err_trun = Arc::new(Mutex::new(false));
 
-    let out_handle = spawn_reader(stdout, Arc::clone(&out_buf), STDOUT_CAP, Arc::clone(&out_trun));
-    let err_handle = spawn_reader(stderr, Arc::clone(&err_buf), STDERR_CAP, Arc::clone(&err_trun));
+    let out_handle = spawn_reader(
+        stdout,
+        Arc::clone(&out_buf),
+        STDOUT_CAP,
+        Arc::clone(&out_trun),
+    );
+    let err_handle = spawn_reader(
+        stderr,
+        Arc::clone(&err_buf),
+        STDERR_CAP,
+        Arc::clone(&err_trun),
+    );
 
     let mut killed_by_timeout = false;
     let status = loop {
@@ -193,14 +221,23 @@ pub fn exec(req: &RunSpawnRequest) -> Result<RunSpawnResponse, String> {
     let truncated = *out_trun.lock().unwrap() || *err_trun.lock().unwrap();
 
     if killed_by_timeout {
-        if !stderr_str.is_empty() && !stderr_str.ends_with('\n') { stderr_str.push('\n'); }
-        stderr_str.push_str(&format!("run.spawn: killed after {}ms timeout\n", timeout.as_millis()));
+        if !stderr_str.is_empty() && !stderr_str.ends_with('\n') {
+            stderr_str.push('\n');
+        }
+        stderr_str.push_str(&format!(
+            "run.spawn: killed after {}ms timeout\n",
+            timeout.as_millis()
+        ));
     }
 
     Ok(RunSpawnResponse {
-        code:       if killed_by_timeout { 124 } else { status.code().unwrap_or(-1) },
-        stdout:     stdout_str,
-        stderr:     stderr_str,
+        code: if killed_by_timeout {
+            124
+        } else {
+            status.code().unwrap_or(-1)
+        },
+        stdout: stdout_str,
+        stderr: stderr_str,
         durationMs: start.elapsed().as_millis() as u64,
         truncated,
     })
@@ -211,24 +248,31 @@ pub fn exec(req: &RunSpawnRequest) -> Result<RunSpawnResponse, String> {
 /// cap are drained from the pipe but discarded, preventing the child from
 /// blocking on a full pipe buffer.
 fn spawn_reader<R>(
-    mut r: R, buf: Arc<Mutex<Vec<u8>>>, cap: usize, trun: Arc<Mutex<bool>>,
+    mut r: R,
+    buf: Arc<Mutex<Vec<u8>>>,
+    cap: usize,
+    trun: Arc<Mutex<bool>>,
 ) -> thread::JoinHandle<()>
-where R: Read + Send + 'static {
+where
+    R: Read + Send + 'static,
+{
     thread::spawn(move || {
         let mut tmp = [0u8; 4096];
         loop {
             match r.read(&mut tmp) {
-                Ok(0)  => return,
-                Ok(n)  => {
+                Ok(0) => return,
+                Ok(n) => {
                     let mut b = buf.lock().unwrap();
                     let remaining = cap.saturating_sub(b.len());
                     if remaining == 0 {
                         *trun.lock().unwrap() = true;
-                        continue;            // keep draining so writer doesn't block
+                        continue; // keep draining so writer doesn't block
                     }
                     let take = n.min(remaining);
                     b.extend_from_slice(&tmp[..take]);
-                    if take < n { *trun.lock().unwrap() = true; }
+                    if take < n {
+                        *trun.lock().unwrap() = true;
+                    }
                 }
                 Err(_) => return,
             }

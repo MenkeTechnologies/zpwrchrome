@@ -75,7 +75,12 @@ fn run_env(req: &Value, env_pairs: &[(&str, &str)]) -> Value {
         .unwrap();
     drop(child.stdin.take());
     let mut out = Vec::new();
-    child.stdout.as_mut().unwrap().read_to_end(&mut out).unwrap();
+    child
+        .stdout
+        .as_mut()
+        .unwrap()
+        .read_to_end(&mut out)
+        .unwrap();
     let _ = child.wait();
     read_one_frame(&out)
 }
@@ -186,7 +191,8 @@ fn live_list_matches_walked_password_store_entries() {
     let walked = walk_gpg(Path::new(STORE));
     assert!(!walked.is_empty(), "expected at least one .gpg entry");
     assert_eq!(
-        host_sorted, walked,
+        host_sorted,
+        walked,
         "host list ({} entries) differs from filesystem walk ({} entries)",
         host_sorted.len(),
         walked.len()
@@ -228,7 +234,8 @@ fn live_tree_matches_walked_directories() {
 
     let walked = walk_dirs(Path::new(STORE));
     assert_eq!(
-        host_sorted, walked,
+        host_sorted,
+        walked,
         "host tree ({} dirs) differs from filesystem walk ({} dirs)",
         host_sorted.len(),
         walked.len()
@@ -268,7 +275,10 @@ fn live_configure_with_no_stores_finds_password_store_as_default() {
     } else {
         "{}".to_string()
     };
-    assert_eq!(settings, expected_settings, "defaultStore.settings mismatch");
+    assert_eq!(
+        settings, expected_settings,
+        "defaultStore.settings mismatch"
+    );
     eprintln!("live_configure verified: defaultStore.path → {host_canonical:?}");
 }
 
@@ -345,16 +355,21 @@ fn pass_cli_is_installed_and_responsive() {
     if skip_if_no_real_store() {
         return;
     }
-    let out = Command::new("pass")
-        .arg("--version")
-        .output();
+    let out = Command::new("pass").arg("--version").output();
     match out {
         Ok(o) if o.status.success() => {
             let v = String::from_utf8_lossy(&o.stdout);
-            let first_line = v.lines().find(|l| l.contains(char::is_numeric)).unwrap_or(v.trim());
+            let first_line = v
+                .lines()
+                .find(|l| l.contains(char::is_numeric))
+                .unwrap_or(v.trim());
             eprintln!("pass CLI present: {first_line}");
         }
-        Ok(o) => panic!("`pass --version` exited {}: {}", o.status, String::from_utf8_lossy(&o.stderr)),
+        Ok(o) => panic!(
+            "`pass --version` exited {}: {}",
+            o.status,
+            String::from_utf8_lossy(&o.stderr)
+        ),
         Err(e) => panic!("`pass --version` could not run: {e}"),
     }
     let _ = PathBuf::from(STORE);

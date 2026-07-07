@@ -12,9 +12,9 @@ use zpwrchrome_host::extensions::run_command::{exec, RunSpawnRequest};
 
 fn req(argv: &[&str]) -> RunSpawnRequest {
     RunSpawnRequest {
-        argv:      argv.iter().map(|s| s.to_string()).collect(),
-        cwd:       String::new(),
-        env:       HashMap::new(),
+        argv: argv.iter().map(|s| s.to_string()).collect(),
+        cwd: String::new(),
+        env: HashMap::new(),
         timeoutMs: None,
     }
 }
@@ -46,9 +46,11 @@ fn nonzero_exit_propagates_status_code() {
 #[test]
 fn stderr_captured_separately_from_stdout() {
     let r = exec(&req(&[
-        "/bin/sh", "-c",
+        "/bin/sh",
+        "-c",
         "echo to-out; echo to-err 1>&2; exit 0",
-    ])).unwrap();
+    ]))
+    .unwrap();
     assert_eq!(r.code, 0);
     assert!(r.stdout.contains("to-out"));
     assert!(r.stderr.contains("to-err"));
@@ -61,9 +63,16 @@ fn timeout_kills_long_running_child_and_reports_124() {
     let mut req = req(&["/bin/sh", "-c", "sleep 30"]);
     req.timeoutMs = Some(200);
     let r = exec(&req).unwrap();
-    assert_eq!(r.code, 124, "timeout-kill should report 124 (coreutils convention)");
+    assert_eq!(
+        r.code, 124,
+        "timeout-kill should report 124 (coreutils convention)"
+    );
     assert!(r.stderr.contains("killed after"), "stderr={:?}", r.stderr);
-    assert!(r.durationMs < 2000, "took {}ms — child wasn't killed promptly", r.durationMs);
+    assert!(
+        r.durationMs < 2000,
+        "took {}ms — child wasn't killed promptly",
+        r.durationMs
+    );
 }
 
 #[test]
@@ -78,7 +87,8 @@ fn empty_argv_via_outer_wrapper_would_fail_but_exec_panic_guarded() {
 #[test]
 fn env_overrides_are_visible_to_child() {
     let mut req = req(&["/bin/sh", "-c", "echo $ZPWR_TEST_VAR"]);
-    req.env.insert("ZPWR_TEST_VAR".into(), "zpwr-payload".into());
+    req.env
+        .insert("ZPWR_TEST_VAR".into(), "zpwr-payload".into());
     let r = exec(&req).unwrap();
     assert_eq!(r.code, 0);
     assert_eq!(r.stdout.trim_end(), "zpwr-payload");
@@ -101,19 +111,24 @@ fn large_stdout_is_truncated_at_cap_and_flag_set() {
     // `truncated`. The child must still complete (we drain past the cap to
     // avoid blocking it on a full pipe).
     let r = exec(&req(&[
-        "/bin/sh", "-c",
-        "head -c 200000 /dev/urandom | base64",   // ~270 KiB of base64
-    ])).unwrap();
+        "/bin/sh",
+        "-c",
+        "head -c 200000 /dev/urandom | base64", // ~270 KiB of base64
+    ]))
+    .unwrap();
     assert_eq!(r.code, 0);
     assert!(r.truncated, "expected truncation flag on >64 KiB output");
-    assert!(r.stdout.len() <= 64 * 1024,
-        "captured {} bytes, cap is 64 KiB", r.stdout.len());
+    assert!(
+        r.stdout.len() <= 64 * 1024,
+        "captured {} bytes, cap is 64 KiB",
+        r.stdout.len()
+    );
 }
 
 #[test]
 fn duration_ms_reflects_elapsed_wall_time() {
     let r = exec(&req(&["/bin/sh", "-c", "sleep 0.1"])).unwrap();
     assert_eq!(r.code, 0);
-    assert!(r.durationMs >= 90,  "expected >=90ms, got {}", r.durationMs);
-    assert!(r.durationMs < 5000, "expected <5s, got {}",   r.durationMs);
+    assert!(r.durationMs >= 90, "expected >=90ms, got {}", r.durationMs);
+    assert!(r.durationMs < 5000, "expected <5s, got {}", r.durationMs);
 }

@@ -33,9 +33,12 @@ pub fn otp(request: &request) {
         response::SendErrorAndExit(
             errors::Code::InvalidPasswordFileExtension,
             Some(response::params_of(&[
-                (field::MESSAGE, "The requested password file does not have the expected '.gpg' extension"),
-                (field::ACTION,  "otp"),
-                (field::FILE,    &request.File),
+                (
+                    field::MESSAGE,
+                    "The requested password file does not have the expected '.gpg' extension",
+                ),
+                (field::ACTION, "otp"),
+                (field::FILE, &request.File),
             ])),
         );
     }
@@ -46,8 +49,11 @@ pub fn otp(request: &request) {
             response::SendErrorAndExit(
                 errors::Code::InvalidPasswordStore,
                 Some(response::params_of(&[
-                    (field::MESSAGE,  "The password store is not present in the list of stores"),
-                    (field::ACTION,   "otp"),
+                    (
+                        field::MESSAGE,
+                        "The password store is not present in the list of stores",
+                    ),
+                    (field::ACTION, "otp"),
                     (field::STORE_ID, &request.StoreID),
                 ])),
             );
@@ -60,10 +66,10 @@ pub fn otp(request: &request) {
             response::SendErrorAndExit(
                 errors::Code::InaccessiblePasswordStore,
                 Some(response::params_of(&[
-                    (field::MESSAGE,    "The password store is not accessible"),
-                    (field::ACTION,     "otp"),
-                    (field::ERROR,      &e),
-                    (field::STORE_ID,   &store.ID),
+                    (field::MESSAGE, "The password store is not accessible"),
+                    (field::ACTION, "otp"),
+                    (field::ERROR, &e),
+                    (field::STORE_ID, &store.ID),
                     (field::STORE_NAME, &store.Name),
                     (field::STORE_PATH, &store.Path),
                 ])),
@@ -85,11 +91,11 @@ pub fn otp(request: &request) {
             response::SendErrorAndExit(
                 errors::Code::UnableToDecryptPasswordFile,
                 Some(response::params_of(&[
-                    (field::MESSAGE,    "Unable to spawn `pass otp`"),
-                    (field::ACTION,     "otp"),
-                    (field::ERROR,      &e.to_string()),
-                    (field::FILE,       &request.File),
-                    (field::STORE_ID,   &store.ID),
+                    (field::MESSAGE, "Unable to spawn `pass otp`"),
+                    (field::ACTION, "otp"),
+                    (field::ERROR, &e.to_string()),
+                    (field::FILE, &request.File),
+                    (field::STORE_ID, &store.ID),
                     (field::STORE_NAME, &store.Name),
                     (field::STORE_PATH, &store.Path),
                 ])),
@@ -101,11 +107,11 @@ pub fn otp(request: &request) {
         response::SendErrorAndExit(
             errors::Code::UnableToDecryptPasswordFile,
             Some(response::params_of(&[
-                (field::MESSAGE,    "`pass otp` failed"),
-                (field::ACTION,     "otp"),
-                (field::ERROR,      stderr.trim()),
-                (field::FILE,       &request.File),
-                (field::STORE_ID,   &store.ID),
+                (field::MESSAGE, "`pass otp` failed"),
+                (field::ACTION, "otp"),
+                (field::ERROR, stderr.trim()),
+                (field::FILE, &request.File),
+                (field::STORE_ID, &store.ID),
                 (field::STORE_NAME, &store.Name),
                 (field::STORE_PATH, &store.Path),
             ])),

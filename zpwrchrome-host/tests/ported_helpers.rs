@@ -29,7 +29,13 @@ fn detect_gpg_recipients_reads_gpg_id_file() {
     let target = d.join("amazon.com.gpg");
     fs::write(&target, "enc").unwrap();
     let r = DetectGpgRecipients(&target).unwrap();
-    assert_eq!(r, vec!["alice@example.com".to_string(), "bob@example.com".to_string()]);
+    assert_eq!(
+        r,
+        vec![
+            "alice@example.com".to_string(),
+            "bob@example.com".to_string()
+        ]
+    );
     let _ = fs::remove_dir_all(&d);
 }
 
@@ -48,11 +54,21 @@ fn detect_gpg_recipients_walks_up_to_find_gpg_id() {
 #[test]
 fn detect_gpg_recipients_handles_crlf_line_endings() {
     let d = tempdir("rec3");
-    fs::write(d.join(".gpg-id"), "alice@example.com\r\nbob@example.com\r\n").unwrap();
+    fs::write(
+        d.join(".gpg-id"),
+        "alice@example.com\r\nbob@example.com\r\n",
+    )
+    .unwrap();
     let target = d.join("x.gpg");
     fs::write(&target, "enc").unwrap();
     let r = DetectGpgRecipients(&target).unwrap();
-    assert_eq!(r, vec!["alice@example.com".to_string(), "bob@example.com".to_string()]);
+    assert_eq!(
+        r,
+        vec![
+            "alice@example.com".to_string(),
+            "bob@example.com".to_string()
+        ]
+    );
     let _ = fs::remove_dir_all(&d);
 }
 
