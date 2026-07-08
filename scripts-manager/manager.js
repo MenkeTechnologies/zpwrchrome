@@ -73,6 +73,7 @@ function send(msg) {
 // ------------------- Tabs -------------------
 document.querySelectorAll(".tab").forEach((el) => {
   el.addEventListener("click", () => {
+    if (!el.dataset.tab) return;   // tab-link (e.g. ◱ Dashboard) — let the <a href> navigate natively
     document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
     document.querySelectorAll(".pane").forEach((p) => p.classList.remove("active"));
     el.classList.add("active");

@@ -135,6 +135,8 @@ body {
   transition: all .15s;
 }
 .tab:hover { color: var(--text); background: var(--bg-hover); }
+.tab-link { text-decoration: none; display: inline-flex; align-items: center; gap: 5px; color: var(--cyan); }
+.tab-link:hover { color: var(--cyan); background: var(--bg-hover); border-bottom-color: var(--cyan); }
 .tab.active {
   color: var(--cyan);
   border-bottom-color: var(--cyan);

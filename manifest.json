@@ -3,7 +3,7 @@
   "name": "zpwrchrome",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6OhpJMWcVtB0WUKsK5kzNBEX0mKzrbXq8TgVgffkBZ0LfBE5+VWFH0f33xn6tY01d1nBPbXJtYNO5oE06UWObwCgvRyeYqBCCW3BPCIOFSKPpGyHswcxE+QKyIvt+zIwO8FN+VJgqnyc8ibUUFaFwPRzBlrwcPqRRnQHS8FKlH0WbqLS12zBwSI6/WLO1qJfmW2UEjhbsy26APKfPwaY6mZfzR7v8QcRJ3XKhPviCfqQ8+91LUmXzDbffYqp64uPnyXqcbyM55/9QXaHTRQx2aDe5fPJfooxoyaIAYfMKlPtmQ18we3p25aQZDz3thAAMWK0lXAEQsIizGu6qjAAJwIDAQAB",
   "short_name": "zpwrchrome",
-  "version": "0.22.21",
+  "version": "0.22.22",
   "description": "Browser power-tool: UNIX `pass` integration (browserpass-compatible) + segmented download manager (default Chrome takeover) + JetBrains-style tab switcher with MRU/scenes/opener-tree/minimap + fzf history search + Tampermonkey-equivalent userscripts + full-page screenshot + Wappalyzer-compatible tech detection + cyberpunk page-theme injector + Turn Off the Lights cinema dimmer + JSON viewer + User-Agent switcher + find-in-all-tabs. Cyberpunk HUD by MenkeTechnologies.",
   "author": "MenkeTechnologies",
   "homepage_url": "https://github.com/MenkeTechnologies/zpwrchrome",
