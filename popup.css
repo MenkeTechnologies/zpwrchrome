@@ -70,12 +70,19 @@ html, body {
 }
 
 .header {
-  display: grid; grid-template-columns: auto 1fr auto;
-  align-items: center; gap: 14px;
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr);
+  grid-template-areas:
+    "title search"
+    "hint  hint";
+  align-items: center; gap: 8px 14px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, #070714, #0a0a14);
 }
+.header .title { grid-area: title; }
+.header .search { grid-area: search; }
+.header .hint { grid-area: hint; }
 
 .title {
   font-family: 'Orbitron', 'Share Tech Mono', monospace;
@@ -104,7 +111,7 @@ html, body {
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
-.hint { font-size: 9.5px; color: var(--text-muted); letter-spacing: 1.5px; white-space: nowrap; }
+.hint { font-size: 9.5px; color: var(--text-muted); letter-spacing: 1.5px; white-space: normal; line-height: 1.6; }
 .hint a {
   color: var(--cyan);
   text-decoration: none;
