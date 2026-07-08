@@ -933,6 +933,12 @@ document.addEventListener("keydown", (e) => {
 });
 
 // Dashboard link in the header
+document.getElementById("open-dashboard").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/dashboard.html") });
+  window.close();
+});
+
 document.getElementById("open-scripts").addEventListener("click", (e) => {
   e.preventDefault();
   chrome.tabs.create({ url: chrome.runtime.getURL("scripts-manager/manager.html") });

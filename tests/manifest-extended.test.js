@@ -62,7 +62,7 @@ test("manifest action popup points at popup.html", () => {
 });
 
 test("manifest options_ui opens scripts manager in a tab", () => {
-  assert.equal(manifest.options_ui.page, "scripts-manager/manager.html");
+  assert.equal(manifest.options_ui.page, "scripts-manager/dashboard.html");
   assert.equal(manifest.options_ui.open_in_tab, true);
 });
 
