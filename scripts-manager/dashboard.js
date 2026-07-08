@@ -8,6 +8,9 @@
 // Each tile is an <a href> to another scripts-manager page, so plain click navigates this tab and
 // ⌘/Ctrl/middle-click opens it in a new tab via the browser's native anchor handling.
 
+// Shared cross-page top nav (auto-injects on import) — same bar every other page has.
+import "../lib/page-nav.js";
+
 "use strict";
 
 // ---------------------------------------------------------------- catalog
