@@ -67,9 +67,9 @@ test("manager.html fallback banner explains the three-step native-mode path", ()
   assert.match(html, /Developer mode/);
 });
 
-test("manifest.json routes options_ui to scripts-manager/manager.html", () => {
+test("manifest.json routes options_ui to scripts-manager/dashboard.html", () => {
   const manifest = JSON.parse(read("manifest.json"));
-  assert.equal(manifest.options_ui.page, "scripts-manager/manager.html");
+  assert.equal(manifest.options_ui.page, "scripts-manager/dashboard.html");
   assert.equal(manifest.options_ui.open_in_tab, true);
 });
 

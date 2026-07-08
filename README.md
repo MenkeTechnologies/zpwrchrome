@@ -9,7 +9,7 @@
 
 [![CI](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zpwrchrome/actions/workflows/ci.yml)
 [![Manifest](https://img.shields.io/badge/manifest-v3-05d9e8.svg)](manifest.json)
-[![Commands](https://img.shields.io/badge/commands-54-ff2a6d.svg)](#0x02-keyboard-commands)
+[![Commands](https://img.shields.io/badge/commands-55-ff2a6d.svg)](#0x02-keyboard-commands)
 [![Theme](https://img.shields.io/badge/companion-theme-d300c5.svg)](theme/)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zpwrchrome/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -18,11 +18,11 @@
 
 > *"UNIX `pass` in the browser. Segmented download manager that owns the default. JetBrains-style tab switcher. fzf history. Tampermonkey-equivalent userscripts."*
 >
-> *"One extension, 54 commands, zero compromises."*
+> *"One extension, 55 commands, zero compromises."*
 
 ## `[CYBERPUNK HUD]`
 
-A Chrome MV3 extension that bundles every daily-driver browser tool into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, a Tampermonkey-equivalent userscript engine, a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG, a Wappalyzer-compatible technology detector that fingerprints the active page against a vendored 3,993-tech corpus, a cyberpunk page-theme injector that paints arbitrary pages with the strykelang HUD palette, a Turn Off the Lights cinema dimmer that lifts `<video>` above a dark overlay, an auto-detected JSON viewer + a sibling XML viewer (covers `application/xml`, `+xml` vendor types, SVG, RSS, Atom, plist, KML, GPX, …), a User-Agent switcher backed by `chrome.declarativeNetRequest` dynamic rules, a ModHeader-style request/response header + URL redirect manager (multi-profile, also via `chrome.declarativeNetRequest`), and a find-in-all-tabs full-text search. 50 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
+A Chrome MV3 extension that bundles every daily-driver browser tool into one toolbar icon: a browserpass-compatible UNIX `pass` integration (fill / copy / OTP / auto-submit / basic-auth injection / full-page CRUD manager / profile + credit-card autofill), a segmented multi-connection download manager that intercepts every browser download by default (HEAD probe + parallel `Range` GETs via a vendored Rust host), a JetBrains-style tab switcher with cross-window MRU + named scenes + opener-tree + minimap, an fzf-fuzzy search over up to 5000 browser-history entries, a Tampermonkey-equivalent userscript engine, a full-page screenshot capture that scrolls the active tab and stitches the tiles into one PNG, a Wappalyzer-compatible technology detector that fingerprints the active page against a vendored 3,993-tech corpus, a cyberpunk page-theme injector that paints arbitrary pages with the strykelang HUD palette, a Turn Off the Lights cinema dimmer that lifts `<video>` above a dark overlay, an auto-detected JSON viewer + a sibling XML viewer (covers `application/xml`, `+xml` vendor types, SVG, RSS, Atom, plist, KML, GPX, …), a User-Agent switcher backed by `chrome.declarativeNetRequest` dynamic rules, a ModHeader-style request/response header + URL redirect manager (multi-profile, also via `chrome.declarativeNetRequest`), and a find-in-all-tabs full-text search. 51 commands bindable to keyboard shortcuts. Built by [MenkeTechnologies](https://github.com/MenkeTechnologies), Manifest V3, zero JS runtime dependencies.
 
 ### [`Live Site`](https://menketechnologies.github.io/zpwrchrome/) &middot; [`Source`](https://github.com/MenkeTechnologies/zpwrchrome) &middot; [`Theme`](theme/)
 
@@ -48,7 +48,7 @@ A Chrome MV3 extension that bundles every daily-driver browser tool into one too
 
 ## [0x00] OVERVIEW
 
-`zpwrchrome` is a Chrome MV3 extension that bundles six daily-driver capabilities into one toolbar icon: UNIX `pass` integration (with full-page CRUD manager + profile / credit-card autofill), a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher with fzf history search, a Tampermonkey-equivalent userscript engine, full-page screenshot capture, and a Wappalyzer-compatible technology detector. 54 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
+`zpwrchrome` is a Chrome MV3 extension that bundles six daily-driver capabilities into one toolbar icon: UNIX `pass` integration (with full-page CRUD manager + profile / credit-card autofill), a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher with fzf history search, a Tampermonkey-equivalent userscript engine, full-page screenshot capture, and a Wappalyzer-compatible technology detector. 55 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via `chrome.storage.session`, survives service-worker restarts
 - **Alt+T popup** — the cyberpunk HUD with 12 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History / **Pass** / **Tech**), Cmd+1–0 jumps for the first ten, Cmd+P → Pass, Cmd+K → Tech, fzf scoring on every row
@@ -87,7 +87,7 @@ cvv: 123
 - **Wappalyzer-compatible technology detection** — `lib/wappalyzer/engine.js` runs the vendored 3,993-fingerprint HTTPArchive/wappalyzer corpus (`lib/wappalyzer/data/technologies.json`, GPL-3 isolated under `LICENSE-WAPPALYZER`; engine code stays MIT). On every main_frame navigation: `webRequest.onCompleted` captures response headers per tabId; `webNavigation.onCompleted` injects `scrapeSignals` to harvest HTML / scripts / meta / cookies / window globals + pre-flights all 1,045 unique dom-selector rules in one pass; `detect()` runs the merged signals against the compiled corpus, implementing every matcher group (html / scripts / scriptSrc / text / url / meta / headers / cookies / js / dom — exists, text, attributes, properties) + implies/requires/excludes graph rewrites + `\\;version:\\1` backref resolution. The match count shares one toolbar badge with downloads + pass via `applyMultiplexedBadge` (see below); Cmd+K from the popup jumps to the 12th `Tech` category; `⤓ Export` ships the detected stack as JSON (filename `tech-<host>-<iso>.json`). `scripts/vendor-wappalyzer.sh` re-runs the corpus merge from a fresh upstream clone
 - **ModHeader-style HTTP header manager** — multi-profile request/response header editor + URL redirect manager. Each profile owns N rules; only the **active** profile's enabled rules are projected into `chrome.declarativeNetRequest` dynamic rules (id range 2000-2999, sibling to the UA switcher's 1001). Rule kinds: **request header** (set / append / remove), **response header** (set / append / remove), **URL redirect** (`urlFilter`-scoped). Each rule carries its own `urlFilter` so a single profile can have per-site overrides. Settings UI at `scripts-manager/modheader.html` — sidebar profile list, click-to-activate, inline rule editor with name / value / op / filter fields; storage under `chrome.storage.local["modheader.state"]`. Survives SW suspension (rules re-applied on boot)
 - **Three-channel toolbar badge** — single Chrome action badge multiplexes downloads (cyan), tech detection (orange), and pass matches (magenta). The visible NUMBER is the dominant counter by priority (downloads → tech → pass) and the COLOR follows it. Trailing letter tags spell out which other counters are coexisting: `t` = tech also detected, `l` = login (pass) also matching. So a tab with 10 active downloads + 5 tech + 2 pass renders `10tl`; 5 tech + 2 pass renders `5l`; 2 pass alone renders `2`. Tooltip spells out the plain-English breakdown for any state. `refreshActiveTabBadge` is the one orchestrator that repaints on `chrome.tabs.onActivated` + `chrome.tabs.onUpdated`
-- **50 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
+- **51 user-bindable commands** — Chrome caps default-suggested at 4; everything else binds at `chrome://extensions/shortcuts` (single-tab ops, batch ops, numeric jumps, clipboard utilities, pass-* + dl-*)
 - **Sub-popup live filter** — type to filter open + closed tabs; `↑`/`↓`/`Enter`/`Delete`/`Esc` nav
 - **Reader mode** — `modal/reader-mode.js` strips the active page to its main article and renders it in a fixed-position overlay with the strykelang HUD palette. Heuristic extraction (largest `<article>` → `<main>` / `[role="main"]` → densest paragraph cluster outside noise containers); cloned + sanitized DOM (scripts, iframes, nav, forms, inline event handlers stripped); A−/A+ font controls + Esc to close. Settings UI at `scripts-manager/reader-mode.html` — four themes (cyberpunk / classic-dark / classic-light / sepia), three font families (mono / serif / sans), font-size / line-width / line-height sliders, optional CRT scanlines. Original page DOM untouched
 - **Post-download commands** — per-rule glob → argv-style command, fired by the SW the moment a download flips `active → done`. Rules are matched **top-to-bottom first-wins** against the finished file's basename (`*.zip`, `*.tar.gz`, case-insensitive). Argv is parsed shlex-style on the JS side and shipped as an array to the host's `run.spawn` action — `std::process::Command::new(argv[0]).args(argv[1..])` with **no shell invocation anywhere on the path**, so `{path}` substitution can't introduce a quoting or injection surface. Per-rule `confirm` flag pops a Chrome notification with Run / Skip buttons (pending argv survives SW suspends via `chrome.storage.session`). Placeholders: `{path}`, `{dir}`, `{name}`, `{base}`, `{ext}`. Output stdout/stderr are captured (64 KiB cap each), exit code is reported, and a 30s default timeout (max 5 min) kills runaways with code 124. Pipes / redirects / && require wrapping in `bash -c '…'` explicitly. Settings UI at `scripts-manager/dl-postcommands.html`
@@ -114,7 +114,7 @@ git clone https://github.com/MenkeTechnologies/zpwrchrome.git
 1. Open `chrome://extensions`
 2. Enable **Developer mode** (top-right)
 3. Click **Load unpacked**, pick the cloned directory
-4. Open `chrome://extensions/shortcuts` to bind any of the 50 user-configurable commands
+4. Open `chrome://extensions/shortcuts` to bind any of the 51 user-configurable commands
 
 #### Native messaging host (required for `pass`, downloads, screenshots)
 
@@ -140,7 +140,7 @@ To upgrade later: `cargo install zpwrchrome-host --force` — the NM manifest al
 
 ## [0x02] KEYBOARD COMMANDS
 
-Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **50** user-bindable, for **54 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
+Chrome’s MV3 manifest allows at most **4** commands with default-suggested keys; the rest are bound by the user at `chrome://extensions/shortcuts`. `zpwrchrome` ships **4** default-keyed and **51** user-bindable, for **55 total** — covering pass actions, download manager, tab switcher, history search, and userscript management.
 
 | Command | Default | Description |
 | --- | --- | --- |
@@ -174,6 +174,7 @@ Chrome’s MV3 manifest allows at most **4** commands with default-suggested key
 | `copy-url` | *(user-set in `chrome://extensions/shortcuts`)* | Copy active tab URL to clipboard |
 | `copy-title-md` | *(user-set in `chrome://extensions/shortcuts`)* | Copy active tab as Markdown link |
 | `bookmark-tab` | *(user-set in `chrome://extensions/shortcuts`)* | Bookmark active tab to Other Bookmarks |
+| `open-dashboard` | *(user-set in `chrome://extensions/shortcuts`)* | Open the zpwrchrome dashboard — a searchable tile grid of every tool, settings page and info screen |
 | `manage-scripts` | *(user-set in `chrome://extensions/shortcuts`)* | Open the userscript manager (Tampermonkey-style) |
 | `save-scene-prompt` | *(user-set in `chrome://extensions/shortcuts`)* | Open popup focused on save-scene input |
 | `restore-scene-1` | *(user-set in `chrome://extensions/shortcuts`)* | Restore scene #1 (newest) — opens a new window with saved tabs |
@@ -336,10 +337,10 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 
 | | |
 | --- | --- |
-| Total chrome.commands | **54** (manifest cap on default keys is 4 — this ext ships 4; the other 50 are user-bindable at `chrome://extensions/shortcuts`) |
+| Total chrome.commands | **55** (manifest cap on default keys is 4 — this ext ships 4; the other 51 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **3012** `node:test` cases (JS) + 127 `cargo test` cases (Rust) |
+| Test suite | **3022** `node:test` cases (JS) + 127 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -391,7 +392,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 3012 tests across 187 files. Covers:
+Stock Node ≥ 20, no external dependencies. 3022 tests across 188 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes

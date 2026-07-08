@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // dashboard</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header class="banner">
+    <div class="banner-inner">
+      <div class="brand">
+        <div class="logo">⚡</div>
+        <div class="brand-text">
+          <h1>zpwrchrome<sup>®</sup></h1>
+          <p class="sub">power-tool dashboard · <span id="ver">v?</span> · by <a href="https://github.com/MenkeTechnologies" target="_blank" rel="noopener">MenkeTechnologies</a></p>
+        </div>
+      </div>
+      <div class="banner-stats">
+        <div class="bstat"><span class="n" id="stat-tools">0</span><span class="l">tools</span></div>
+        <div class="bstat"><span class="n" id="stat-scripts">–</span><span class="l">userscripts</span></div>
+        <div class="bstat"><span class="n" id="stat-dl">–</span><span class="l">downloads</span></div>
+      </div>
+      <div class="banner-actions">
+        <a class="link" href="https://github.com/MenkeTechnologies/zpwrchrome" target="_blank" rel="noopener" title="GitHub">⌥</a>
+        <a class="link" href="https://menketechnologies.github.io/zpwrchrome/" target="_blank" rel="noopener" title="Docs">⌘</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <span class="dash-title">// tiles</span>
+    <input class="search" id="search" type="search" placeholder="filter // tool, setting, page" autocomplete="off" spellcheck="false" autofocus>
+    <span class="count" id="count"></span>
+  </div>
+
+  <main id="grid">
+    <div class="empty">loading…</div>
+  </main>
+
+  <div class="footer">
+    <span><kbd>/</kbd>search</span>
+    <span><kbd>↑↓←→</kbd>move focus</span>
+    <span><kbd>Enter</kbd>open</span>
+    <span><kbd>⌘/Ctrl+click</kbd>open in new tab</span>
+    <span><kbd>drag</kbd>reorder (saved)</span>
+    <span><kbd>Esc</kbd>clear filter</span>
+  </div>
+
+  <script src="dashboard.js" type="module"></script>
+</body>
+</html>
