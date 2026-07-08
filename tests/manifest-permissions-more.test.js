@@ -55,7 +55,7 @@ test("content script excludes Chrome Web Store URLs", () => {
 });
 
 test("options_ui opens scripts-manager in a full tab", () => {
-  assert.equal(manifest.options_ui.page, "scripts-manager/manager.html");
+  assert.equal(manifest.options_ui.page, "scripts-manager/dashboard.html");
   assert.equal(manifest.options_ui.open_in_tab, true);
 });
 

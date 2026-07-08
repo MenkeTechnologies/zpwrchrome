@@ -127,6 +127,7 @@ async function dispatch(command) {
   if (command === "copy-url")             return copyActiveUrl();
   if (command === "copy-title-md")        return copyActiveTitleMd();
   if (command === "bookmark-tab")         return bookmarkActive();
+  if (command === "open-dashboard")       return openDashboard();
   if (command === "manage-scripts")       return openScriptsManager();
   if (command === "save-scene-prompt")    return chrome.action.openPopup();
   if (command.startsWith("restore-scene-")) return restoreSceneByOrdinal(command);
@@ -1852,6 +1853,7 @@ const CTX_PG_LINKS   = "zpwrchrome-pg-links";
 const CTX_PG_IMAGES  = "zpwrchrome-pg-images";
 const CTX_PG_MEDIA   = "zpwrchrome-pg-media";
 const CTX_PG_ZCITE   = "zpwrchrome-pg-zcite";
+const CTX_ACT_DASH   = "zpc-act-dashboard";
 const CTX_ACT_MGR    = "zpc-act-manager";
 const CTX_ACT_SCR    = "zpc-act-scripts";
 const CTX_ACT_PASS   = "zpc-act-pass";
@@ -1935,6 +1937,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   create({ id: CTX_SUB_HELP,   title: "Help",                            contexts: act });
 
   // === Manager pages submenu ====================================
+  create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_DASH,   title: "Open dashboard (all tools)", contexts: act });
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_MGR,    title: "Open download manager",   contexts: act });
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_SCR,    title: "Open userscript manager", contexts: act });
   create({ parentId: CTX_SUB_MGRS, id: CTX_ACT_PASS,   title: "Open pass manager",       contexts: act });
@@ -1969,6 +1972,7 @@ if (chrome.contextMenus) {
     // Append #downloadDir for the change-folder item so the General settings
     // page can scroll to the field and focus its input.
     const pages = {
+      [CTX_ACT_DASH]:   "/scripts-manager/dashboard.html",
       [CTX_ACT_MGR]:    "/scripts-manager/downloads.html",
       [CTX_ACT_SCR]:    "/scripts-manager/manager.html",
       [CTX_ACT_PASS]:   "/scripts-manager/pass.html",
@@ -2065,6 +2069,18 @@ async function openHistoryInPopup() {
 
 async function openScriptsManager() {
   const url = chrome.runtime.getURL("scripts-manager/manager.html");
+  await chrome.tabs.create({ url });
+}
+
+// The dashboard hub — focus an already-open tab instead of piling up duplicates.
+async function openDashboard() {
+  const url = chrome.runtime.getURL("scripts-manager/dashboard.html");
+  const [existing] = await chrome.tabs.query({ url });
+  if (existing) {
+    await chrome.tabs.update(existing.id, { active: true });
+    if (existing.windowId != null) await chrome.windows.update(existing.windowId, { focused: true }).catch(() => {});
+    return;
+  }
   await chrome.tabs.create({ url });
 }
 
