@@ -411,7 +411,39 @@ Color anchors (RGB triplets in \`theme/manifest.json\`):
                                                      └──────────────────┘
 \`\`\`
 
-The service worker holds no globals — MRU lives in \`chrome.storage.session\`. Pure helpers in \`lib/util.js\` (JS) and \`zpwrchrome-host/src/{ported,extensions}/\` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / \`cargo test\`. The native host is the Rust port of \`browserpass-native\` v3.1.2 plus three extension actions (\`otp\`, \`search\`, \`dl.*\`); each request spawns a fresh process (BP protocol) with download workers detaching to keep state under \`$XDG_CACHE_HOME/zpwrchrome/dl/\`.
+The service worker holds no globals — MRU lives in \`chrome.storage.session\`. Pure helpers in \`lib/util.js\` (JS) and \`zpwrchrome-host/src/{ported,extensions}/\` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / \`cargo test\`. The native host is a **1:1 Rust port of \`browserpass-native\` v3.1.2**: \`zpwrchrome-host/src/ported/**\` mirrors the upstream Go source file-for-file (per-fn \`// go:NN\` citations, Go comments carried over verbatim — see \`zpwrchrome-host/docs/port_report.html\`), while \`src/extensions/**\` layers on six Rust-only tool families upstream never had. One binary serves both; each request is one process spawn (BP process model), with download workers detaching to keep state under \`$XDG_CACHE_HOME/zpwrchrome/dl/\`.
+
+### Additive-action multiplexing over the browserpass wire
+
+Every request is one native-messaging frame on stdin. \`src/bin/zpwrchrome_host.rs\` reads it once via \`frame::read_msg\`, then parses it **twice**: first as a raw \`serde_json::Value\` to read the \`"action"\` string, and — only for upstream actions — again into the ported \`request\` struct, so the strict-port struct never grows extension fields. Dispatch is **additive-first**: the extension action names are matched *before* control ever reaches the ported switch. Because \`browserpass-extension\` never emits any additive name, a stock browserpass client talking to this binary gets byte-identical upstream behavior.
+
+1. \`dl.*\` (prefix) → \`extensions::dl::dispatch_dl\`
+2. \`otp\` / \`search\` → \`extensions::otp\` / \`extensions::search\`
+3. \`run.spawn\` → \`extensions::run_command\`
+4. \`host.crawl\` / \`host.exec\` → \`extensions::host\`
+5. \`zcite.save\` → \`extensions::zcite\`
+6. anything else → \`process_dispatch\` — the byte-for-byte mirror of upstream \`request/process.go\`: \`configure\` / \`list\` / \`tree\` / \`fetch\` / \`save\` / \`delete\` / \`echo\`
+
+### The six additive tool families (\`src/extensions/\`)
+
+| Module | Wire action(s) | What it does |
+| --- | --- | --- |
+| \`dl\` | \`dl.add\` / \`list\` / \`pause\` / \`resume\` / \`cancel\` / \`remove\` / \`clear\`, \`dl.openDir\`, \`dl.openFile\`, \`dl.writeFile\`, \`dl.writeFileChunk\` | Segmented multi-connection download manager (HEAD probe → N concurrent \`Range\` GETs → pre-allocated dest file); also the chunked file sink the full-page screenshot streams PNG tiles into |
+| \`otp\` | \`otp\` | Shells \`pass otp <path>\` for the current TOTP code — browserpass v3 dropped OTP, so it is re-added host-side |
+| \`search\` | \`search\` | Whole-store fuzzy search over every configured store's \`.gpg\` paths (substring outranks subsequence), so large stores don't round-trip every path per keystroke |
+| \`host\` | \`host.crawl\` / \`host.exec\` | Filesystem crawl + program exec, delegated to \`zwire_host::api\` (see below) |
+| \`run_command\` | \`run.spawn\` | Post-download argv execution via \`std::process::Command\` (no shell); stdout/stderr capped 64 KiB each, 30 s default / 5 min max timeout |
+| \`zcite\` | \`zcite.save\` | Writes extracted CSL-JSON into zcite's inbox, path resolved with \`dirs::data_dir()\` to match zcite-core exactly |
+
+Identity / credit-card autofill (\`profile/*\`, \`creditcard/*\`) is **not** a separate wire action — it rides the ported \`fetch\`, then \`lib/identity-tokens.js\` + the page-injected \`fillIdentityForm()\` map the decrypted key:value body onto WHATWG autocomplete tokens client-side.
+
+### Transport
+
+\`src/frame.rs\` is the whole wire: a little-endian \`u32\` length prefix, then that many JSON bytes, capped at \`MAX_MSG\` = 1 MiB (Chrome's host↔extension ceiling). \`read_msg\` / \`write_msg\` are the only I/O primitives; every handler emits its envelope through \`ported::response\` (\`SendOk\` / \`SendErrorAndExit\` / \`SendRaw\`). The download family's HTTP is \`ureq\` 2.10 with \`default-features = false\` + the \`tls\` (rustls) and \`native-certs\` features — pure-Rust TLS, no OpenSSL, no OS TLS, so it cross-compiles to macOS / Linux / future arches without a C dependency. \`serde\` / \`serde_json\` / \`dirs\` round out the crate.
+
+### \`zwire-host\` reuse — one native agent, two front-ends
+
+\`host.crawl\` / \`host.exec\` do not re-implement a recursive walk or a capture-stdout exec: they call \`zwire_host::api::walk\` and \`zwire_host::api::exec\`, the **same native capability library the [zwire](https://github.com/MenkeTechnologies/zwire-host) browser agent runs**. \`zpwrchrome-host/Cargo.toml\` pins it as a git dependency (\`tag = "v0.3.0"\`, \`default-features = false\`) so only the light filesystem/exec half compiles in — the heavy \`portable-pty\` / \`sysinfo\` deps stay out of this tree. The zwire browser and this NM host share the exact crawl/exec code path.
 
 ---
 
@@ -470,7 +502,7 @@ zpwrchrome is six daily-driver tools in one extension. Each row names a capabili
 | \`scripts-manager/find-all.{html,css,js}\` + \`lib/find-snippet.js\` | Find-in-all-tabs — fzf-fuzzy search across every open tab's \`innerText\` (parallel scrape capped at 200 KB / tab). Enter activates the chosen tab and scrolls to the match via \`window.find()\` |
 | \`modal/json-viewer.js\` + \`lib/json-format.js\` | Auto-detects JSON-served pages and replaces \`<pre>\` with a collapsible tree (RFC 6901 pointer copy, prettyPrint / minify toggles, clipboard with \`execCommand\` fallback for non-secure contexts) |
 | \`modal/xml-viewer.js\` + \`lib/xml-format.js\` | Auto-detects XML/SVG/RSS/Atom/plist/KML/GPX served pages and replaces \`<pre>\` with a DOMParser-driven collapsible tree. Attribute coloring, CDATA / comment / PI rendering, XPath copy per node, live filter, prettyPrint / minify / raw toggles, http(s) auto-linkify in text + attribute values |
-| \`zpwrchrome-host/Cargo.toml\` / \`zpwrchrome-host/src/{lib,frame}.rs\` + \`src/ported/**\` + \`src/extensions/**\` + \`src/bin/zpwrchrome_host.rs\` | Rust port of \`browserpass-native\` v3.1.2 + extension actions (\`otp\`, \`search\`, \`dl.*\`) over length-prefixed JSON on stdio. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see \`zpwrchrome-host/docs/port_report.html\` |
+| \`zpwrchrome-host/Cargo.toml\` / \`zpwrchrome-host/src/{lib,frame}.rs\` + \`src/ported/**\` + \`src/extensions/**\` + \`src/bin/zpwrchrome_host.rs\` | Rust port of \`browserpass-native\` v3.1.2 + six additive extension modules over length-prefixed JSON on stdio: \`dl\` (\`dl.*\` segmented downloads), \`otp\`, \`search\`, \`host\` (\`host.crawl\` / \`host.exec\` via \`zwire_host::api\`, a git dependency on the [zwire](https://github.com/MenkeTechnologies/zwire-host) agent), \`run_command\` (\`run.spawn\`), \`zcite\` (\`zcite.save\`). Additive actions dispatched *before* the ported upstream switch, so the browserpass wire stays byte-compatible. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see \`zpwrchrome-host/docs/port_report.html\` |
 | \`zpwrchrome-host --install <ext-id>\` (CLI flag on the binary, not a separate script) | Writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir on macOS / Linux. \`allowed_origins\` is set to \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension |
 | \`zpwrchrome-host/tests/ported_*.rs\` + \`extensions_*.rs\` | \`cargo test\` suite — per-fn pins for the port + extensions, end-to-end binary spawn tests, segmented download against a local HTTP fixture |
 | \`docs/index.html\` | GitHub-Pages landing page (regenerated from manifest) |
