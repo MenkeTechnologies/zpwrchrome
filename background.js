@@ -4094,6 +4094,7 @@ if (chrome.notifications?.onClosed) {
   const HOST = "com.zwire.hud";
   const UI_SCHEME_KEY = "ui.scheme";
   const UI_LIGHT_KEY = "ui.light";
+  const UI_PALETTE_KEY = "ui.palette";
   // Echo guards: the value the host last pushed, so our storage writer below
   // doesn't send it straight back and loop.
   let fromHostScheme = null, fromHostLight = null;
@@ -4102,6 +4103,13 @@ if (chrome.notifications?.onClosed) {
     if (!scheme) return;
     fromHostScheme = scheme;
     try { chrome.storage.local.set({ [UI_SCHEME_KEY]: scheme }); } catch (e) {}
+  }
+  // A custom/edited scheme ('custom' / 'custom-N') has no entry in the vendored
+  // color-schemes table, so lib/ui-scheme.js can't render it from a name. Mirror the
+  // host's RESOLVED palette (var→hex) into storage; ui-scheme.js applies it directly.
+  function applyPalette(pal) {
+    if (!pal || typeof pal !== "object" || !Object.keys(pal).length) return;
+    try { chrome.storage.local.set({ [UI_PALETTE_KEY]: pal }); } catch (e) {}
   }
   function applyUi(ui) {
     const light = !!(ui && ui.light);
@@ -4124,13 +4132,14 @@ if (chrome.notifications?.onClosed) {
       if (!m || m.ev !== "pub") return;
       if (m.topic === "scheme" && m.data && m.data.scheme) applyScheme(m.data.scheme);
       else if (m.topic === "ui" && m.data) applyUi(m.data);
+      else if (m.topic === "palette" && m.data) applyPalette(m.data);
     });
     port.onDisconnect.addListener(() => {
       void chrome.runtime.lastError;
       if (!gotMsg) _retry = Math.min(_retry * 2, 300000);   // never connected → likely no host (standalone)
       setTimeout(connect, _retry);
     });
-    try { port.postMessage({ cmd: "sub", topic: "scheme" }); port.postMessage({ cmd: "sub", topic: "ui" }); } catch (e) {}
+    try { port.postMessage({ cmd: "sub", topic: "scheme" }); port.postMessage({ cmd: "sub", topic: "ui" }); port.postMessage({ cmd: "sub", topic: "palette" }); } catch (e) {}
   }
   connect();
 
