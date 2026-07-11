@@ -133,3 +133,78 @@ textarea:focus { outline: none; border-color: var(--cyan); }
 .dim { color: var(--text-muted); }
 .status.ok { color: var(--green); }
 .status.err { color: var(--accent); }
+
+/* Custom-scheme editor swatch grid + saved-preset chips.
+   Ported from zgui-core colorscheme.css (buildEditor / buildPresetChips). */
+.custom-color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 4px; }
+.custom-color-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
+.custom-color-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+.custom-color-input {
+  -webkit-appearance: none;
+  width: 48px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  padding: 2px;
+}
+.custom-color-input::-webkit-color-swatch-wrapper { padding: 0; }
+.custom-color-input::-webkit-color-swatch { border: none; border-radius: 1px; }
+
+.custom-scheme-saved { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.custom-preset-bar { display: flex; align-items: center; gap: 6px; }
+.custom-preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.custom-preset-name {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text);
+  font-size: 11px;
+}
+.custom-preset-name:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 8px var(--cyan-dim); }
+.custom-preset-save, .custom-preset-update, .custom-preset-clear {
+  padding: 5px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, color .15s;
+}
+.custom-preset-save, .custom-preset-update { color: var(--cyan); }
+.custom-preset-save:hover, .custom-preset-update:hover { border-color: var(--cyan); box-shadow: 0 0 8px var(--cyan-dim); }
+.custom-preset-clear { color: var(--text-dim); }
+.custom-preset-clear:hover { border-color: var(--red); color: var(--red); }
+.custom-preset-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.custom-preset-chip:hover { border-color: var(--cyan); }
+.custom-preset-chip.active { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px var(--cyan-dim); }
+.custom-preset-chip-dots { display: flex; gap: 2px; }
+.custom-preset-chip-dot { width: 8px; height: 8px; border-radius: 50%; }
+.custom-preset-chip-name { white-space: nowrap; }
+.custom-preset-del {
+  margin-left: 2px;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-muted);
+  border-radius: 2px;
+}
+.custom-preset-del:hover { color: var(--red); background: rgba(255, 7, 58, 0.12); }
