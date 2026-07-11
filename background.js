@@ -4095,9 +4095,13 @@ if (chrome.notifications?.onClosed) {
   const UI_SCHEME_KEY = "ui.scheme";
   const UI_LIGHT_KEY = "ui.light";
   const UI_PALETTE_KEY = "ui.palette";
+  // The saved custom-scheme LIBRARY (`[theme.schemes]` in ~/.zwire/global.toml):
+  // an ordered array of { name, vars }. Mirrored into storage so our theme injector
+  // can list every fleet-shared custom scheme in its picker, not just the built-ins.
+  const UI_SCHEMES_KEY = "ui.schemes";
   // Echo guards: the value the host last pushed, so our storage writer below
   // doesn't send it straight back and loop.
-  let fromHostScheme = null, fromHostLight = null;
+  let fromHostScheme = null, fromHostLight = null, fromHostPalette = null;
 
   function applyScheme(scheme) {
     if (!scheme) return;
@@ -4109,7 +4113,13 @@ if (chrome.notifications?.onClosed) {
   // host's RESOLVED palette (var→hex) into storage; ui-scheme.js applies it directly.
   function applyPalette(pal) {
     if (!pal || typeof pal !== "object" || !Object.keys(pal).length) return;
+    fromHostPalette = JSON.stringify(pal);
     try { chrome.storage.local.set({ [UI_PALETTE_KEY]: pal }); } catch (e) {}
+  }
+  // Mirror the shared saved-scheme library so theme-injector.js can render its chips.
+  function applySchemes(list) {
+    if (!Array.isArray(list)) return;
+    try { chrome.storage.local.set({ [UI_SCHEMES_KEY]: list }); } catch (e) {}
   }
   function applyUi(ui) {
     const light = !!(ui && ui.light);
@@ -4133,13 +4143,14 @@ if (chrome.notifications?.onClosed) {
       if (m.topic === "scheme" && m.data && m.data.scheme) applyScheme(m.data.scheme);
       else if (m.topic === "ui" && m.data) applyUi(m.data);
       else if (m.topic === "palette" && m.data) applyPalette(m.data);
+      else if (m.topic === "schemes" && m.data) applySchemes(m.data);
     });
     port.onDisconnect.addListener(() => {
       void chrome.runtime.lastError;
       if (!gotMsg) _retry = Math.min(_retry * 2, 300000);   // never connected → likely no host (standalone)
       setTimeout(connect, _retry);
     });
-    try { port.postMessage({ cmd: "sub", topic: "scheme" }); port.postMessage({ cmd: "sub", topic: "ui" }); port.postMessage({ cmd: "sub", topic: "palette" }); } catch (e) {}
+    try { port.postMessage({ cmd: "sub", topic: "scheme" }); port.postMessage({ cmd: "sub", topic: "ui" }); port.postMessage({ cmd: "sub", topic: "palette" }); port.postMessage({ cmd: "sub", topic: "schemes" }); } catch (e) {}
   }
   connect();
 
@@ -4158,6 +4169,15 @@ if (chrome.notifications?.onClosed) {
         const light = !!changes[UI_LIGHT_KEY].newValue;
         if (light !== fromHostLight) {
           try { chrome.runtime.sendNativeMessage(HOST, { ui: { light } }, () => { void chrome.runtime.lastError; }); } catch (e) {}
+        }
+      }
+      // Picking a custom/edited scheme in OUR injector writes ui.palette (the host
+      // has no colour tables for a 'custom-N', so it can't derive it from the name).
+      // Forward the resolved palette so the whole fleet repaints. Skip the host's echo.
+      if (changes[UI_PALETTE_KEY]) {
+        const pal = changes[UI_PALETTE_KEY].newValue;
+        if (pal && typeof pal === "object" && Object.keys(pal).length && JSON.stringify(pal) !== fromHostPalette) {
+          try { chrome.runtime.sendNativeMessage(HOST, { palette: pal }, () => { void chrome.runtime.lastError; }); } catch (e) {}
         }
       }
     });
