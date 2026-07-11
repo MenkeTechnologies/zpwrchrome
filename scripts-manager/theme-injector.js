@@ -2,7 +2,10 @@
 
 import "../lib/page-nav.js";
 import { buildThemeCss } from "../lib/cyber-theme-css.js";
-import { COLOR_SCHEMES, SCHEME_IDS, DEFAULT_SCHEME, themeFor, themeFromVars } from "../lib/color-schemes.js";
+import {
+  COLOR_SCHEMES, SCHEME_IDS, DEFAULT_SCHEME, themeFor, themeFromVars,
+  CUSTOM_EDIT_KEYS, buildCustomScheme,
+} from "../lib/color-schemes.js";
 import { UI_SCHEME_KEY, UI_LIGHT_KEY, UI_PALETTE_KEY } from "../lib/ui-scheme.js";
 
 const STATE_KEY = "theme.injector";
@@ -17,6 +20,9 @@ const DOT_VARS = ["--accent", "--cyan", "--magenta", "--green", "--yellow", "--o
 
 // Custom saved schemes synced from the fleet (populated from ui.schemes storage).
 let customSchemes = [];
+// The un-named live 'custom' edit's full var map (mirrors zgui-core customSchemeVars);
+// persisted in the state bag so an in-progress edit survives a reload.
+let liveCustomVars = {};
 
 const state = {
   bag: {
@@ -29,6 +35,7 @@ const state = {
     darkMode:  false,
     scheme:    DEFAULT_SCHEME,
     palette:   themeFor(DEFAULT_SCHEME),
+    customVars: {},
   },
 };
 
@@ -97,13 +104,19 @@ function buildSchemeGrid() {
 // A custom/edited scheme ('custom' / 'custom-N') has no vendored table entry.
 function isCustomScheme(id) { return id === "custom" || (typeof id === "string" && id.startsWith("custom-")); }
 
+// The raw var→hex map backing any scheme id: a saved preset's vars, the live
+// 'custom' edit's vars, or a built-in table entry. Null for an unknown id.
+function varsForScheme(id) {
+  const m = /^custom-(\d+)$/.exec(id || "");
+  if (m) return customSchemes[Number(m[1])]?.vars || null;
+  if (id === "custom") return liveCustomVars;
+  return COLOR_SCHEMES[id]?.vars || null;
+}
+
 // Resolve any scheme id → the page-recolor palette (built-in table or synced vars).
 function paletteForScheme(id) {
-  const m = /^custom-(\d+)$/.exec(id || "");
-  if (m) {
-    const s = customSchemes[Number(m[1])];
-    if (s && s.vars) return themeFromVars(s.vars);
-  }
+  const v = varsForScheme(id);
+  if (v && Object.keys(v).length) return themeFromVars(v);
   return themeFor(isCustomScheme(id) ? DEFAULT_SCHEME : id);
 }
 
@@ -130,10 +143,215 @@ async function selectScheme(id) {
   // A custom scheme has no vendored colours, so lib/ui-scheme.js renders it from
   // ui.palette. Write the resolved var→hex map; background.js forwards it to the
   // host so the whole fleet repaints. Clear it for a built-in (name is enough).
-  const m = /^custom-(\d+)$/.exec(id);
-  write[UI_PALETTE_KEY] = m ? (customSchemes[Number(m[1])]?.vars || {}) : {};
+  write[UI_PALETTE_KEY] = isCustomScheme(id) ? (varsForScheme(id) || {}) : {};
   await chrome.storage.local.set(write);
+  if (typeof reseedEditor === "function") reseedEditor();
+  renderPresetChips();
   setStatus("scheme: " + schemeLabel(id), "ok");
+}
+
+/* ── Custom-scheme editor + saved-preset library (port of zgui-core colorscheme.js
+ *    buildEditor / buildPresetChips, standalone: chrome.storage instead of ZGui.prefs).
+ *    All persistence rides ui.scheme / ui.palette / ui.schemes so background.js relays
+ *    it to the host → ~/.zwire/global.toml → the whole zwire fleet. ───────────────── */
+
+// The base hex values to seed the editor from: the active scheme's raw vars.
+function currentBaseVars() { return varsForScheme(state.bag.scheme) || COLOR_SCHEMES[DEFAULT_SCHEME].vars; }
+function pickerMap(root) {
+  const m = {};
+  root.querySelectorAll(".custom-color-input").forEach((i) => { m[i.dataset.var] = i.value; });
+  return m;
+}
+
+// Apply an edit from the swatches: build the full scheme (auto glow/dim/bg). If a saved
+// preset is active, overwrite it in place (its chip follows the colours live + Save/Update
+// keep targeting it); otherwise fork to the un-named live 'custom' scheme.
+async function applyCustomEdit(vars) {
+  const m = /^custom-(\d+)$/.exec(state.bag.scheme);
+  if (m && customSchemes[Number(m[1])]) {
+    customSchemes[Number(m[1])].vars = vars;
+    state.bag.palette = themeFromVars(vars);
+    markActiveScheme(); updatePreview(); renderPresetChips();
+    await chrome.storage.local.set({
+      [STATE_KEY]: state.bag,
+      [UI_PALETTE_KEY]: vars,
+      [UI_SCHEMES_KEY]: customSchemes,
+    });
+  } else {
+    liveCustomVars = vars;
+    state.bag.customVars = vars;
+    state.bag.scheme = "custom";
+    state.bag.palette = themeFromVars(vars);
+    markActiveScheme(); updatePreview(); renderPresetChips();
+    await chrome.storage.local.set({
+      [STATE_KEY]: state.bag,
+      [UI_SCHEME_KEY]: "custom",
+      [UI_PALETTE_KEY]: vars,
+    });
+  }
+}
+
+let reseedEditor = null;
+// The swatch grid: one <input type=color> per editable base token, seeded from the
+// active scheme. Editing any swatch rebuilds + applies the full scheme live.
+function buildEditor() {
+  const host = $("custom-editor");
+  if (!host) return;
+  host.className = "custom-color-grid";
+  const seed = currentBaseVars();
+  host.textContent = "";
+  for (const k of CUSTOM_EDIT_KEYS) {
+    const hex = (seed[k] && /^#[0-9a-fA-F]{6}$/.test(seed[k])) ? seed[k] : "#000000";
+    const label = document.createElement("label");
+    label.className = "custom-color-item";
+    const span = document.createElement("span");
+    span.className = "custom-color-label";
+    span.textContent = k.replace("--", "");
+    const input = document.createElement("input");
+    input.type = "color";
+    input.className = "custom-color-input";
+    input.dataset.var = k;
+    input.value = hex;
+    label.append(span, input);
+    host.appendChild(label);
+  }
+  host.addEventListener("input", (e) => {
+    if (!e.target.closest || !e.target.closest(".custom-color-input")) return;
+    applyCustomEdit(buildCustomScheme(pickerMap(host)));
+  });
+  reseedEditor = () => {
+    const s = currentBaseVars();
+    host.querySelectorAll(".custom-color-input").forEach((i) => { if (s[i.dataset.var]) i.value = s[i.dataset.var]; });
+  };
+}
+
+function activePresetIdx() {
+  const m = /^custom-(\d+)$/.exec(state.bag.scheme || "");
+  return m ? Number(m[1]) : -1;
+}
+
+// Persist the library + (optionally) the active scheme/palette in one write so
+// background.js relays a single consistent state to the host.
+async function writeLibrary(extra) {
+  await chrome.storage.local.set(Object.assign({ [STATE_KEY]: state.bag, [UI_SCHEMES_KEY]: customSchemes }, extra || {}));
+}
+
+async function savePreset() {
+  const nameEl = $("custom-presets").querySelector(".custom-preset-name");
+  const name = (nameEl?.value || "").trim() || ("Custom " + (customSchemes.length + 1));
+  const vars = currentBaseVars();
+  customSchemes.push({ name, vars: buildCustomScheme(Object.assign({}, vars)) });
+  const idx = customSchemes.length - 1;
+  state.bag.scheme = "custom-" + idx;
+  state.bag.palette = themeFromVars(customSchemes[idx].vars);
+  buildSchemeGrid(); updatePreview(); renderPresetChips();
+  await writeLibrary({ [UI_SCHEME_KEY]: "custom-" + idx, [UI_PALETTE_KEY]: customSchemes[idx].vars });
+  setStatus("saved scheme: " + name, "ok");
+}
+
+async function updatePresetActive() {
+  const ai = activePresetIdx();
+  if (ai < 0) return;
+  const nameEl = $("custom-presets").querySelector(".custom-preset-name");
+  const name = (nameEl?.value || "").trim() || customSchemes[ai].name;
+  customSchemes[ai] = { name, vars: currentBaseVars() };
+  buildSchemeGrid(); renderPresetChips();
+  await writeLibrary();
+  setStatus("updated scheme: " + name, "ok");
+}
+
+async function deleteAllPresets() {
+  customSchemes = [];
+  buildSchemeGrid(); renderPresetChips();
+  await writeLibrary();
+  setStatus("deleted all custom schemes", "ok");
+}
+
+// Delete one preset; reindex the active 'custom-N' marker so it keeps pointing at the
+// same scheme (or drops to the un-named live 'custom' when the active one is removed).
+async function deletePreset(idx) {
+  if (idx < 0 || idx >= customSchemes.length) return;
+  customSchemes.splice(idx, 1);
+  const ai = activePresetIdx();
+  if (ai === idx) state.bag.scheme = "custom";
+  else if (ai > idx) state.bag.scheme = "custom-" + (ai - 1);
+  buildSchemeGrid(); renderPresetChips();
+  await writeLibrary({ [UI_SCHEME_KEY]: state.bag.scheme });
+  setStatus("deleted custom scheme", "ok");
+}
+
+// Load (apply) a saved preset — same path as picking its button in the grid.
+function loadPreset(idx) {
+  if (idx < 0 || idx >= customSchemes.length) return;
+  selectScheme("custom-" + idx);
+}
+
+// The name+Save/Update/Delete-all toolbar over the saved-scheme chip row.
+function renderPresetChips() {
+  const host = $("custom-presets");
+  if (!host) return;
+  host.className = "custom-scheme-saved";
+  const ai = activePresetIdx();
+  const activeName = ai >= 0 && customSchemes[ai] ? customSchemes[ai].name : "";
+  host.textContent = "";
+
+  const bar = document.createElement("div");
+  bar.className = "custom-preset-bar";
+  const name = document.createElement("input");
+  name.className = "custom-preset-name";
+  name.type = "text";
+  name.placeholder = "Scheme name";
+  name.maxLength = 40;
+  name.value = activeName;
+  name.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); savePreset(); } });
+  const save = document.createElement("button");
+  save.type = "button"; save.className = "custom-preset-save"; save.textContent = "Save";
+  save.title = "Save current colors as a new scheme";
+  save.addEventListener("click", () => savePreset());
+  bar.append(name, save);
+  if (ai >= 0) {
+    const upd = document.createElement("button");
+    upd.type = "button"; upd.className = "custom-preset-update"; upd.textContent = "Update";
+    upd.title = "Rename / overwrite the active scheme";
+    upd.addEventListener("click", () => updatePresetActive());
+    bar.appendChild(upd);
+  }
+  if (customSchemes.length) {
+    const clr = document.createElement("button");
+    clr.type = "button"; clr.className = "custom-preset-clear"; clr.textContent = "Delete all";
+    clr.title = "Delete all saved schemes";
+    clr.addEventListener("click", () => deleteAllPresets());
+    bar.appendChild(clr);
+  }
+  host.appendChild(bar);
+
+  const chips = document.createElement("div");
+  chips.className = "custom-preset-chips";
+  customSchemes.forEach((p, i) => {
+    const chip = document.createElement("span");
+    chip.className = "custom-preset-chip" + (i === ai ? " active" : "");
+    chip.title = p.name;
+    const dots = document.createElement("span");
+    dots.className = "custom-preset-chip-dots";
+    for (const v of ["--accent", "--cyan", "--magenta"]) {
+      const d = document.createElement("span");
+      d.className = "custom-preset-chip-dot";
+      d.style.background = (p.vars && p.vars[v]) || "#888";
+      dots.appendChild(d);
+    }
+    const nm = document.createElement("span");
+    nm.className = "custom-preset-chip-name";
+    nm.textContent = p.name;
+    const del = document.createElement("span");
+    del.className = "custom-preset-del";
+    del.textContent = "×";
+    del.title = "Delete this scheme";
+    del.addEventListener("click", (e) => { e.stopPropagation(); deletePreset(i); });
+    chip.append(dots, nm, del);
+    chip.addEventListener("click", () => loadPreset(i));
+    chips.appendChild(chip);
+  });
+  host.appendChild(chips);
 }
 
 function render() {
@@ -188,15 +406,22 @@ async function save() {
 }
 
 async function load() {
-  const bag = await chrome.storage.local.get([STATE_KEY, UI_SCHEME_KEY, UI_LIGHT_KEY, UI_SCHEMES_KEY]);
+  const bag = await chrome.storage.local.get([STATE_KEY, UI_SCHEME_KEY, UI_LIGHT_KEY, UI_SCHEMES_KEY, UI_PALETTE_KEY]);
   if (bag?.[STATE_KEY]) state.bag = { ...state.bag, ...bag[STATE_KEY] };
   customSchemes = Array.isArray(bag?.[UI_SCHEMES_KEY]) ? bag[UI_SCHEMES_KEY] : [];
   // ui.scheme is the source of truth for the chosen scheme; recompute the
   // palette from the id so a vendored-color change can never serve stale hex.
   state.bag.scheme = bag?.[UI_SCHEME_KEY] || state.bag.scheme || DEFAULT_SCHEME;
+  // Restore the un-named live 'custom' edit: prefer the host's resolved palette,
+  // else the bag's remembered vars, so the editor + preview seed from real colours.
+  liveCustomVars = (bag?.[UI_PALETTE_KEY] && Object.keys(bag[UI_PALETTE_KEY]).length)
+    ? bag[UI_PALETTE_KEY]
+    : (state.bag.customVars || {});
   state.bag.palette = paletteForScheme(state.bag.scheme);
   const lt = $("lightMode"); if (lt) lt.checked = !!bag?.[UI_LIGHT_KEY];
   buildSchemeGrid();   // rebuild with the freshly-loaded custom schemes
+  buildEditor();       // swatch grid seeded from the active scheme
+  renderPresetChips(); // saved-scheme library toolbar + chips
   render();
 }
 
@@ -213,22 +438,36 @@ chrome.storage.onChanged.addListener((changes, area) => {
     const t = $("lightMode"); if (t) t.checked = !!changes[UI_LIGHT_KEY].newValue;
   }
   // The shared custom-scheme library changed (saved/renamed/deleted on another
-  // fleet surface) — rebuild the picker so it always mirrors ~/.zwire/global.toml.
+  // fleet surface) — rebuild the picker + chips so they mirror ~/.zwire/global.toml.
   if (changes[UI_SCHEMES_KEY]) {
     customSchemes = Array.isArray(changes[UI_SCHEMES_KEY].newValue) ? changes[UI_SCHEMES_KEY].newValue : [];
     buildSchemeGrid();
+    renderPresetChips();
   }
   // The active scheme changed elsewhere (HUD, newtab, another zpwrchrome page) —
-  // keep the picker highlight + preview in sync without a reload.
+  // keep the picker highlight, editor swatches, chips + preview in sync, no reload.
   if (changes[UI_SCHEME_KEY] && changes[UI_SCHEME_KEY].newValue) {
     state.bag.scheme = changes[UI_SCHEME_KEY].newValue;
     state.bag.palette = paletteForScheme(state.bag.scheme);
     markActiveScheme();
+    if (typeof reseedEditor === "function") reseedEditor();
+    renderPresetChips();
+    updatePreview();
+  }
+  // A custom scheme's resolved palette changed elsewhere — follow the colours in the
+  // editor swatches + preview (the live 'custom' edit backs off ui.palette).
+  if (changes[UI_PALETTE_KEY] && changes[UI_PALETTE_KEY].newValue && isCustomScheme(state.bag.scheme)) {
+    const pal = changes[UI_PALETTE_KEY].newValue;
+    if (state.bag.scheme === "custom") liveCustomVars = pal;
+    state.bag.palette = themeFromVars(pal);
+    if (typeof reseedEditor === "function") reseedEditor();
     updatePreview();
   }
 });
 
 buildSchemeGrid();
+buildEditor();
+renderPresetChips();
 
 // ─── Wire up ────────────────────────────────────────────────────────
 $("enabled").addEventListener("change", (ev) => {

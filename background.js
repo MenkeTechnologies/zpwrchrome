@@ -4101,7 +4101,7 @@ if (chrome.notifications?.onClosed) {
   const UI_SCHEMES_KEY = "ui.schemes";
   // Echo guards: the value the host last pushed, so our storage writer below
   // doesn't send it straight back and loop.
-  let fromHostScheme = null, fromHostLight = null, fromHostPalette = null;
+  let fromHostScheme = null, fromHostLight = null, fromHostPalette = null, fromHostSchemes = null;
 
   function applyScheme(scheme) {
     if (!scheme) return;
@@ -4119,6 +4119,7 @@ if (chrome.notifications?.onClosed) {
   // Mirror the shared saved-scheme library so theme-injector.js can render its chips.
   function applySchemes(list) {
     if (!Array.isArray(list)) return;
+    fromHostSchemes = JSON.stringify(list);
     try { chrome.storage.local.set({ [UI_SCHEMES_KEY]: list }); } catch (e) {}
   }
   function applyUi(ui) {
@@ -4178,6 +4179,15 @@ if (chrome.notifications?.onClosed) {
         const pal = changes[UI_PALETTE_KEY].newValue;
         if (pal && typeof pal === "object" && Object.keys(pal).length && JSON.stringify(pal) !== fromHostPalette) {
           try { chrome.runtime.sendNativeMessage(HOST, { palette: pal }, () => { void chrome.runtime.lastError; }); } catch (e) {}
+        }
+      }
+      // Saving/editing/deleting a custom scheme in OUR editor rewrites the shared
+      // library (ui.schemes). Forward it so the host persists it to ~/.zwire/global.toml
+      // [theme.schemes] and every fleet surface sees the same named schemes. Skip the echo.
+      if (changes[UI_SCHEMES_KEY]) {
+        const list = changes[UI_SCHEMES_KEY].newValue;
+        if (Array.isArray(list) && JSON.stringify(list) !== fromHostSchemes) {
+          try { chrome.runtime.sendNativeMessage(HOST, { schemes: list }, () => { void chrome.runtime.lastError; }); } catch (e) {}
         }
       }
     });
