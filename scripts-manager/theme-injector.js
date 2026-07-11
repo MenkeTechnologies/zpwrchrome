@@ -140,10 +140,12 @@ async function selectScheme(id) {
   // One write drives both surfaces: ui.scheme for zpwrchrome's own pages,
   // theme.injector (with palette) for the page-recolor content script.
   const write = { [STATE_KEY]: state.bag, [UI_SCHEME_KEY]: id };
-  // A custom scheme has no vendored colours, so lib/ui-scheme.js renders it from
-  // ui.palette. Write the resolved var→hex map; background.js forwards it to the
-  // host so the whole fleet repaints. Clear it for a built-in (name is enough).
-  write[UI_PALETTE_KEY] = isCustomScheme(id) ? (varsForScheme(id) || {}) : {};
+  // Always write the resolved var→hex map — for a built-in too, not just custom.
+  // lib/ui-scheme.js only consumes it for custom schemes, but background.js forwards
+  // it to the host, which projects it to ~/.zwire/hud-palette (the native chrome's
+  // base colours). Projecting for built-ins keeps that projection in lockstep, so
+  // switching from a custom scheme back to a built-in repaints the native tab/accent.
+  write[UI_PALETTE_KEY] = varsForScheme(id) || {};
   await chrome.storage.local.set(write);
   if (typeof reseedEditor === "function") reseedEditor();
   renderPresetChips();
