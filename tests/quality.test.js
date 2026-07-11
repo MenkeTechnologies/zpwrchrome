@@ -156,7 +156,8 @@ test("every chrome.storage.local.set key is read somewhere", () => {
     "background.js",
     "popup.js",
     "scripts-manager/manager.js",
-    "lib/ui-scheme.js"   // reads ui.scheme (get + storage.onChanged) written by background.js
+    "lib/ui-scheme.js",  // reads ui.scheme (get + storage.onChanged) written by background.js
+    "scripts-manager/theme-injector.js"   // reads ui.schemes (the fleet-shared custom-scheme library) written by background.js
   // Strip optional chaining (e.g. chrome.storage?.local?.get?.(…)) so the
   // read/write regexes below match whether or not a source uses `?.`. Optional
   // CALLS (`get?.(`) collapse to `get(`; optional property access to `.`.
