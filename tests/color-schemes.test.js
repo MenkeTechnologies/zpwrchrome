@@ -126,3 +126,59 @@ test("theme-injector.js renders the synced custom schemes and resolves custom-N 
   assert.match(ti, /themeFromVars/, "must resolve a custom scheme's palette from its vars");
   assert.match(ti, /UI_PALETTE_KEY/, "picking a custom scheme must write ui.palette");
 });
+
+// ── Custom-scheme EDITOR (port of zgui-core buildEditor / buildPresetChips) ──
+
+import { CUSTOM_EDIT_KEYS, hexToRgba, buildCustomScheme } from "../lib/color-schemes.js";
+
+test("hexToRgba: parses #rrggbb into rgba() with the given alpha", () => {
+  assert.equal(hexToRgba("#05d9e8", 0.4), "rgba(5, 217, 232, 0.4)");
+  assert.equal(hexToRgba("#000000", 0.15), "rgba(0, 0, 0, 0.15)");
+  assert.equal(hexToRgba("#ffffff", 0.08), "rgba(255, 255, 255, 0.08)");
+});
+
+test("buildCustomScheme: auto-derives glow/dim/bg variants from the base picks (zgui-core alphas)", () => {
+  const base = { "--accent": "#ff2a6d", "--cyan": "#05d9e8", "--magenta": "#d300c5", "--yellow": "#ffd400", "--green": "#39ff14", "--orange": "#ff8800" };
+  const v = buildCustomScheme(base);
+  // base picks preserved
+  assert.equal(v["--accent"], "#ff2a6d");
+  // derived variants with the exact alpha constants the app shell uses
+  assert.equal(v["--accent-glow"], hexToRgba("#ff2a6d", 0.4));
+  assert.equal(v["--cyan-glow"], hexToRgba("#05d9e8", 0.4));
+  assert.equal(v["--cyan-dim"], hexToRgba("#05d9e8", 0.15));
+  assert.equal(v["--magenta-glow"], hexToRgba("#d300c5", 0.3));
+  assert.equal(v["--yellow-glow"], hexToRgba("#ffd400", 0.2));
+  assert.equal(v["--green-bg"], hexToRgba("#39ff14", 0.08));
+  assert.equal(v["--orange-bg"], hexToRgba("#ff8800", 0.1));
+});
+
+test("buildCustomScheme: does not invent variants for tokens that weren't picked", () => {
+  const v = buildCustomScheme({ "--accent": "#123456" });
+  assert.ok(v["--accent-glow"], "accent-glow derives");
+  assert.equal(v["--cyan-glow"], undefined, "no cyan pick → no cyan-glow");
+  assert.equal(v["--green-bg"], undefined, "no green pick → no green-bg");
+});
+
+test("CUSTOM_EDIT_KEYS: only hex-pickable base tokens (none of the auto-derived rgba variants)", () => {
+  assert.ok(CUSTOM_EDIT_KEYS.includes("--accent") && CUSTOM_EDIT_KEYS.includes("--bg-primary"));
+  // The exact variants buildCustomScheme derives — these must never be directly editable
+  // (a <input type=color> can't hold an rgba(), and editing them would be overwritten).
+  const DERIVED = ["--accent-glow", "--cyan-glow", "--cyan-dim", "--magenta-glow", "--yellow-glow", "--green-bg", "--orange-bg"];
+  for (const d of DERIVED) assert.ok(!CUSTOM_EDIT_KEYS.includes(d), `${d} is auto-derived, must not be editable`);
+});
+
+test("theme-injector.js has the editor + preset CRUD writing the shared library", () => {
+  const ti = _read("scripts-manager/theme-injector.js");
+  assert.match(ti, /function buildEditor\(/, "swatch-grid editor");
+  assert.match(ti, /function savePreset\(/, "save a custom scheme");
+  assert.match(ti, /function deletePreset\(/, "delete one preset");
+  assert.match(ti, /function updatePresetActive\(/, "update the active preset in place");
+  assert.match(ti, /buildCustomScheme\(pickerMap\(host\)\)/, "swatch edits rebuild via buildCustomScheme");
+  assert.match(ti, /UI_SCHEMES_KEY\]:\s*customSchemes/, "saves write the library to ui.schemes");
+});
+
+test("background.js forwards the edited library (ui.schemes) to the host", () => {
+  const bg = _read("background.js");
+  assert.match(bg, /sendNativeMessage\(HOST,\s*\{\s*schemes:\s*list\s*\}/, "must push ui.schemes edits to the host");
+  assert.match(bg, /fromHostSchemes/, "must echo-guard host-pushed library updates");
+});
