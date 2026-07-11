@@ -87,3 +87,42 @@ test("buildThemeCss(opts.palette): the chosen scheme's colors replace the cyberp
 test("buildThemeCss(): no palette → unchanged cyberpunk default (back-compat)", () => {
   assert.deepEqual(buildThemeCss({ intensity: "medium" }), buildThemeCss({ intensity: "medium", palette: THEME }));
 });
+
+// ── Custom scheme sync from ~/.zwire/global.toml (the fleet-shared library) ──
+
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { themeFromVars } from "../lib/color-schemes.js";
+
+const _root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const _read = (p) => readFileSync(join(_root, p), "utf8");
+
+test("themeFromVars: a synced custom scheme's raw var map fills the same camelCase palette", () => {
+  const vars = { ...COLOR_SCHEMES.cyberpunk.vars, "--accent": "#123456", "--cyan": "#abcdef", "--bg-primary": "#010203" };
+  const p = themeFromVars(vars);
+  for (const slot of Object.keys(THEME)) assert.ok(p[slot] !== undefined, `themeFromVars missing slot ${slot}`);
+  assert.equal(p.accent, "#123456");
+  assert.equal(p.cyan, "#abcdef");
+  assert.equal(p.bgPrimary, "#010203");
+  assert.equal(p.fontStack, THEME.fontStack);
+  // themeFor now delegates to themeFromVars, so a built-in still resolves identically.
+  assert.deepEqual(themeFor("matrix"), themeFromVars(COLOR_SCHEMES.matrix.vars));
+});
+
+test("background.js subscribes to the host 'schemes' topic and mirrors the library to ui.schemes", () => {
+  const bg = _read("background.js");
+  assert.match(bg, /cmd:\s*"sub",\s*topic:\s*"schemes"/, "must sub to the schemes topic");
+  assert.match(bg, /"ui\.schemes"/, "must define the ui.schemes storage key");
+  assert.match(bg, /m\.topic\s*===\s*"schemes"/, "must handle inbound schemes pubs");
+  // A local custom pick (ui.palette) is pushed back to the host so the fleet repaints.
+  assert.match(bg, /sendNativeMessage\(HOST,\s*\{\s*palette:\s*pal\s*\}/, "must forward ui.palette to the host");
+});
+
+test("theme-injector.js renders the synced custom schemes and resolves custom-N palettes", () => {
+  const ti = _read("scripts-manager/theme-injector.js");
+  assert.match(ti, /"ui\.schemes"/, "must read the ui.schemes library");
+  assert.match(ti, /custom-"\s*\+\s*i/, "must render a button per custom scheme as custom-N");
+  assert.match(ti, /themeFromVars/, "must resolve a custom scheme's palette from its vars");
+  assert.match(ti, /UI_PALETTE_KEY/, "picking a custom scheme must write ui.palette");
+});
