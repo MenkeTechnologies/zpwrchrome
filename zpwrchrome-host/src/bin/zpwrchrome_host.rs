@@ -288,6 +288,28 @@ fn print_help() {
     print!("{}", usage());
 }
 
+// Maps a versioned Homebrew keg path back onto the version-independent `opt`
+// symlink: `<prefix>/Cellar/<formula>/<version>/bin/x` -> `<prefix>/opt/<formula>/bin/x`.
+// current_exe().canonicalize() resolves `<prefix>/bin/x` down into the keg, and
+// `brew upgrade` deletes the old keg — baking that path into the NM manifest
+// leaves the browser unable to spawn the host after the next upgrade. Paths
+// outside a Cellar, or whose `opt` link is missing, are returned unchanged.
+fn stable_exe_path(exe: &std::path::Path) -> std::path::PathBuf {
+    let parts: Vec<_> = exe.components().collect();
+    let Some(i) = parts.iter().position(|c| c.as_os_str() == "Cellar") else {
+        return exe.to_path_buf();
+    };
+    // Need <formula>/<version>/<...at least one more...> after "Cellar".
+    if parts.len() < i + 4 {
+        return exe.to_path_buf();
+    }
+    let mut stable: std::path::PathBuf = parts[..i].iter().collect();
+    stable.push("opt");
+    stable.push(parts[i + 1]); // formula
+    stable.extend(parts[i + 3..].iter()); // skip <version>, keep bin/x
+    if stable.exists() { stable } else { exe.to_path_buf() }
+}
+
 // Writes the NM manifest registering this binary as
 // `com.menketechnologies.zpwrchrome` for every Chromium-family browser
 // config directory the current user has on disk. Returns the number of
@@ -297,6 +319,7 @@ fn install_nm_manifest(ext_ids: &[&str]) -> std::io::Result<usize> {
     let exe = std::env::current_exe()?
         .canonicalize()
         .unwrap_or_else(|_| std::env::current_exe().unwrap());
+    let exe = stable_exe_path(&exe);
     let exe_str = exe.to_string_lossy();
     let home = std::env::var("HOME")
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::NotFound, "HOME not set"))?;
@@ -408,4 +431,55 @@ fn install_nm_manifest(ext_ids: &[&str]) -> std::io::Result<usize> {
         installed += 1;
     }
     Ok(installed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    // <prefix>/Cellar/zpwrchrome-host/<ver>/bin/zpwrchrome-host + the opt link.
+    fn keg(prefix: &std::path::Path, ver: &str, with_opt_link: bool) -> PathBuf {
+        let cellar = prefix.join("Cellar/zpwrchrome-host").join(ver).join("bin");
+        std::fs::create_dir_all(&cellar).unwrap();
+        std::fs::write(cellar.join("zpwrchrome-host"), b"x").unwrap();
+        if with_opt_link {
+            let opt = prefix.join("opt/zpwrchrome-host/bin");
+            std::fs::create_dir_all(&opt).unwrap();
+            std::fs::write(opt.join("zpwrchrome-host"), b"x").unwrap();
+        }
+        cellar.join("zpwrchrome-host")
+    }
+
+    // The regression: a keg path baked into the NM manifest dies on the next
+    // `brew upgrade`, the browser can't spawn the host, and every download
+    // silently falls back to the browser's own downloader.
+    #[test]
+    fn cellar_path_maps_to_version_independent_opt_link() {
+        let prefix =
+            std::env::temp_dir().join(format!("zpwrchrome-keg-ok-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&prefix);
+        let exe = keg(&prefix, "0.10.1", true);
+        assert_eq!(
+            stable_exe_path(&exe),
+            prefix.join("opt/zpwrchrome-host/bin/zpwrchrome-host")
+        );
+        let _ = std::fs::remove_dir_all(&prefix);
+    }
+
+    #[test]
+    fn keeps_keg_path_when_opt_link_is_absent() {
+        let prefix =
+            std::env::temp_dir().join(format!("zpwrchrome-keg-noopt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&prefix);
+        let exe = keg(&prefix, "0.10.1", false);
+        assert_eq!(stable_exe_path(&exe), exe);
+        let _ = std::fs::remove_dir_all(&prefix);
+    }
+
+    #[test]
+    fn leaves_non_homebrew_paths_alone() {
+        let exe = PathBuf::from("/usr/local/bin/zpwrchrome-host");
+        assert_eq!(stable_exe_path(&exe), exe);
+    }
 }
