@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zpwrchrome // host console</title>
+  <link rel="stylesheet" href="dl-settings.css">
+  <link rel="stylesheet" href="host.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="dashboard.html">‹ Back</a>
+  <div class="brand">
+    <span class="logo">🔌</span>
+    <h1>zpwrchrome <span class="dim">host console</span></h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<div class="hc-wrap">
+
+  <section class="hc-card">
+    <div class="hc-h">// status</div>
+    <div id="status" class="hc-status"></div>
+    <div class="hc-btns" style="margin-top:10px">
+      <button id="ping" class="btn-ghost">Ping host</button>
+    </div>
+  </section>
+
+  <section class="hc-card">
+    <div class="hc-h">// repl — JSON in / JSON out</div>
+    <div class="hc-sub" style="margin-bottom:8px">Click a command to load its template, edit the JSON, then Send (⌘/Ctrl-Enter). Each send spawns one host process.</div>
+    <div id="catalog" class="hc-cat"></div>
+    <textarea id="editor" class="hc-in" spellcheck="false" autocomplete="off"></textarea>
+    <div class="hc-btns">
+      <button id="send" class="btn-ghost">Send ▶ (⌘/Ctrl-Enter)</button>
+      <button id="format" class="btn-ghost">Format</button>
+      <button id="export" class="btn-ghost">Export ↓</button>
+      <button id="clear" class="btn-ghost">Clear log</button>
+      <input id="filter" type="search" class="btn-ghost" placeholder="filter transcript…" autocomplete="off" style="flex:1;min-width:180px">
+    </div>
+    <div id="log" class="hc-log"></div>
+  </section>
+
+  <section class="hc-card">
+    <div class="hc-h">// command log — service-worker diag ring</div>
+    <div class="hc-clbar">
+      <span class="hc-sub">every native round-trip from any surface (popup, service worker, this page)</span>
+      <label class="hc-sub" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input id="hide-noise" type="checkbox"> hide high-frequency chatter
+      </label>
+    </div>
+    <div id="clog" class="hc-clog"></div>
+  </section>
+
+</div>
+
+<script src="host.js" type="module"></script>
+</body>
+</html>

@@ -48,6 +48,7 @@ const SECTIONS = [
     cat: "info",
     label: "Diagnostics & Help",
     tiles: [
+      { id: "host",     page: "host.html",     glyph: "🔌", label: "Host Console",  desc: "Interactive REPL to the zpwrchrome-host native binary — send any {action:…} command, browse the full protocol surface, watch every round-trip." },
       { id: "dl-diag",  page: "dl-diag.html",  glyph: "⚠",  label: "Diagnostics",  desc: "Service-worker + native-host log, connection state and error trail." },
       { id: "dl-help",  page: "dl-help.html",  glyph: "❔", label: "Help",          desc: "How the downloader, native host and takeover work — setup and troubleshooting." },
       { id: "dl-about", page: "dl-about.html", glyph: "ℹ",  label: "About",         desc: "Version, credits, license and links for zpwrchrome." },

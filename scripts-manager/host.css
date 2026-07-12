@@ -1,0 +1,137 @@
+/* zpwrchrome — Host console page styles.
+ * Ported from the zwire HUD host page (hud-internal/pages/host.js inline CSS),
+ * re-homed onto zpwrchrome's own :root vars (dashboard.css / ui-scheme.js).
+ * The console talks to the zpwrchrome-host native binary
+ * (com.menketechnologies.zpwrchrome) over one-shot sendNativeMessage. */
+
+.hc-wrap { padding: 16px 20px; max-width: 1100px; margin: 0 auto; }
+
+.hc-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.hc-h {
+  color: var(--cyan);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.hc-sub { color: var(--text-muted); font-size: 12px; }
+
+/* STATUS ------------------------------------------------------------------ */
+.hc-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hc-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.hc-caps { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.hc-cap {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--cyan);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+/* REPL: catalog · editor · tree ------------------------------------------- */
+.hc-cat {
+  max-height: 190px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: var(--bg-primary);
+}
+.hc-catlabel {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin: 8px 0 3px;
+}
+.hc-catlabel:first-child { margin-top: 0; }
+.hc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.hc-chip {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--text);
+  background: var(--bg-primary);
+}
+.hc-chip:hover { border-color: var(--cyan); color: var(--cyan); }
+
+.hc-in {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 120px;
+  height: 190px;
+  background: var(--bg-primary);
+  color: var(--text);
+  border: 1px solid var(--cyan);
+  font: 13px 'Share Tech Mono', monospace;
+  padding: 8px;
+  outline: none;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.hc-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+
+/* Response transcript (collapsible JSON trees) ---------------------------- */
+.hc-log {
+  height: min(52vh, 520px);
+  overflow: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+.hc-entry { border-bottom: 1px solid var(--border); padding: 5px 2px; }
+.hc-ehead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 11px 'Share Tech Mono', monospace;
+  color: var(--text-muted);
+}
+.hc-etime { opacity: 0.7; }
+.hc-ar { font-weight: 700; }
+.hc-entry.out .hc-ar { color: var(--cyan); }
+.hc-entry.in .hc-ar { color: var(--green); }
+.hc-entry.err { color: var(--accent); font: 12px 'Share Tech Mono', monospace; }
+.hc-tree { margin: 2px 0 0 4px; font: 12px 'Share Tech Mono', monospace; }
+.hc-tree details { margin-left: 12px; }
+.hc-tree summary { cursor: pointer; color: var(--text-dim); }
+.hc-tree summary:hover { color: var(--cyan); }
+.hc-k { color: var(--magenta); }
+.hc-v-str { color: var(--green); }
+.hc-v-num { color: var(--cyan); }
+.hc-v-bool { color: var(--yellow); }
+.hc-v-null { color: var(--text-muted); }
+.hc-leaf { margin-left: 12px; white-space: pre-wrap; word-break: break-word; }
+
+/* COMMAND LOG (service-worker diag ring) --------------------------------- */
+.hc-clbar { display: flex; align-items: center; gap: 10px; margin: 2px 0 6px; flex-wrap: wrap; }
+.hc-clbar .hc-sub { flex: 1 1 auto; }
+.hc-clog {
+  height: min(42vh, 440px);
+  overflow: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: 12px 'Share Tech Mono', monospace;
+}
+.hc-clr { display: flex; gap: 10px; padding: 3px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
+.hc-clt { color: var(--text-muted); opacity: 0.7; flex: 0 0 auto; }
+.hc-cll { flex: 0 0 190px; overflow: hidden; text-overflow: ellipsis; }
+.hc-clr.ok  .hc-cll { color: var(--cyan); }
+.hc-clr.warn .hc-cll { color: var(--yellow); }
+.hc-clr.bad .hc-cll { color: var(--accent); }
+.hc-clb { color: var(--text-dim); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
