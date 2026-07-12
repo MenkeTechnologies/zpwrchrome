@@ -49,6 +49,7 @@ import {
   TOKEN_SYNONYMS,
   expandFieldValue,
 } from "./lib/identity-tokens.js";
+import { COUNTRIES, US_STATES, CA_PROVINCES } from "./lib/geo-data.js";
 import { loadSettings as loadDlSettings, DL_DEFAULTS as DL_SETTINGS_DEFAULTS, saveSettings as saveDlSettings } from "./scripts-manager/dl-settings.js";
 import { loadInterface as loadDlInterface, DL_INTERFACE_DEFAULTS } from "./scripts-manager/dl-interface.js";
 import { loadRules as loadDlRules } from "./scripts-manager/dl-rules.js";
@@ -641,7 +642,7 @@ function scanIdentityCategories(synonyms, knownTokens, profileTokens, ccTokens) 
     if (ac) {
       if (known.has(ac)) return ac;
       for (const t of ac.split(/\s+/)) if (known.has(t)) return t;
-      if (ac === "off" || ac === "current-password" || ac === "new-password") return null;
+      if (ac === "current-password" || ac === "new-password") return null;
     }
     const hay = [spec.name, spec.id, spec.label, spec.placeholder].map(normalize).join(" ");
     let best = null, bestLen = 0;
@@ -735,16 +736,26 @@ async function injectIdentityFill(tabId, fields, { kinds }) {
     const results = await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
       func: fillIdentityForm,
-      args: [fields, TOKEN_SYNONYMS, [...PROFILE_TOKENS, ...CC_TOKENS]],
+      args: [fields, TOKEN_SYNONYMS, [...PROFILE_TOKENS, ...CC_TOKENS],
+             { countries: COUNTRIES, states: US_STATES, provinces: CA_PROVINCES }],
     });
     const totalFilled = (results || []).reduce((s, r) => s + (r?.result?.filled || 0), 0);
+    const hostedCard = [...new Set((results || []).flatMap((r) => r?.result?.hostedCard || []))];
     diagPush("pass.identity.fill.injected", {
-      kinds, frames: results?.length || 0, totalFilled,
+      kinds, frames: results?.length || 0, totalFilled, hostedCard,
     });
     if (totalFilled === 0) {
       notify({
         title: "zpwrchrome — pass identity fill",
         message: `No recognized ${kinds.join(" / ")} fields on this page.`,
+      });
+    } else if (hostedCard.length && kinds.includes("creditcard")) {
+      // Card number/CVC/expiry live in the processor's cross-origin iframe
+      // and cannot be filled by any extension — tell the user the truth.
+      notify({
+        title: "zpwrchrome — pass identity fill",
+        message: `Filled ${totalFilled} field${totalFilled === 1 ? "" : "s"}. ` +
+          `Card number is in ${hostedCard.join(" / ")} hosted fields (cross-origin) — enter it manually.`,
       });
     }
   } catch (e) {
@@ -824,10 +835,19 @@ async function showIdentityPicker(tabId, kind, paths) {
 // value in the fields bag (with alias-chain fallbacks for cc-exp,
 // name ↔ given/family, street-address ↔ address-line1/2/3), and writes
 // via the native value setter so React/Vue/Lit observers fire.
-function fillIdentityForm(fields, synonyms, knownTokens) {
+async function fillIdentityForm(fields, synonyms, knownTokens, geo) {
   const known = new Set(knownTokens);
+  const COUNTRIES  = (geo && geo.countries) || {};
+  const US_STATES  = (geo && geo.states)    || {};
+  const CA_PROV    = (geo && geo.provinces) || {};
   function normalize(s) {
     return String(s || "").toLowerCase().replace(/[_\s]+/g, "-");
+  }
+  // Loose text-compare for option matching: lowercase, trim, collapse
+  // whitespace, drop diacritics so "Côte d'Ivoire" ~ "cote divoire".
+  function loose(s) {
+    return String(s || "").toLowerCase().normalize("NFD")
+      .replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
   }
   function labelText(el) {
     const doc = el.ownerDocument;
@@ -844,13 +864,17 @@ function fillIdentityForm(fields, synonyms, knownTokens) {
     }
     const labId = el.getAttribute("aria-labelledby");
     if (labId) {
-      const lab = doc.getElementById(labId);
-      if (lab) return lab.textContent || "";
+      // aria-labelledby may list several ids; join their text.
+      const txt = labId.split(/\s+/).map((id) => doc.getElementById(id)?.textContent || "").join(" ").trim();
+      if (txt) return txt;
     }
+    const al = el.getAttribute("aria-label");
+    if (al) return al;
     return "";
   }
   function visible(el) {
-    if (!el || el.disabled || el.readOnly) return false;
+    if (!el || el.disabled || el.getAttribute("aria-disabled") === "true") return false;
+    if (el.readOnly && el.tagName === "INPUT") return false;
     const t = String(el.type || "").toLowerCase();
     if (t === "hidden" || t === "submit" || t === "button" || t === "reset" ||
         t === "image"  || t === "file"   || t === "checkbox" || t === "radio") return false;
@@ -861,22 +885,56 @@ function fillIdentityForm(fields, synonyms, knownTokens) {
     if (cs.visibility === "hidden" || cs.display === "none") return false;
     return true;
   }
-  function nativeSet(el, val) {
-    const proto = Object.getPrototypeOf(el);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Poll fn() until it returns truthy or the deadline; returns null on timeout.
+  async function pollFor(fn, ms, step) {
+    const t0 = Date.now();
+    for (;;) {
+      let v; try { v = fn(); } catch { v = null; }
+      if (v) return v;
+      if (Date.now() - t0 > ms) return null;
+      await sleep(step || 60);
+    }
+  }
+  // Realm-aware native value setter — bypasses React's _valueTracker (which
+  // otherwise swallows the change) by calling the setter off the element's
+  // OWN-realm prototype, so it works inside same-origin iframes too.
+  function setNativeValue(el, value, opts) {
+    const win = el.ownerDocument.defaultView || window;
+    const tag = el.tagName;
+    const proto = tag === "SELECT"   ? win.HTMLSelectElement.prototype
+                : tag === "TEXTAREA" ? win.HTMLTextAreaElement.prototype
+                :                      win.HTMLInputElement.prototype;
     const desc = Object.getOwnPropertyDescriptor(proto, "value");
-    if (desc && desc.set) desc.set.call(el, val);
-    else el.value = val;
-    el.dispatchEvent(new Event("input",  { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    if (desc && desc.set) desc.set.call(el, value);
+    else el.value = value;
+    const bubbles = true, composed = !!(opts && opts.composed);
+    const IE = win.InputEvent || InputEvent, EV = win.Event || Event;
+    if (opts && opts.keys) {
+      el.dispatchEvent(new (win.KeyboardEvent || KeyboardEvent)("keydown", { bubbles, composed }));
+    }
+    el.dispatchEvent(new IE("input",  { bubbles, composed, data: String(value), inputType: "insertText" }));
+    el.dispatchEvent(new EV("change", { bubbles, composed }));
+    if (opts && opts.keys) {
+      el.dispatchEvent(new (win.KeyboardEvent || KeyboardEvent)("keyup", { bubbles, composed }));
+    }
+  }
+  function fireMouse(el, types) {
+    const win = el.ownerDocument.defaultView || window;
+    for (const type of types) {
+      const Ctor = /^pointer/.test(type) ? (win.PointerEvent || win.MouseEvent) : (win.MouseEvent || MouseEvent);
+      el.dispatchEvent(new Ctor(type, { bubbles: true, cancelable: true, composed: true, button: 0 }));
+    }
   }
   function recognize(spec) {
     const ac = String(spec.autocomplete || "").trim().toLowerCase();
     if (ac) {
       if (known.has(ac)) return ac;
       for (const t of ac.split(/\s+/)) if (known.has(t)) return t;
-      if (ac === "off" || ac === "current-password" || ac === "new-password") return null;
+      if (ac === "current-password" || ac === "new-password") return null;
     }
-    const hay = [spec.name, spec.id, spec.label, spec.placeholder].map(normalize).join(" ");
+    const hay = [spec.name, spec.id, spec.label, spec.placeholder,
+                 spec.dataAutomationId].map(normalize).join(" ");
     let best = null;
     let bestLen = 0;
     for (const token in synonyms) {
@@ -892,6 +950,102 @@ function fillIdentityForm(fields, synonyms, knownTokens) {
     if (tp === "email") return "email";
     if (tp === "tel")   return "tel";
     return null;
+  }
+  // Candidate display strings to match against a dropdown's options, given
+  // a recognized token + the raw stored value. For country/state, expand
+  // ISO codes → names and names → codes so either storage form matches
+  // either dropdown form.
+  function optionCandidates(token, value) {
+    const v = String(value).trim();
+    const out = [v];
+    const up = v.toUpperCase();
+    const addAll = (map) => {
+      if (map[up]) out.push(map[up]);                       // code → name
+      for (const [code, name] of Object.entries(map)) {     // name → code
+        if (loose(name) === loose(v)) { out.push(code, name); }
+      }
+    };
+    if (token === "country" || token === "country-name") addAll(COUNTRIES);
+    if (token === "address-level1") { addAll(US_STATES); addAll(CA_PROV); }
+    return [...new Set(out.filter(Boolean))];
+  }
+  function optionMatches(text, candidates) {
+    const t = loose(text);
+    if (!t) return false;
+    for (const c of candidates) { if (loose(c) === t) return true; }        // exact
+    for (const c of candidates) { const lc = loose(c); if (lc.length >= 3 && t.startsWith(lc)) return true; }
+    return false;
+  }
+  // Fill a native <select> by matching an option's value or text against
+  // the candidate strings (code/name variants).
+  function fillNativeSelect(sel, candidates) {
+    const opts = Array.from(sel.options);
+    let hit = opts.find((o) => candidates.some((c) => loose(c) === loose(o.value)))
+           || opts.find((o) => candidates.some((c) => loose(c) === loose(o.textContent)))
+           || opts.find((o) => optionMatches(o.textContent, candidates))
+           || opts.find((o) => optionMatches(o.value, candidates));
+    if (!hit) return false;
+    setNativeValue(sel, hit.value);
+    sel.selectedIndex = hit.index;
+    return true;
+  }
+  // Drive a custom combobox / listbox widget (react-select, MUI, Ant,
+  // Downshift, Headless UI, Radix, react-aria, …): open it, type to filter
+  // if it takes text, poll for the rendered option (menus usually portal to
+  // <body>, so query the whole document), then click the match. Handles
+  // async option loading (Greenhouse's geocoded city field) via the poll.
+  async function driveCombobox(trigger, candidates) {
+    const doc = trigger.ownerDocument;
+    const isTextInput = trigger.tagName === "INPUT" && trigger.type !== "checkbox";
+    try { trigger.focus({ preventScroll: true }); } catch {}
+    fireMouse(trigger, ["pointerdown", "mousedown", "mouseup", "click"]);
+    if (isTextInput) {
+      // Type the most specific candidate (a full name filters better than a code).
+      const typed = candidates.slice().sort((a, b) => b.length - a.length)[0];
+      setNativeValue(trigger, typed);
+    }
+    const OPTION_SEL = '[role="option"], .select__option, .MuiAutocomplete-option, ' +
+                       '.MuiMenuItem-root, .ant-select-item-option, [class*="option"]';
+    const candLoose = candidates.map(loose);
+    const opt = await pollFor(() => {
+      const nodes = Array.from(doc.querySelectorAll(OPTION_SEL))
+        .filter((n) => n.getBoundingClientRect().height > 0);
+      // Prefer an exact text match over a prefix match, regardless of DOM
+      // order, so "United States" wins over "United States Minor Outlying …".
+      return nodes.find((n) => candLoose.includes(loose(n.textContent)))
+          || nodes.find((n) => optionMatches(n.textContent, candidates))
+          || null;
+    }, 4000, 60);
+    if (!opt) return false;
+    // react-select/MUI commit on click; Radix/react-aria need pointer events.
+    fireMouse(opt, ["pointerover", "pointermove", "pointerdown", "mousedown", "mouseup", "click", "pointerup"]);
+    return true;
+  }
+  // Is this element a custom dropdown trigger rather than a plain field?
+  function comboKind(el) {
+    const role = (el.getAttribute("role") || "").toLowerCase();
+    if (role === "combobox" && el.tagName !== "SELECT") return true;
+    if (el.getAttribute("aria-haspopup") === "listbox") return true;
+    if (el.closest && el.closest('.select__control, .MuiAutocomplete-root, .ant-select, [class*="react-select"]')) return true;
+    return false;
+  }
+  // Detect cross-origin hosted card fields (Stripe/Braintree/Adyen/…). Their
+  // inputs live in another origin's iframe and are physically unfillable; we
+  // report them so the caller can tell the user the truth.
+  function detectHostedCardFields() {
+    const SIGS = [
+      ["Stripe",       'iframe[name^="__privateStripeFrame"], iframe[src*="js.stripe.com"], .StripeElement, .__PrivateStripeElement'],
+      ["Braintree",    'iframe[src*="assets.braintreegateway.com"], [class*="braintree-hosted-fields-"]'],
+      ["Adyen",        'iframe[src*="adyen.com"][title*="card" i], [class*="adyen-checkout__card"]'],
+      ["Square",       'iframe[src*="squareup.com"], iframe[src*="squareupsandbox.com"]'],
+      ["Checkout.com", 'iframe[src*="checkout.com"], .card-number-frame iframe'],
+      ["Recurly",      'iframe[src*="recurly.com"], .recurly-element iframe'],
+      ["Spreedly",     'iframe[src*="core.spreedly.com"]'],
+      ["Shopify",      'iframe[src*="checkout.pci.shopifyinc.com"]'],
+    ];
+    const found = [];
+    for (const [name, sel] of SIGS) { try { if (document.querySelector(sel)) found.push(name); } catch {} }
+    return found;
   }
   function expand(token) {
     const direct = fields[token];
@@ -954,25 +1108,49 @@ function fillIdentityForm(fields, synonyms, knownTokens) {
     }
     return null;
   }
+  // Scan real form fields plus custom-dropdown triggers (react-select
+  // inputs are role=combobox <input>s already caught; MUI/Radix triggers
+  // are <div>/<button aria-haspopup=listbox>). Dedupe by element identity.
   const filled = [];
-  const candidates = document.querySelectorAll("input, select, textarea");
-  for (const el of candidates) {
+  const seen = new Set();
+  const nodes = Array.from(document.querySelectorAll(
+    'input, select, textarea, [role="combobox"], [aria-haspopup="listbox"]'));
+  for (const el of nodes) {
+    if (seen.has(el)) continue;
+    seen.add(el);
     if (!visible(el)) continue;
     const token = recognize({
-      autocomplete: el.autocomplete || "",
-      name:         el.name         || "",
-      id:           el.id           || "",
-      label:        labelText(el),
-      placeholder:  el.placeholder  || "",
-      type:         el.type         || "",
+      autocomplete:     el.autocomplete || el.getAttribute("autocomplete") || "",
+      name:             el.name         || el.getAttribute("name") || "",
+      id:               el.id           || "",
+      label:            labelText(el),
+      placeholder:      el.placeholder  || el.getAttribute("placeholder") || "",
+      type:             el.type         || "",
+      dataAutomationId: el.getAttribute("data-automation-id") || "",
     });
     if (!token) continue;
     const val = expand(token);
     if (val == null || val === "") continue;
-    nativeSet(el, val);
-    filled.push({ token, name: el.name || "", id: el.id || "" });
+
+    let ok = false;
+    try {
+      if (el.tagName === "SELECT") {
+        ok = fillNativeSelect(el, optionCandidates(token, val));
+      } else if (comboKind(el)) {
+        ok = await driveCombobox(el, optionCandidates(token, val));
+      } else {
+        setNativeValue(el, val);
+        ok = true;
+      }
+    } catch { ok = false; }
+    if (ok) filled.push({ token, name: el.name || "", id: el.id || "" });
   }
-  return { filled: filled.length, fields: filled, origin: location?.origin || "" };
+  return {
+    filled: filled.length,
+    fields: filled,
+    hostedCard: detectHostedCardFields(),
+    origin: location?.origin || "",
+  };
 }
 
 // In-tab shadow-DOM picker. Same z-index ceiling as the tab-switcher
