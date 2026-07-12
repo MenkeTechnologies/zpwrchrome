@@ -55,10 +55,26 @@ test("composite autocomplete (shipping street-address) picks the known token", (
   assert.equal(recognizeField({ autocomplete: "section-foo billing cc-csc" }), "cc-csc");
 });
 
-test("autocomplete=off / current-password / new-password short-circuits to null (opt-out)", () => {
-  assert.equal(recognizeField({ autocomplete: "off",              name: "card-number" }), null);
+test("current-password / new-password short-circuit to null (opt-out)", () => {
   assert.equal(recognizeField({ autocomplete: "current-password", id: "cc-number"     }), null);
   assert.equal(recognizeField({ autocomplete: "new-password",     name: "cardholder"  }), null);
+});
+
+test("autocomplete=off falls through to name/label/type recognition", () => {
+  // Custom widgets (react-select, intl-tel-input, MUI) and many plain
+  // sites set autocomplete=off; it must NOT veto an explicit hotkey fill.
+  assert.equal(recognizeField({ autocomplete: "off", name: "card-number" }), "cc-number");
+  assert.equal(recognizeField({ autocomplete: "off", id:   "country"      }), "country");
+  assert.equal(recognizeField({ autocomplete: "off", type: "tel"          }), "tel");
+  // …but off with no other signal still yields null (nothing to match).
+  assert.equal(recognizeField({ autocomplete: "off", name: "unrelated"    }), null);
+});
+
+test("country is recognized from a bare `country` name/id/label", () => {
+  assert.equal(recognizeField({ id:    "country"  }), "country");
+  assert.equal(recognizeField({ label: "Country"  }), "country");
+  // country-name still wins its longer, more specific match.
+  assert.equal(recognizeField({ name:  "country-name" }), "country-name");
 });
 
 test("autocomplete attribute wins over name-based recognition", () => {
