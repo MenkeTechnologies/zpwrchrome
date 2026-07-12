@@ -4253,6 +4253,30 @@ if (chrome.notifications?.onClosed) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Command-palette bridge from the zwire fleet (⌘K).
+ * hud-internal owns ⌘K browser-wide as a chrome.commands shortcut and routes it
+ * per active tab. When the active tab is a zpwrchrome page it cross-ext-messages
+ * us here; we relay to that page so its palette (lib/zpc-palette.js) opens — the
+ * same palette shown everywhere else in the fleet. A `zwirePing` lets the HUD +
+ * New Tab palettes check we're installed+enabled before listing our rows (a
+ * disabled zpwrchrome can't answer, so those rows drop). Senders are restricted
+ * to the fleet by manifest `externally_connectable` (hud-internal + newtab).
+ * ------------------------------------------------------------------------- */
+(() => {
+  try {
+    chrome.runtime.onMessageExternal.addListener((msg, _sender, sendResponse) => {
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "zwirePing") { sendResponse({ ok: true }); return; }
+      if (msg.type === "zwireOpenPalette") {
+        // Broadcast to every zpwrchrome page; only the focused one opens
+        // (lib/zpc-palette.js guards on document.hasFocus()).
+        try { chrome.runtime.sendMessage({ kind: "zpc.open-palette" }, () => { void chrome.runtime.lastError; }); } catch (e) {}
+      }
+    });
+  } catch (e) {}
+})();
+
+/* ---------------------------------------------------------------------------
  * Colorscheme sync with the global zwire HUD.
  * hud-internal owns the scheme (native file <app-data>/zwire/hud-scheme drives the
  * compiled color mixer). We mirror it into our own chrome.storage.local
