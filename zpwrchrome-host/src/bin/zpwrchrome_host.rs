@@ -307,7 +307,11 @@ fn stable_exe_path(exe: &std::path::Path) -> std::path::PathBuf {
     stable.push("opt");
     stable.push(parts[i + 1]); // formula
     stable.extend(parts[i + 3..].iter()); // skip <version>, keep bin/x
-    if stable.exists() { stable } else { exe.to_path_buf() }
+    if stable.exists() {
+        stable
+    } else {
+        exe.to_path_buf()
+    }
 }
 
 // Writes the NM manifest registering this binary as
@@ -456,8 +460,7 @@ mod tests {
     // silently falls back to the browser's own downloader.
     #[test]
     fn cellar_path_maps_to_version_independent_opt_link() {
-        let prefix =
-            std::env::temp_dir().join(format!("zpwrchrome-keg-ok-{}", std::process::id()));
+        let prefix = std::env::temp_dir().join(format!("zpwrchrome-keg-ok-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&prefix);
         let exe = keg(&prefix, "0.10.1", true);
         assert_eq!(
