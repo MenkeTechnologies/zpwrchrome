@@ -184,9 +184,21 @@ test("fillLoginForm dispatches input AND change events for framework listeners",
   assert.match(fn[0], /new Event\("change",\s*\{ bubbles: true \}\)/);
 });
 
-test("fillLoginForm prefers username field preceding password in document order", () => {
+test("fillLoginForm prefers username field preceding password in traversal order (shadow-DOM safe)", () => {
   const fn = bg.match(/function fillLoginForm\([\s\S]*?\n\}/);
-  assert.match(fn[0], /compareDocumentPosition\(c\) & Node\.DOCUMENT_POSITION_PRECEDING/);
+  // compareDocumentPosition returns DISCONNECTED across shadow trees, so
+  // "preceding" must come from the deep-scan collection order instead.
+  assert.doesNotMatch(fn[0], /compareDocumentPosition\(/);
+  assert.match(fn[0], /const pwIdx = seq\.indexOf\(pwEl\)/);
+  assert.match(fn[0], /return before \|\| cands\[0\] \|\| null/);
+});
+
+test("fillLoginForm scans through open shadow roots (deepQueryAll, not bare document.querySelectorAll)", () => {
+  const fn = bg.match(/function fillLoginForm\([\s\S]*?\n\}/);
+  assert.match(fn[0], /function deepQueryAll\(sel, root\)/);
+  assert.match(fn[0], /if \(host\.shadowRoot\) walk\(host\.shadowRoot\)/);
+  assert.match(fn[0], /deepQueryAll\('input\[type="password"\]'\)\.find\(visible\)/);
+  assert.doesNotMatch(fn[0], /document\.querySelectorAll\(/);
 });
 
 test("fillLoginForm filters out hidden / checkbox / radio / file / image inputs from username search", () => {
@@ -358,7 +370,10 @@ test("scanIdentityCategories reports a `login` flag from a visible password fiel
   assert.ok(fn, "scanIdentityCategories missing");
   // Detection keys off an actual <input type=password> (not a username-ish
   // text field) so a password-less registration form never triggers login.
-  assert.match(fn[0], /querySelectorAll\('input\[type="password"\]'\)/);
+  // The scan pierces open shadow roots (deepQueryAll) so web-component
+  // forms (SmartRecruiters spl-input etc.) are detected too.
+  assert.match(fn[0], /deepQueryAll\('input\[type="password"\]'\)/);
+  assert.match(fn[0], /function deepQueryAll\(sel, root\)/);
   assert.match(fn[0], /return \{ profile: hasProfile, creditcard: hasCC, login: hasLogin \}/);
 });
 
