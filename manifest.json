@@ -316,7 +316,7 @@
       "description": "Navigate the active tab to the URL stored in the best-matching `pass` entry (parses url/link/website/web/site keys)"
     },
     "pass-fill-identity": {
-      "description": "Fill whatever identity fields the active tab has \u2014 profile (name/address/email/phone/\u2026) AND credit-card (cc-number/cc-exp/cc-csc/cardholder/\u2026) in one keystroke. Picks the best-matching profile/* and creditcard/* entries (picker if multiple, last-used cached per host)."
+      "description": "Fill whatever identity fields the active tab has \u2014 login (username/password), profile (name/address/email/phone/\u2026) AND credit-card (cc-number/cc-exp/cc-csc/cardholder/\u2026) in one keystroke. Picks the best-matching profile/* and creditcard/* entries plus a host-matched login entry (picker if multiple, last-used cached per host)."
     },
     "pass-fill-profile": {
       "description": "Fill profile fields only (name, address, email, phone, \u2026) on the active tab from a `profile/*` entry in `pass`. Quick-pick overlay when multiple profiles exist."
