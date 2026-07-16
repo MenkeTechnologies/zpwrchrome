@@ -731,11 +731,28 @@ function scanIdentityCategories(ruleSources, profileTokens, ccTokens) {
     if (cs.visibility === "hidden" || cs.display === "none") return false;
     return true;
   }
+  // querySelectorAll never pierces shadow roots — web-component design
+  // systems (SmartRecruiters spl-input, Salesforce LWC, Vaadin, …) put the
+  // real <input> inside an open shadow root, so a light-DOM-only scan sees
+  // zero fields. Recursively descend every OPEN shadow root. (Closed roots
+  // are unreachable by design; nothing to do about those.)
+  function deepQueryAll(sel, root) {
+    const out = [];
+    const walk = (r) => {
+      let m; try { m = r.querySelectorAll(sel); } catch { return; }
+      for (const el of m) out.push(el);
+      for (const host of r.querySelectorAll("*")) if (host.shadowRoot) walk(host.shadowRoot);
+    };
+    walk(root || document);
+    return out;
+  }
   function labelText(el) {
-    const doc = el.ownerDocument;
+    // getRootNode(): inside a shadow root the <label for=…> lives in the
+    // same root, not the document — ownerDocument lookups miss it.
+    const root = el.getRootNode ? el.getRootNode() : el.ownerDocument;
     if (el.id) {
       try {
-        const lab = doc.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        const lab = root.querySelector(`label[for="${CSS.escape(el.id)}"]`);
         if (lab) return lab.textContent || "";
       } catch {}
     }
@@ -761,7 +778,7 @@ function scanIdentityCategories(ruleSources, profileTokens, ccTokens) {
   }
   let hasProfile = false;
   let hasCC = false;
-  for (const el of document.querySelectorAll("input, select, textarea")) {
+  for (const el of deepQueryAll("input, select, textarea")) {
     if (!visible(el)) continue;
     const token = recognize({
       autocomplete: el.autocomplete || "",
@@ -781,7 +798,7 @@ function scanIdentityCategories(ruleSources, profileTokens, ccTokens) {
   // to the dedicated pass-fill command — filling a login username into a
   // password-less registration form would clobber its profile email field.
   let hasLogin = false;
-  for (const el of document.querySelectorAll('input[type="password"]')) {
+  for (const el of deepQueryAll('input[type="password"]')) {
     if (el.disabled || el.readOnly) continue;
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) continue;
@@ -973,10 +990,12 @@ async function fillIdentityForm(fields, synonyms, ruleSources, knownTokens, geo)
       .replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
   }
   function labelText(el) {
-    const doc = el.ownerDocument;
+    // getRootNode(): inside a shadow root the <label for=…> and the
+    // aria-labelledby targets live in the same root, not the document.
+    const root = el.getRootNode ? el.getRootNode() : el.ownerDocument;
     if (el.id) {
       try {
-        const lab = doc.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        const lab = root.querySelector(`label[for="${CSS.escape(el.id)}"]`);
         if (lab) return lab.textContent || "";
       } catch {}
     }
@@ -988,7 +1007,8 @@ async function fillIdentityForm(fields, synonyms, ruleSources, knownTokens, geo)
     const labId = el.getAttribute("aria-labelledby");
     if (labId) {
       // aria-labelledby may list several ids; join their text.
-      const txt = labId.split(/\s+/).map((id) => doc.getElementById(id)?.textContent || "").join(" ").trim();
+      const byId = (id) => (root.getElementById ? root.getElementById(id) : root.querySelector(`#${CSS.escape(id)}`));
+      const txt = labId.split(/\s+/).map((id) => byId(id)?.textContent || "").join(" ").trim();
       if (txt) return txt;
     }
     const al = el.getAttribute("aria-label");
@@ -1123,7 +1143,9 @@ async function fillIdentityForm(fields, synonyms, ruleSources, knownTokens, geo)
                        '.MuiMenuItem-root, .ant-select-item-option, [class*="option"]';
     const candLoose = candidates.map(loose);
     const opt = await pollFor(() => {
-      const nodes = Array.from(doc.querySelectorAll(OPTION_SEL))
+      // deepQueryAll: option lists of web-component selects render inside
+      // shadow roots (hoisted deeper in this function; hoisting applies).
+      const nodes = deepQueryAll(OPTION_SEL, doc)
         .filter((n) => n.getBoundingClientRect().height > 0);
       // Prefer an exact text match over a prefix match, regardless of DOM
       // order, so "United States" wins over "United States Minor Outlying …".
@@ -1223,13 +1245,27 @@ async function fillIdentityForm(fields, synonyms, ruleSources, knownTokens, geo)
     }
     return null;
   }
+  // querySelectorAll never pierces shadow roots — web-component design
+  // systems (SmartRecruiters spl-input, Salesforce LWC, Vaadin, …) put the
+  // real <input> inside an open shadow root, so a light-DOM-only scan sees
+  // zero fields. Recursively descend every OPEN shadow root.
+  function deepQueryAll(sel, root) {
+    const out = [];
+    const walk = (r) => {
+      let m; try { m = r.querySelectorAll(sel); } catch { return; }
+      for (const el of m) out.push(el);
+      for (const host of r.querySelectorAll("*")) if (host.shadowRoot) walk(host.shadowRoot);
+    };
+    walk(root || document);
+    return out;
+  }
   // Scan real form fields plus custom-dropdown triggers (react-select
   // inputs are role=combobox <input>s already caught; MUI/Radix triggers
   // are <div>/<button aria-haspopup=listbox>). Dedupe by element identity.
   const filled = [];
   const seen = new Set();
-  const nodes = Array.from(document.querySelectorAll(
-    'input, select, textarea, [role="combobox"], [aria-haspopup="listbox"]'));
+  const nodes = deepQueryAll(
+    'input, select, textarea, [role="combobox"], [aria-haspopup="listbox"]');
   for (const el of nodes) {
     if (seen.has(el)) continue;
     seen.add(el);
@@ -1533,6 +1569,20 @@ function fillLoginForm(username, password, autoSubmit) {
     if (cs.visibility === "hidden" || cs.display === "none") return false;
     return true;
   }
+  // querySelectorAll never pierces shadow roots — web-component design
+  // systems (SmartRecruiters spl-input, Salesforce LWC, Vaadin, …) put the
+  // real <input> inside an open shadow root, so a light-DOM-only scan sees
+  // zero fields. Recursively descend every OPEN shadow root.
+  function deepQueryAll(sel, root) {
+    const out = [];
+    const walk = (r) => {
+      let m; try { m = r.querySelectorAll(sel); } catch { return; }
+      for (const el of m) out.push(el);
+      for (const host of r.querySelectorAll("*")) if (host.shadowRoot) walk(host.shadowRoot);
+    };
+    walk(root || document);
+    return out;
+  }
   // Heuristic: does an <input> look like a username/email field even when
   // no password field is anchored next to it? Used on pages that split
   // login into two steps (Google / Microsoft / Okta) — the first step
@@ -1548,24 +1598,30 @@ function fillLoginForm(username, password, autoSubmit) {
   }
   function findUsernameAnchoredOnPassword(pwEl) {
     // Same form (preferred) or whole document; pick the visible text-like
-    // input immediately preceding the password in document order.
+    // input immediately preceding the password in traversal order.
+    // compareDocumentPosition returns DISCONNECTED across shadow trees, so
+    // "preceding" is derived from the deep-scan collection order instead.
     const sel = 'input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="reset"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="image"])';
-    const all = pwEl.form
-      ? [...pwEl.form.querySelectorAll(sel)]
-      : [...document.querySelectorAll(sel)];
-    const visibleAll = all.filter(visible);
-    const before = visibleAll.filter((c) => pwEl.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING);
-    return before.length ? before[before.length - 1] : visibleAll[0] || null;
+    const scope = pwEl.form || undefined;
+    const seq = deepQueryAll('input', scope).filter((el) => visible(el) || el === pwEl);
+    const pwIdx = seq.indexOf(pwEl);
+    const cands = (scope ? deepQueryAll(sel, scope) : deepQueryAll(sel)).filter(visible);
+    const candSet = new Set(cands);
+    let before = null;
+    for (let i = 0; i < (pwIdx < 0 ? seq.length : pwIdx); i++) {
+      if (candSet.has(seq[i])) before = seq[i];
+    }
+    return before || cands[0] || null;
   }
   function findStandaloneUsername() {
     // No password on the page — find the most likely username field by
     // type=email, autocomplete=username/email, or name/id/placeholder
     // matching a username-ish keyword.
-    const all = [...document.querySelectorAll('input')].filter(visible);
+    const all = deepQueryAll('input').filter(visible);
     return all.find(looksLikeUsername) || null;
   }
 
-  const pw = [...document.querySelectorAll('input[type="password"]')].find(visible);
+  const pw = deepQueryAll('input[type="password"]').find(visible);
 
   let userEl = null;
   let userFilled = false;
@@ -1619,19 +1675,21 @@ function fillLoginForm(username, password, autoSubmit) {
     };
     const findNearby = (start) => {
       // BFS up the ancestor chain looking for a submit-shaped button.
+      // Hops OUT of shadow roots via getRootNode().host so a field inside
+      // a web component can still find the page-level submit button.
       let cur = start;
       while (cur && cur !== cur.ownerDocument) {
         const b =
           cur.querySelector?.('button[type="submit"]') ||
           cur.querySelector?.('input[type="submit"]');
         if (b && !b.disabled && visible(b)) return b;
-        cur = cur.parentElement;
+        cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
       }
       return null;
     };
     const findByText = () => {
       const rx = /^(sign[- ]?in|log[- ]?in|continue|next|submit|enter)\b/i;
-      const all = [...document.querySelectorAll('button, [role="button"], input[type="submit"]')];
+      const all = deepQueryAll('button, [role="button"], input[type="submit"]');
       return all.find((b) => {
         if (b.disabled || !visible(b)) return false;
         const t = String(b.value || b.textContent || b.getAttribute("aria-label") || "").trim();
