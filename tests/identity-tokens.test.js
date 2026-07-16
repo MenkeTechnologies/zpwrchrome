@@ -10,6 +10,9 @@ import {
   PROFILE_TOKENS,
   CC_TOKENS,
   TOKEN_SYNONYMS,
+  FIELD_RULE_SOURCES,
+  compileFieldRules,
+  matchFieldRules,
   normalizeForMatch,
   recognizeField,
   expandFieldValue,
@@ -292,4 +295,131 @@ test("expandFieldValue: realistic profile entry with friendly names round-trips"
   // Composite name still works via alias chain even with no explicit
   // `name` key in the entry.
   assert.equal(expandFieldValue("name", friendly), "Jane Doe");
+});
+
+// ─── Real-world field-name variations (regression corpus) ──────────
+// These are the shapes that broke recognition before the FIELD_RULES
+// engine: nested framework names, camelCase, billing/shipping prefixes,
+// and separator-split digits. Sources: Firefox HeuristicsRegExp,
+// Chromium autofill regexes, WooCommerce/Magento/Shopify/Spree/Workday/
+// Amazon/Salesforce field conventions.
+
+test("camelCase field names are split and recognized", () => {
+  assert.equal(recognizeField({ name: "addressLine1" }), "address-line1");
+  assert.equal(recognizeField({ name: "addressLine2" }), "address-line2");
+  assert.equal(recognizeField({ name: "postalCode"   }), "postal-code");
+  assert.equal(recognizeField({ name: "firstName"    }), "given-name");
+  assert.equal(recognizeField({ name: "lastName"     }), "family-name");
+  assert.equal(recognizeField({ name: "phoneNumber"  }), "tel");
+});
+
+test("dotted nested names (Stripe / react-hook-form / Formik) recognize", () => {
+  assert.equal(recognizeField({ name: "address.line1" }),     "address-line1");
+  assert.equal(recognizeField({ name: "address.line2" }),     "address-line2");
+  assert.equal(recognizeField({ name: "user.address.city" }), "address-level2");
+  assert.equal(recognizeField({ name: "address.postal_code" }), "postal-code");
+  assert.equal(recognizeField({ name: "addresses.0.street" }), "street-address");
+});
+
+test("bracketed nested names (Magento / Shopify / Spree) recognize the leaf, not the parent", () => {
+  assert.equal(recognizeField({ name: "billing[postcode]" }),  "postal-code");
+  assert.equal(recognizeField({ name: "billing[city]" }),      "address-level2");
+  assert.equal(recognizeField({ name: "billing[region_id]" }), "address-level1");
+  assert.equal(recognizeField({ name: "order[bill_address_attributes][address1]" }), "address-line1");
+  // The pollution case: a ZIP field whose PARENT segment says "address"
+  // must NOT be swallowed by street-address (leaf tokens win by ordering).
+  assert.equal(recognizeField({ name: "checkout[shipping_address][zip]" }), "postal-code");
+});
+
+test("billing_/shipping_ prefixed WooCommerce names recognize", () => {
+  assert.equal(recognizeField({ name: "billing_address_1" }),  "address-line1");
+  assert.equal(recognizeField({ name: "shipping_address_2" }), "address-line2");
+  assert.equal(recognizeField({ name: "billing_city" }),       "address-level2");
+  assert.equal(recognizeField({ name: "billing_state" }),      "address-level1");
+  assert.equal(recognizeField({ name: "billing_postcode" }),   "postal-code");
+  assert.equal(recognizeField({ name: "billing_country" }),    "country");
+  assert.equal(recognizeField({ name: "billing_first_name" }), "given-name");
+  assert.equal(recognizeField({ name: "billing_company" }),    "organization");
+});
+
+test("separator-split digits recognize (address-line-1, address_line_2)", () => {
+  assert.equal(recognizeField({ name: "address-line-1" }), "address-line1");
+  assert.equal(recognizeField({ name: "address_line_2" }), "address-line2");
+  assert.equal(recognizeField({ id:   "street_1" }),       "address-line1");
+});
+
+test("Amazon / Workday / Salesforce / Magento vendor names recognize", () => {
+  assert.equal(recognizeField({ id: "enterAddressLine1" }),          "address-line1");
+  assert.equal(recognizeField({ id: "enterAddressStateOrRegion" }),  "address-level1");
+  assert.equal(recognizeField({ id: "enterAddressPostalCode" }),     "postal-code");
+  assert.equal(recognizeField({ id: "enterAddressCity" }),           "address-level2");
+  assert.equal(recognizeField({ name: "addressSection_addressLine1" }), "address-line1");
+  assert.equal(recognizeField({ name: "legalNameSection_firstName" }),  "given-name");
+  assert.equal(recognizeField({ name: "MailingPostalCode" }),        "postal-code");
+  assert.equal(recognizeField({ name: "region_id" }),                "address-level1");
+  assert.equal(recognizeField({ name: "administrative_area_level_1" }), "address-level1");
+});
+
+test("collision guards: email/word-suffix/country-county do not misfire", () => {
+  // email-address must not be swallowed by street-address's \\baddress\\b
+  assert.equal(recognizeField({ name: "email-address" }), "email");
+  // English words ending in -city are excluded by \\bcity\\b
+  assert.equal(recognizeField({ name: "capacity" }),    null);
+  assert.equal(recognizeField({ name: "electricity" }), null);
+  // county routes to state (not country); country stays country
+  assert.equal(recognizeField({ name: "county" }),  "address-level1");
+  assert.equal(recognizeField({ name: "country" }), "country");
+  assert.equal(recognizeField({ name: "country_id" }), "country");
+  // "United States" (option text leaking into a label) is NOT a state field
+  assert.notEqual(recognizeField({ label: "United States" }), "address-level1");
+});
+
+test("newly-covered tokens (full name, cc-name, cc-type, cc-exp) recognize", () => {
+  assert.equal(recognizeField({ name: "name" }),        "name");        // bare full name
+  assert.equal(recognizeField({ name: "fullName" }),    "name");
+  assert.equal(recognizeField({ name: "cardholder" }),  "cc-name");
+  assert.equal(recognizeField({ name: "card-brand" }),  "cc-type");
+  assert.equal(recognizeField({ name: "expiration" }),  "cc-exp");
+  assert.equal(recognizeField({ label: "MM / YY" }),    "cc-exp");
+  assert.equal(recognizeField({ name: "suite" }),       "address-line2");
+});
+
+test("normalizeForMatch flattens camelCase / dotted / bracketed names", () => {
+  assert.equal(normalizeForMatch("addressLine1"),        "address-line1");
+  assert.equal(normalizeForMatch("address.line1"),       "address-line1");
+  assert.equal(normalizeForMatch("billing[postcode]"),   "billing-postcode");
+  assert.equal(normalizeForMatch("checkout[shipping_address][zip]"), "checkout-shipping-address-zip");
+});
+
+test("FIELD_RULE_SOURCES is serializable (structured-clone safe for injection)", () => {
+  // background.js ships these into the page via executeScript args — RegExp
+  // objects don't survive structured clone, so every source must be a
+  // [token, string] pair that recompiles cleanly.
+  assert.ok(Array.isArray(FIELD_RULE_SOURCES) && FIELD_RULE_SOURCES.length > 20);
+  const known = new Set([...PROFILE_TOKENS, ...CC_TOKENS]);
+  for (const [token, src] of FIELD_RULE_SOURCES) {
+    assert.ok(known.has(token), `rule token "${token}" is not a known token`);
+    assert.equal(typeof src, "string");
+    assert.doesNotThrow(() => new RegExp(src, "u"), `rule "${token}" has an invalid regex`);
+  }
+  assert.deepEqual(JSON.parse(JSON.stringify(FIELD_RULE_SOURCES)), FIELD_RULE_SOURCES.map(([t, s]) => [t, s]));
+});
+
+test("compileFieldRules + matchFieldRules reproduce recognizeField (injected-path parity)", () => {
+  // The injected fillIdentityForm / scanIdentityCategories rebuild the rules
+  // from the serialized sources and call the same match loop. This asserts
+  // that path yields the SAME token as the module recognizeField, so the
+  // page-side copies can't silently diverge.
+  const compiled = compileFieldRules(FIELD_RULE_SOURCES);
+  const cases = [
+    "address.line1", "billing[postcode]", "checkout[shipping_address][zip]",
+    "billing_address_1", "shipping_city", "billing_state", "enterAddressPostalCode",
+    "addressLine2", "region_id", "cardholder", "expiration", "email-address",
+    "phoneNumber", "county", "country", "capacity",
+  ];
+  for (const raw of cases) {
+    const viaModule   = recognizeField({ name: raw });
+    const viaInjected = matchFieldRules([normalizeForMatch(raw), "", "", ""], compiled);
+    assert.equal(viaInjected, viaModule, `parity mismatch for "${raw}"`);
+  }
 });

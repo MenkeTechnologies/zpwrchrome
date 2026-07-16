@@ -47,6 +47,7 @@ import {
   PROFILE_TOKENS,
   CC_TOKENS,
   TOKEN_SYNONYMS,
+  FIELD_RULE_SOURCES,
   expandFieldValue,
 } from "./lib/identity-tokens.js";
 import { COUNTRIES, US_STATES, CA_PROVINCES } from "./lib/geo-data.js";
@@ -686,7 +687,7 @@ async function detectIdentityCategoriesOnPage(tabId) {
   const results = await chrome.scripting.executeScript({
     target: { tabId, allFrames: true },
     func: scanIdentityCategories,
-    args: [TOKEN_SYNONYMS, [...PROFILE_TOKENS, ...CC_TOKENS], [...PROFILE_TOKENS], [...CC_TOKENS]],
+    args: [FIELD_RULE_SOURCES, [...PROFILE_TOKENS], [...CC_TOKENS]],
   });
   const out = { profile: false, creditcard: false, login: false };
   for (const r of (results || [])) {
@@ -697,11 +698,21 @@ async function detectIdentityCategoriesOnPage(tabId) {
   return out;
 }
 
-function scanIdentityCategories(synonyms, knownTokens, profileTokens, ccTokens) {
-  const known = new Set(knownTokens);
+function scanIdentityCategories(ruleSources, profileTokens, ccTokens) {
   const profileSet = new Set(profileTokens);
   const ccSet      = new Set(ccTokens);
-  function normalize(s) { return String(s || "").toLowerCase().replace(/[_\s]+/g, "-"); }
+  const known      = new Set([...profileTokens, ...ccTokens]);
+  const rules      = ruleSources.map(([token, src]) => [token, new RegExp(src, "u")]);
+  // Mirror lib/identity-tokens.js#normalizeForMatch: camelCase split →
+  // lowercase → collapse non-alnum to '-' → trim. Keeps the injected
+  // recognizer identical to the module one.
+  function normalize(s) {
+    return String(s ?? "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
   function visible(el) {
     if (!el || el.disabled || el.readOnly) return false;
     const t = String(el.type || "").toLowerCase();
@@ -732,15 +743,10 @@ function scanIdentityCategories(synonyms, knownTokens, profileTokens, ccTokens) 
       for (const t of ac.split(/\s+/)) if (known.has(t)) return t;
       if (ac === "current-password" || ac === "new-password") return null;
     }
-    const hay = [spec.name, spec.id, spec.label, spec.placeholder].map(normalize).join(" ");
-    let best = null, bestLen = 0;
-    for (const token in synonyms) {
-      for (const syn of synonyms[token]) {
-        const sn = normalize(syn);
-        if (hay.includes(sn) && sn.length > bestLen) { best = token; bestLen = sn.length; }
-      }
+    const hay = [spec.name, spec.id, spec.label, spec.placeholder].map(normalize).filter(Boolean).join(" ");
+    if (hay) {
+      for (const [token, re] of rules) if (re.test(hay)) return token;
     }
-    if (best) return best;
     const tp = String(spec.type || "").toLowerCase();
     if (tp === "email") return "email";
     if (tp === "tel")   return "tel";
@@ -838,7 +844,7 @@ async function injectIdentityFill(tabId, fields, { kinds }) {
     const results = await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
       func: fillIdentityForm,
-      args: [fields, TOKEN_SYNONYMS, [...PROFILE_TOKENS, ...CC_TOKENS],
+      args: [fields, TOKEN_SYNONYMS, FIELD_RULE_SOURCES, [...PROFILE_TOKENS, ...CC_TOKENS],
              { countries: COUNTRIES, states: US_STATES, provinces: CA_PROVINCES }],
     });
     const totalFilled = (results || []).reduce((s, r) => s + (r?.result?.filled || 0), 0);
@@ -937,13 +943,21 @@ async function showIdentityPicker(tabId, kind, paths) {
 // value in the fields bag (with alias-chain fallbacks for cc-exp,
 // name ↔ given/family, street-address ↔ address-line1/2/3), and writes
 // via the native value setter so React/Vue/Lit observers fire.
-async function fillIdentityForm(fields, synonyms, knownTokens, geo) {
+async function fillIdentityForm(fields, synonyms, ruleSources, knownTokens, geo) {
   const known = new Set(knownTokens);
+  const rules = ruleSources.map(([token, src]) => [token, new RegExp(src, "u")]);
   const COUNTRIES  = (geo && geo.countries) || {};
   const US_STATES  = (geo && geo.states)    || {};
   const CA_PROV    = (geo && geo.provinces) || {};
+  // Mirror lib/identity-tokens.js#normalizeForMatch (camelCase split →
+  // lowercase → collapse non-alnum to '-' → trim) so the injected
+  // recognizer matches the module + scan copies exactly.
   function normalize(s) {
-    return String(s || "").toLowerCase().replace(/[_\s]+/g, "-");
+    return String(s ?? "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
   }
   // Loose text-compare for option matching: lowercase, trim, collapse
   // whitespace, drop diacritics so "Côte d'Ivoire" ~ "cote divoire".
@@ -1036,18 +1050,10 @@ async function fillIdentityForm(fields, synonyms, knownTokens, geo) {
       if (ac === "current-password" || ac === "new-password") return null;
     }
     const hay = [spec.name, spec.id, spec.label, spec.placeholder,
-                 spec.dataAutomationId].map(normalize).join(" ");
-    let best = null;
-    let bestLen = 0;
-    for (const token in synonyms) {
-      for (const syn of synonyms[token]) {
-        const sn = normalize(syn);
-        if (hay.includes(sn) && sn.length > bestLen) {
-          best = token; bestLen = sn.length;
-        }
-      }
+                 spec.dataAutomationId].map(normalize).filter(Boolean).join(" ");
+    if (hay) {
+      for (const [token, re] of rules) if (re.test(hay)) return token;
     }
-    if (best) return best;
     const tp = String(spec.type || "").toLowerCase();
     if (tp === "email") return "email";
     if (tp === "tel")   return "tel";
