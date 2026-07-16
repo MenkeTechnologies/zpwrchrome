@@ -541,13 +541,16 @@ async function passFillIdentityActive(kind) {
 
 // Combined fill: gather fields from BOTH profile/* and creditcard/*
 // entries (each kind goes through its own pick/cache/picker), merge
-// into one bag, inject fillIdentityForm once. Additionally, when the
-// page has a visible password field, host-match a login entry and fill
-// username/password via fillLoginForm. The identity fill function only
-// touches recognized fields on the page — so a page with only profile
-// inputs gets only profile values written, even when we passed CC
-// values in the bag. Single keystroke for a signup/checkout that has
-// login + address + card fields together.
+// into one bag, inject fillIdentityForm once. Additionally, host-match a
+// login entry and fill username/password via fillLoginForm — the SAME
+// path the standalone `pass-fill` command uses, so a 2-step username-first
+// login (step 1 has no visible password field) fills exactly as it does
+// under pass-fill. pickLoginEntry returns null when the host has no
+// matching login entry, so non-login pages are untouched. The identity
+// fill function only touches recognized fields on the page — so a page
+// with only profile inputs gets only profile values written, even when we
+// passed CC values in the bag. Single keystroke for login + address + card
+// together, one key for all.
 async function passFillIdentityCombinedActive() {
   diagPush("pass.identity.fill.combined.start");
   const t = await getActive();
@@ -596,11 +599,15 @@ async function passFillIdentityCombinedActive() {
   if (usedKinds.length) {
     await injectIdentityFill(t.id, merged, { kinds: usedKinds.slice() });
   }
-  // Login: host-match a `pass` entry (same matcher as `pass-fill`) and
-  // fill username/password. Only when the page actually has a visible
-  // password field, so we never clobber a profile email field with a
-  // login username on a password-less form.
-  if (detected.login && host) {
+  // Login: host-match a `pass` entry (same matcher AND same fill path as
+  // `pass-fill`) and fill username/password. Gated on host-match only — NOT
+  // on a visible password field — so 2-step username-first logins (step 1
+  // has no password field yet) fill just like they do under pass-fill.
+  // pickLoginEntry returns null when the host has no matching login entry,
+  // so a page with no credential for this host is left untouched; the
+  // password-less clobber risk only materializes when the host genuinely
+  // has a stored login, which is exactly when the user wants it filled.
+  if (host) {
     const creds = await pickLoginEntry(t.id, host);
     if (creds && (creds.username || creds.password)) {
       const n = await injectLoginFill(t.id, creds);

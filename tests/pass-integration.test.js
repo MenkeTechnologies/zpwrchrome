@@ -369,12 +369,16 @@ test("detectIdentityCategoriesOnPage aggregates the login flag across frames", (
   assert.match(fn[0], /if \(r\?\.result\?\.login\)\s+out\.login\s+= true/);
 });
 
-test("combined identity fill fills login only when a password field is present", () => {
+test("combined identity fill attempts login on any host-match (pass-fill parity, not gated on a password field)", () => {
   const fn = bg.match(/async function passFillIdentityCombinedActive\([\s\S]*?\n\}/);
   assert.ok(fn, "passFillIdentityCombinedActive missing");
-  // Guarded on detected.login + a real host, then delegates to the login
-  // pick + inject helpers.
-  assert.match(fn[0], /if \(detected\.login && host\)/);
+  // Gated on a real host ONLY — the same fill path as the standalone
+  // pass-fill command, so a 2-step username-first login (step 1 has no
+  // visible password field) still fills. pickLoginEntry returns null when
+  // the host has no matching login entry, so non-login pages stay untouched.
+  // Must NOT reintroduce the old `detected.login` password-field gate.
+  assert.match(fn[0], /\n  if \(host\) \{\n    const creds = await pickLoginEntry/);
+  assert.doesNotMatch(fn[0], /if \(detected\.login && host\)/);
   assert.match(fn[0], /pickLoginEntry\(t\.id, host\)/);
   assert.match(fn[0], /injectLoginFill\(t\.id, creds\)/);
   // Profile/CC inject must not carry the "login" kind (that's a separate
