@@ -509,6 +509,12 @@ async function passCopyFieldForPath(path, field) {
 // street-address, postal-code, …) — see lib/identity-tokens.js for the
 // full set + the recognizer.
 //
+// The combined `pass-fill-identity` command additionally fills login
+// credentials (username/password): when the page has a visible password
+// field, it host-matches a `pass` entry (same matcher as `pass-fill`) and
+// fills it via fillLoginForm — so one keystroke handles a signup/checkout
+// that has login + address + card fields together.
+//
 // Flow:
 //   1. List entries under the prefix.
 //   2. If 2+, inject a shadow-DOM picker into the active tab (last-used
@@ -534,10 +540,13 @@ async function passFillIdentityActive(kind) {
 
 // Combined fill: gather fields from BOTH profile/* and creditcard/*
 // entries (each kind goes through its own pick/cache/picker), merge
-// into one bag, inject fillIdentityForm once. The fill function only
+// into one bag, inject fillIdentityForm once. Additionally, when the
+// page has a visible password field, host-match a login entry and fill
+// username/password via fillLoginForm. The identity fill function only
 // touches recognized fields on the page — so a page with only profile
 // inputs gets only profile values written, even when we passed CC
-// values in the bag. Single keystroke for a checkout that has both.
+// values in the bag. Single keystroke for a signup/checkout that has
+// login + address + card fields together.
 async function passFillIdentityCombinedActive() {
   diagPush("pass.identity.fill.combined.start");
   const t = await getActive();
@@ -555,7 +564,7 @@ async function passFillIdentityCombinedActive() {
     detected = await detectIdentityCategoriesOnPage(t.id);
   } catch (e) {
     diagPush("pass.identity.fill.combined.detect_err", { err: String(e?.message || e) });
-    detected = { profile: true, creditcard: true };  // fall through to both
+    detected = { profile: true, creditcard: true, login: true };  // fall through to all
   }
   diagPush("pass.identity.fill.combined.detected", detected);
   const merged = {};
@@ -579,16 +588,94 @@ async function passFillIdentityCombinedActive() {
     Object.assign(merged, fields);
     usedKinds.push(kind);
   }
+  // Profile + credit-card go in first (single injection) so that, even in
+  // the unlikely event login fill were to navigate, the address/card
+  // fields are already written. (Login auto-submit is forced off below,
+  // so no navigation actually happens here.)
+  if (usedKinds.length) {
+    await injectIdentityFill(t.id, merged, { kinds: usedKinds.slice() });
+  }
+  // Login: host-match a `pass` entry (same matcher as `pass-fill`) and
+  // fill username/password. Only when the page actually has a visible
+  // password field, so we never clobber a profile email field with a
+  // login username on a password-less form.
+  if (detected.login && host) {
+    const creds = await pickLoginEntry(t.id, host);
+    if (creds && (creds.username || creds.password)) {
+      const n = await injectLoginFill(t.id, creds);
+      if (n > 0) usedKinds.push("login");
+    }
+  }
   if (!usedKinds.length) {
     notify({
       title: "zpwrchrome — pass identity fill",
-      message: !detected.profile && !detected.creditcard
-        ? "No recognized profile or credit-card fields on this page."
-        : "No matching `profile/*` or `creditcard/*` entries in the pass store. Add one in the pass manager.",
+      message: (!detected.profile && !detected.creditcard && !detected.login)
+        ? "No recognized profile, credit-card, or login fields on this page."
+        : "No matching `profile/*`, `creditcard/*`, or host-matched login entries in the pass store. Add one in the pass manager.",
     });
-    return;
   }
-  await injectIdentityFill(t.id, merged, { kinds: usedKinds });
+}
+
+// Host-match a login entry for the combined fill, disambiguating with the
+// same in-tab picker + last-used cache as profile/creditcard (rather than
+// popping the extension popup the way the standalone pass-fill does). Zero
+// host matches → silent skip (the user may only have profile/cc entries).
+async function pickLoginEntry(tabId, host) {
+  let matches;
+  try {
+    matches = await bpMatchByHost(host);
+  } catch (e) {
+    diagPush("pass.identity.fill.combined.login_match_err", { host, err: String(e?.message || e) });
+    return null;
+  }
+  const paths = matches.map((m) => m.path).sort();
+  diagPush("pass.identity.fill.combined.login_candidates", { host, count: paths.length, paths });
+  if (!paths.length) return null;
+  let chosen;
+  if (paths.length === 1) {
+    chosen = paths[0];
+  } else {
+    const last = await getIdentityLastUsed("login", host);
+    const ordered = last && paths.includes(last)
+      ? [last, ...paths.filter((p) => p !== last)]
+      : paths;
+    chosen = await showIdentityPicker(tabId, "login", ordered);
+    if (!chosen) {
+      diagPush("pass.identity.fill.combined.login_cancelled", { host });
+      return null;
+    }
+    await setIdentityLastUsed("login", host, chosen);
+  }
+  try {
+    const entry = await bpFetchParsed(chosen);
+    return { username: String(entry.username || ""), password: String(entry.password || "") };
+  } catch (e) {
+    diagPush("pass.identity.fill.combined.login_fetch_err", { path: chosen, err: String(e?.message || e) });
+    return null;
+  }
+}
+
+// Inject the shared fillLoginForm into every frame with autoSubmit forced
+// off — the combined fill is about populating fields, not submitting, so a
+// login submit never abandons the profile/card fields we just wrote. The
+// standalone `pass-fill` command still honors the auto-submit setting.
+async function injectLoginFill(tabId, creds) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: fillLoginForm,
+      args: [String(creds.username || ""), String(creds.password || ""), false],
+    });
+    const filled = (results || []).filter(
+      (r) => r?.result?.pwFilled === true || r?.result?.userFilled === true || r?.result?.filled === true,
+    ).length;
+    diagPush("pass.identity.fill.combined.login_injected", { frames: results?.length || 0, filled });
+    return filled;
+  } catch (e) {
+    diagPush("pass.identity.fill.combined.login_inject_err", { err: String(e?.message || e) });
+    console.warn("[zpwrchrome] identity login fill inject:", e?.message || e);
+    return 0;
+  }
 }
 
 // Page-side scan: walk every visible <input>/<select>/<textarea>, run
@@ -601,10 +688,11 @@ async function detectIdentityCategoriesOnPage(tabId) {
     func: scanIdentityCategories,
     args: [TOKEN_SYNONYMS, [...PROFILE_TOKENS, ...CC_TOKENS], [...PROFILE_TOKENS], [...CC_TOKENS]],
   });
-  const out = { profile: false, creditcard: false };
+  const out = { profile: false, creditcard: false, login: false };
   for (const r of (results || [])) {
     if (r?.result?.profile)    out.profile    = true;
     if (r?.result?.creditcard) out.creditcard = true;
+    if (r?.result?.login)      out.login      = true;
   }
   return out;
 }
@@ -675,7 +763,21 @@ function scanIdentityCategories(synonyms, knownTokens, profileTokens, ccTokens) 
     else if (profileSet.has(token)) hasProfile = true;
     if (hasProfile && hasCC) break;
   }
-  return { profile: hasProfile, creditcard: hasCC };
+  // Login: a visible, enabled password field means this is a credential
+  // form. Standalone username-only (2-step) pages are intentionally left
+  // to the dedicated pass-fill command — filling a login username into a
+  // password-less registration form would clobber its profile email field.
+  let hasLogin = false;
+  for (const el of document.querySelectorAll('input[type="password"]')) {
+    if (el.disabled || el.readOnly) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    const cs = el.ownerDocument.defaultView.getComputedStyle(el);
+    if (cs.visibility === "hidden" || cs.display === "none") continue;
+    hasLogin = true;
+    break;
+  }
+  return { profile: hasProfile, creditcard: hasCC, login: hasLogin };
 }
 
 // Shared pick + fetch: list entries under `${kind}/` (or use the

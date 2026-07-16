@@ -352,3 +352,51 @@ test("manifest declares webRequest + webRequestAuthProvider perms", () => {
   assert.ok(manifest.permissions.includes("webRequest"));
   assert.ok(manifest.permissions.includes("webRequestAuthProvider"));
 });
+
+test("scanIdentityCategories reports a `login` flag from a visible password field", () => {
+  const fn = bg.match(/function scanIdentityCategories\([\s\S]*?\n\}/);
+  assert.ok(fn, "scanIdentityCategories missing");
+  // Detection keys off an actual <input type=password> (not a username-ish
+  // text field) so a password-less registration form never triggers login.
+  assert.match(fn[0], /querySelectorAll\('input\[type="password"\]'\)/);
+  assert.match(fn[0], /return \{ profile: hasProfile, creditcard: hasCC, login: hasLogin \}/);
+});
+
+test("detectIdentityCategoriesOnPage aggregates the login flag across frames", () => {
+  const fn = bg.match(/async function detectIdentityCategoriesOnPage\([\s\S]*?\n\}/);
+  assert.ok(fn, "detectIdentityCategoriesOnPage missing");
+  assert.match(fn[0], /profile: false, creditcard: false, login: false/);
+  assert.match(fn[0], /if \(r\?\.result\?\.login\)\s+out\.login\s+= true/);
+});
+
+test("combined identity fill fills login only when a password field is present", () => {
+  const fn = bg.match(/async function passFillIdentityCombinedActive\([\s\S]*?\n\}/);
+  assert.ok(fn, "passFillIdentityCombinedActive missing");
+  // Guarded on detected.login + a real host, then delegates to the login
+  // pick + inject helpers.
+  assert.match(fn[0], /if \(detected\.login && host\)/);
+  assert.match(fn[0], /pickLoginEntry\(t\.id, host\)/);
+  assert.match(fn[0], /injectLoginFill\(t\.id, creds\)/);
+  // Profile/CC inject must not carry the "login" kind (that's a separate
+  // injection through fillLoginForm, not fillIdentityForm).
+  assert.match(fn[0], /injectIdentityFill\(t\.id, merged, \{ kinds: usedKinds\.slice\(\) \}\)/);
+});
+
+test("pickLoginEntry host-matches, caches last-used under a `login` namespace", () => {
+  const fn = bg.match(/async function pickLoginEntry\([\s\S]*?\n\}/);
+  assert.ok(fn, "pickLoginEntry missing");
+  assert.match(fn[0], /bpMatchByHost\(host\)/);          // same matcher as pass-fill
+  assert.match(fn[0], /getIdentityLastUsed\("login", host\)/);
+  assert.match(fn[0], /setIdentityLastUsed\("login", host, chosen\)/);
+  assert.match(fn[0], /showIdentityPicker\(tabId, "login", ordered\)/);
+  assert.match(fn[0], /return \{ username: String\(entry\.username[\s\S]*?password: String\(entry\.password/);
+});
+
+test("injectLoginFill forces auto-submit OFF in the combined flow", () => {
+  const fn = bg.match(/async function injectLoginFill\([\s\S]*?\n\}/);
+  assert.ok(fn, "injectLoginFill missing");
+  assert.match(fn[0], /func: fillLoginForm/);
+  // autoSubmit arg is a hard `false` — combined fill never submits and
+  // abandons the address/card fields it just wrote.
+  assert.match(fn[0], /args: \[String\(creds\.username \|\| ""\), String\(creds\.password \|\| ""\), false\]/);
+});
