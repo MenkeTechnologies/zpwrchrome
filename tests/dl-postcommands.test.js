@@ -30,8 +30,8 @@ test("pathMeta: POSIX path splits cleanly", () => {
 });
 
 test("pathMeta: Windows path with backslashes works", () => {
-  const m = pathMeta("C:\\Users\\Jacob\\Downloads\\app.exe");
-  assert.equal(m.dir,  "C:\\Users\\Jacob\\Downloads");
+  const m = pathMeta("C:\\Users\\Alice\\Downloads\\app.exe");
+  assert.equal(m.dir,  "C:\\Users\\Alice\\Downloads");
   assert.equal(m.name, "app.exe");
   assert.equal(m.base, "app");
   assert.equal(m.ext,  "exe");
