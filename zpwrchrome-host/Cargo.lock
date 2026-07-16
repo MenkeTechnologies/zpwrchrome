@@ -909,12 +909,13 @@ dependencies = [
 
 [[package]]
 name = "zwire-host"
-version = "0.3.8"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea6978e776712c1ed79ec614772a9f90b093dc66130aa3fb61b856182124fd87"
+checksum = "ee6095f65b6a2e6d534964981a26c94e5377b3b864f151a92b10bfa4d5d471e3"
 dependencies = [
  "base64",
  "interprocess",
+ "serde",
  "serde_json",
  "toml",
 ]
