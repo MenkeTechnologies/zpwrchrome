@@ -400,3 +400,22 @@ test("injectLoginFill forces auto-submit OFF in the combined flow", () => {
   // abandons the address/card fields it just wrote.
   assert.match(fn[0], /args: \[String\(creds\.username \|\| ""\), String\(creds\.password \|\| ""\), false\]/);
 });
+
+test("both injected recognizers use the ported FIELD_RULE regex ruleset, not a synonym loop", () => {
+  // The page-side copies (scanIdentityCategories + fillIdentityForm) must stay
+  // in sync with lib/identity-tokens.js: each receives the serialized
+  // FIELD_RULE_SOURCES, recompiles them, and matches via the rule loop —
+  // and NEITHER may reintroduce the old `hay.includes(sn)` synonym loop.
+  assert.match(bg, /FIELD_RULE_SOURCES/, "background.js must import FIELD_RULE_SOURCES");
+  const count = (re) => (bg.match(re) || []).length;
+  // The recompile line + the match loop each appear in BOTH injected copies.
+  assert.equal(count(/ruleSources\.map\(\(\[token, src\]\) => \[token, new RegExp\(src, "u"\)\]\)/g), 2,
+    "both injected recognizers must recompile the passed rule sources");
+  assert.equal(count(/for \(const \[token, re\] of rules\) if \(re\.test\(hay\)\) return token/g), 2,
+    "both injected recognizers must match via the compiled rules");
+  // The old synonym-substring loop must be gone from the injected recognizers.
+  assert.doesNotMatch(bg, /hay\.includes\(sn\)/, "old synonym-substring loop still present");
+  // Both injections pass the serialized rule sources through executeScript.
+  assert.match(bg, /func: scanIdentityCategories,\s*args: \[FIELD_RULE_SOURCES,/);
+  assert.match(bg, /func: fillIdentityForm,\s*args: \[fields, TOKEN_SYNONYMS, FIELD_RULE_SOURCES,/);
+});
