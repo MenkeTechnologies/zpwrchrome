@@ -48,7 +48,7 @@ A Chrome MV3 extension that bundles every daily-driver browser tool into one too
 
 ## [0x00] OVERVIEW
 
-`zpwrchrome` is a Chrome MV3 extension that bundles six daily-driver capabilities into one toolbar icon: UNIX `pass` integration (with full-page CRUD manager + profile / credit-card autofill), a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher with fzf history search, a Tampermonkey-equivalent userscript engine, full-page screenshot capture, and a Wappalyzer-compatible technology detector. 55 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
+`zpwrchrome` is a Chrome MV3 extension that collapses a browser power-user's toolchain into one toolbar icon. The headline capabilities: UNIX `pass` integration (with browser-side GPG unlock, full-page CRUD manager, and profile / credit-card autofill), a segmented download manager that takes over Chrome's default, a JetBrains-style tab switcher with fzf history search, a Tampermonkey-equivalent userscript engine, full-page screenshot capture, and a Wappalyzer-compatible technology detector — the rest are enumerated in [Capability Surface](#0x07-capability-surface). 55 keyboard commands, a cyberpunk HUD popup, and a matching browser theme. Highlights:
 
 - **MRU stack** — cross-window most-recently-used tracking via `chrome.storage.session`, survives service-worker restarts
 - **Alt+T popup** — the cyberpunk HUD with 12 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History / **Pass** / **Tech**), Cmd+1–0 jumps for the first ten, Cmd+P → Pass, Cmd+K → Tech, fzf scoring on every row
@@ -354,7 +354,7 @@ Identity / credit-card autofill (`profile/*`, `creditcard/*`) is **not** a separ
 
 ## [0x07] CAPABILITY SURFACE
 
-zpwrchrome is six daily-driver tools in one extension. Each row names a capability and what replaces / supersedes in the typical browser power-user stack.
+Each row names a capability and what it replaces / supersedes in the typical browser power-user stack.
 
 | Capability | Replaces / supersedes | Implementation |
 | --- | --- | --- |

@@ -1,5 +1,6 @@
 //! zpwrchrome-host — Rust port of [browserpass-native](https://github.com/browserpass/browserpass-native)
-//! plus zpwrchrome extensions (otp, search, segmented download manager).
+//! plus zpwrchrome extensions (otp, search, GPG unlock, segmented download
+//! manager, post-download exec, filesystem crawl/exec, zcite handoff).
 //!
 //! The `ported/` tree is a strict 1:1 port of the upstream Go source — every
 //! file mirrors a single upstream Go file by stem and relative subpath, every
