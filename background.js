@@ -3921,8 +3921,9 @@ if (chrome.webRequest && chrome.webRequest.onAuthRequired) {
 //   request:  { action, settings: { stores: { storeId: {id,name,path} } }, ...args }
 //   response: { status: "ok"|"error", version, data?, code?, params? }
 //
-// The host (zpwrchrome-host) speaks PROTOCOL.md v3.1.2 plus three
-// extension actions (otp, search, dl.*). Each call spawns a fresh host
+// The host (zpwrchrome-host) speaks PROTOCOL.md v3.1.2 plus the additive
+// actions (otp, search, pass.unlock, pass.lock, run.spawn, host.crawl,
+// host.exec, zcite.save, dl.*). Each call spawns a fresh host
 // process — there is no long-lived port. Pause/resume/cancel + live queue
 // updates for downloads are surfaced via the host's file-state at
 // $XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json (read by `dl.list`).

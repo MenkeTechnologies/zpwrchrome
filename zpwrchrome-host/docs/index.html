@@ -189,9 +189,9 @@
       <div class="stat"><div class="n">v0.10.2</div><div class="l">version</div></div>
       <div class="stat"><div class="n">v3.1.2</div><div class="l">protocol pin</div></div>
       <div class="stat"><div class="n">7</div><div class="l">ported actions</div></div>
-      <div class="stat"><div class="n">6</div><div class="l">extension actions</div></div>
-      <div class="stat"><div class="n">5,753</div><div class="l">LOC Rust</div></div>
-      <div class="stat"><div class="n">127</div><div class="l">#[test] fns</div></div>
+      <div class="stat"><div class="n">20</div><div class="l">extension actions</div></div>
+      <div class="stat"><div class="n">6,125</div><div class="l">LOC Rust (src)</div></div>
+      <div class="stat"><div class="n">137</div><div class="l">#[test] fns</div></div>
     </div>
     <div class="ctas">
       <a class="btn btn-primary"   href="https://github.com/MenkeTechnologies/zpwrchrome">▸ source on github</a>
@@ -211,7 +211,8 @@
         browser extension talks to via Chrome / Firefox native messaging — <strong style="color: var(--accent);">plus</strong>
         additive actions that <code>browserpass-extension</code> doesn't call but are wired into
         <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">zpwrchrome</a>:
-        TOTP retrieval, whole-store fuzzy + substring search, browser-side GPG unlock, and a multi-segment HTTP/HTTPS download manager.
+        TOTP retrieval, whole-store fuzzy + substring search, browser-side GPG unlock, a multi-segment HTTP/HTTPS download manager,
+        post-download command execution, filesystem crawl / program exec, and a CSL-JSON handoff to the zcite reference manager.
       </p>
       <div class="features">
         <div class="feature"><strong>Single static binary</strong>Pure-Rust dep tree: <code>serde</code>, <code>serde_json</code>, <code>ureq</code> with rustls. No aria2, no system OpenSSL, no Go toolchain at runtime.</div>
@@ -220,7 +221,10 @@
         <div class="feature"><strong>OTP <span class="tag ext">ext</span></strong>Shells <code>pass otp &lt;entry&gt;</code> with <code>PASSWORD_STORE_DIR</code> set to the matching store. Returns the current TOTP code.</div>
         <div class="feature"><strong>Search <span class="tag ext">ext</span></strong>Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores.</div>
         <div class="feature"><strong>Unlock without a terminal <span class="tag ext">ext</span></strong>Decrypts a probe entry with a loopback pinentry to prime gpg-agent, so the GPG passphrase can be typed in the browser. <code>--batch</code> gpg can't prompt and a browser-spawned host has no TTY — this is what closes that gap.</div>
-        <div class="feature"><strong>Segmented downloads <span class="tag ext">ext</span></strong>N-segment <code>Range</code> GETs with retry / resume. Chrome cookies + User-Agent forwarded. File-state JSON tracker.</div>
+        <div class="feature"><strong>Segmented downloads <span class="tag ext">ext</span></strong>N-segment <code>Range</code> GETs with retry / resume. Chrome cookies + User-Agent forwarded. File-state JSON tracker under <code>$XDG_CACHE_HOME/zpwrchrome/dl/</code>, so the queue survives a service-worker restart.</div>
+        <div class="feature"><strong>Post-download exec <span class="tag ext">ext</span></strong><code>run.spawn</code> executes a user-configured argv through <code>std::process::Command</code> — no shell anywhere on the path, so a filename can't introduce a quoting surface. stdout/stderr capped, 30 s default timeout (5 min max).</div>
+        <div class="feature"><strong>Host tools <span class="tag ext">ext</span></strong><code>host.crawl</code> / <code>host.exec</code> delegate to <code>zwire_host::api</code> — the same capability library the <a href="https://github.com/MenkeTechnologies/zwire-host" style="color: var(--cyan);">zwire</a> agent runs, pulled in with <code>default-features = false</code> so its heavy PTY / sysinfo deps stay out of this tree.</div>
+        <div class="feature"><strong>zcite connector <span class="tag ext">ext</span></strong><code>zcite.save</code> drops a CSL-JSON reference into zcite's inbox. A plain file in a shared directory — this MIT host never links the proprietary zcite engine.</div>
         <div class="feature"><strong>Audit-friendly identifiers</strong>Go's PascalCase / camelCase preserved. File-level <code>#![allow(non_snake_case)]</code> makes this an explicit, documented decision rather than a style accident.</div>
         <div class="feature"><strong>Drift pinned by tests</strong><code>tests/ported_errors.rs</code> pins every error code to its PROTOCOL.md value. <code>tests/ported_version.rs</code> pins version triple + packed int. <code>tests/ported_integration.rs</code> exercises every action end-to-end against the compiled binary.</div>
       </div>
@@ -275,9 +279,54 @@
               <td><code>{action:"pass.lock"}</code> → <code>{locked:true}</code></td>
             </tr>
             <tr>
-              <td><code>download-start</code> / <code>download-status</code> / <code>download-cancel</code></td>
-              <td>Multi-segment HTTP/HTTPS downloader. N-segment <code>Range</code> GETs with retry / resume. Chrome cookies + UA forwarded for logged-in URLs.</td>
-              <td><code>{action:"download-start", url, cookie, segments}</code> → file-state JSON; <code>{action:"download-status", id}</code>; <code>{action:"download-cancel", id}</code></td>
+              <td><code>run.spawn</code></td>
+              <td>Executes a post-download argv via <code>std::process::Command</code> — argv[0] resolved against PATH, argv[1..] passed as literal C strings, no shell invocation. stdout/stderr truncated to their caps; default 30 s timeout, 5 min max, a runaway is killed with code 124.</td>
+              <td><code>{action:"run.spawn", argv:[…], cwd?, env?, timeoutMs?}</code> → <code>{code, stdout, stderr, durationMs, truncated}</code></td>
+            </tr>
+            <tr>
+              <td><code>host.crawl</code></td>
+              <td>Recursive filesystem walk, delegated to <code>zwire_host::api::walk</code>.</td>
+              <td><code>{action:"host.crawl", path, ext}</code> → <code>{count, entries:[{path, name, dir, size}, …]}</code></td>
+            </tr>
+            <tr>
+              <td><code>host.exec</code></td>
+              <td>Program execution with captured output, delegated to <code>zwire_host::api::exec</code>.</td>
+              <td><code>{action:"host.exec", program, args:[…]}</code> → <code>{code, stdout, stderr}</code></td>
+            </tr>
+            <tr>
+              <td><code>zcite.save</code></td>
+              <td>Writes a CSL-JSON reference (extracted from the active page by the extension's "Save to zcite") into zcite's inbox; zcite's <code>inbox.import</code> drains it into the library.</td>
+              <td><code>{action:"zcite.save", item:&lt;CSL-JSON object|array&gt;}</code> → <code>{status:"ok", path, bytes}</code></td>
+            </tr>
+            <tr>
+              <td><code>dl.add</code></td>
+              <td>Queues a segmented download: HEAD probe sizes the file, then N concurrent <code>Range</code> GETs into a pre-allocated destination. Falls back to a single stream when the server doesn't advertise <code>Accept-Ranges</code>. Cookies + User-Agent are forwarded so logged-in URLs work.</td>
+              <td><code>{action:"dl.add", url, dir?, name?, segments?, cookies?, userAgent?, mask?}</code> → <code>{gid, dest}</code></td>
+            </tr>
+            <tr>
+              <td><code>dl.list</code></td>
+              <td>Returns every job's current state, read from the file-state tracker rather than in-process memory — so the queue survives both a host exit and a service-worker restart.</td>
+              <td><code>{action:"dl.list"}</code> → <code>{jobs:[…]}</code></td>
+            </tr>
+            <tr>
+              <td><code>dl.pause</code> / <code>dl.resume</code> / <code>dl.cancel</code> / <code>dl.restart</code></td>
+              <td>Job control by <code>gid</code>. <code>resume</code> continues from the current byte offset; <code>restart</code> discards the partial file and re-downloads from byte zero.</td>
+              <td><code>{action:"dl.pause", gid}</code> (same shape for the other three)</td>
+            </tr>
+            <tr>
+              <td><code>dl.remove</code> / <code>dl.clear</code></td>
+              <td>Drops one job, or every job in a scope, from the queue — optionally deleting the file from disk too.</td>
+              <td><code>{action:"dl.remove", gid, deleteFromDisk}</code> · <code>{action:"dl.clear", scope, deleteFromDisk}</code></td>
+            </tr>
+            <tr>
+              <td><code>dl.openDir</code> / <code>dl.openFile</code></td>
+              <td>Reveals the containing directory, or opens the finished file, with the platform opener.</td>
+              <td><code>{action:"dl.openDir", dir}</code> · <code>{action:"dl.openFile", dir}</code></td>
+            </tr>
+            <tr>
+              <td><code>dl.writeFile</code> / <code>dl.writeFileChunk</code></td>
+              <td>Chunked file sink the extension streams generated bytes into — the full-page screenshot ships its stitched PNG through it as base64 chunks, because native messaging caps a host→extension frame at 1 MiB. Colliding filenames auto-rename <code>foo.zip</code> → <code>foo (1).zip</code>.</td>
+              <td><code>{action:"dl.writeFile", dir, name, base64}</code> → <code>{dest, bytes}</code> · <code>{action:"dl.writeFileChunk", sessionId, chunkIndex, base64, final}</code> → <code>{sessionId, chunkIndex, final, dest, bytes}</code></td>
             </tr>
           </tbody>
         </table>
@@ -289,11 +338,12 @@
       <ol>
         <li><code>cargo install zpwrchrome-host</code></li>
         <li>Register the binary for an extension ID: <code>zpwrchrome-host --install &lt;ext-id&gt;</code> &mdash; get the ext-id at <code>chrome://extensions</code> with <strong>Developer mode</strong> enabled.</li>
-        <li><code>pass</code> support requires GPG configured locally. <code>otp</code> requires <code>pass-otp</code> in <code>$PATH</code>.</li>
-        <li>Used by <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">zpwrchrome</a> (a Chrome extension); also a drop-in for the upstream <a href="https://github.com/browserpass/browserpass-extension" style="color: var(--cyan);">browserpass-extension</a> with the OTP / search / download actions silently ignored.</li>
+        <li><code>pass</code> support requires GPG configured locally. The <code>otp</code> action shells out to <code>pass otp</code>, so it needs <code>pass</code> + <code>pass-otp</code> in <code>$PATH</code>.</li>
+        <li>No terminal is needed to unlock: send <code>pass.unlock</code> with the passphrase, or use zpwrchrome's own unlock prompt.</li>
+        <li>Used by <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">zpwrchrome</a> (a Chrome extension); also a drop-in for the upstream <a href="https://github.com/browserpass/browserpass-extension" style="color: var(--cyan);">browserpass-extension</a> with every additive action silently unused.</li>
       </ol>
       <p style="margin-top: 10px; font-size: 12px; color: var(--text-dim);">
-        Alternative: clone and <code>cargo build --release</code>, then install the resulting binary at the upstream-expected path (<code>$XDG_CONFIG_HOME/&lt;browser&gt;/NativeMessagingHosts/com.github.browserpass.native.json</code>). The <code>--install</code> flag does this automatically per browser.
+        <code>--install</code> writes a manifest named <code>com.menketechnologies.zpwrchrome.json</code> into every Chromium-family config directory the user has, with <code>allowed_origins</code> restricted to the extension IDs passed on the command line. To use this binary as an upstream browserpass replacement instead, register it by hand under upstream's host name (<code>&lt;browser config dir&gt;/NativeMessagingHosts/com.github.browserpass.native.json</code>) — <code>--install</code> does not write that name.
       </p>
     </section>
 
@@ -323,29 +373,29 @@
         <table>
           <thead><tr><th>code</th><th>name</th><th>cause</th></tr></thead>
           <tbody>
-            <tr><td>10</td><td><code>UnknownAction</code></td><td>Action string not recognized</td></tr>
-            <tr><td>11</td><td><code>ParseRequestLength</code></td><td>Native-messaging frame length invalid</td></tr>
-            <tr><td>12</td><td><code>ParseRequest</code></td><td>Request JSON malformed</td></tr>
-            <tr><td>13</td><td><code>MissingHostsConfiguration</code></td><td>No configured store path</td></tr>
-            <tr><td>14</td><td><code>InaccessiblePasswordStore</code></td><td><code>~/.password-store</code> unreadable</td></tr>
-            <tr><td>15</td><td><code>InaccessibleDefaultPasswordStore</code></td><td>Default store path missing</td></tr>
-            <tr><td>16</td><td><code>InaccessibleGpgHome</code></td><td><code>$GNUPGHOME</code> unreadable</td></tr>
-            <tr><td>17</td><td><code>InaccessibleDefaultGpgHome</code></td><td>Default GPG home missing</td></tr>
-            <tr><td>18</td><td><code>InvalidGpgPath</code></td><td>GPG binary not found</td></tr>
-            <tr><td>19</td><td><code>InvalidGpgHome</code></td><td>GPG home path invalid</td></tr>
-            <tr><td>20</td><td><code>InvalidPasswordStore</code></td><td>Password store path invalid</td></tr>
-            <tr><td>21</td><td><code>InvalidStoreId</code></td><td>Store-id not in configuration</td></tr>
-            <tr><td>22</td><td><code>InvalidPasswordFileExtension</code></td><td>File extension not <code>.gpg</code></td></tr>
-            <tr><td>23</td><td><code>UnableToListFilesInPasswordStore</code></td><td>Recursive walk failed</td></tr>
-            <tr><td>24</td><td><code>UnableToDetermineRelativeFilePath</code></td><td>Path-relative computation failed</td></tr>
-            <tr><td>25</td><td><code>UnableToReadPasswordFile</code></td><td>File-system read failed</td></tr>
-            <tr><td>26</td><td><code>UnableToDecryptPasswordFile</code></td><td>GPG decryption failed</td></tr>
-            <tr><td>27</td><td><code>UnableToEncryptPasswordFile</code></td><td>GPG encryption failed</td></tr>
-            <tr><td>28</td><td><code>UnableToCopyEncryptedPasswordFile</code></td><td>Atomic-rename to target failed</td></tr>
-            <tr><td>29</td><td><code>UnableToWriteToTemporaryFile</code></td><td>Temp-file write failed</td></tr>
-            <tr><td>30</td><td><code>UnableToWriteToFile</code></td><td>Final-file write failed</td></tr>
-            <tr><td>31</td><td><code>UnableToCreateDirectory</code></td><td>Parent directory creation failed</td></tr>
-            <tr><td>32</td><td><code>UnableToRemoveFile</code></td><td>File-system delete failed</td></tr>
+            <tr><td>10</td><td><code>ParseRequestLength</code></td><td>Native-messaging frame length unreadable</td></tr>
+            <tr><td>11</td><td><code>ParseRequest</code></td><td>Request JSON malformed</td></tr>
+            <tr><td>12</td><td><code>InvalidRequestAction</code></td><td>Action string not recognized</td></tr>
+            <tr><td>13</td><td><code>InaccessiblePasswordStore</code></td><td>The requested store is not accessible at its path</td></tr>
+            <tr><td>14</td><td><code>InaccessibleDefaultPasswordStore</code></td><td>The default store is not accessible at its path</td></tr>
+            <tr><td>15</td><td><code>UnknownDefaultPasswordStoreLocation</code></td><td>Default store location could not be determined</td></tr>
+            <tr><td>16</td><td><code>UnreadablePasswordStoreDefaultSettings</code></td><td>A store's <code>.browserpass.json</code> could not be read</td></tr>
+            <tr><td>17</td><td><code>UnreadableDefaultPasswordStoreDefaultSettings</code></td><td>The default store's <code>.browserpass.json</code> could not be read</td></tr>
+            <tr><td>18</td><td><code>UnableToListFilesInPasswordStore</code></td><td>Recursive <code>.gpg</code> walk failed</td></tr>
+            <tr><td>19</td><td><code>UnableToDetermineRelativeFilePathInPasswordStore</code></td><td>Store-relative file path computation failed</td></tr>
+            <tr><td>20</td><td><code>InvalidPasswordStore</code></td><td>Store id not present in the request's store list</td></tr>
+            <tr><td>21</td><td><code>InvalidGpgPath</code></td><td>Configured gpg binary failed its <code>--version</code> check</td></tr>
+            <tr><td>22</td><td><code>UnableToDetectGpgPath</code></td><td>No gpg binary found in PATH or the common locations</td></tr>
+            <tr><td>23</td><td><code>InvalidPasswordFileExtension</code></td><td>File extension is not <code>.gpg</code></td></tr>
+            <tr><td>24</td><td><code>UnableToDecryptPasswordFile</code></td><td>GPG decryption failed — also what a locked store returns, and what <code>pass.unlock</code> returns on a bad passphrase</td></tr>
+            <tr><td>25</td><td><code>UnableToListDirectoriesInPasswordStore</code></td><td>Recursive directory walk failed</td></tr>
+            <tr><td>26</td><td><code>UnableToDetermineRelativeDirectoryPathInPasswordStore</code></td><td>Store-relative directory path computation failed</td></tr>
+            <tr><td>27</td><td><code>EmptyContents</code></td><td><code>save</code> called with no contents</td></tr>
+            <tr><td>28</td><td><code>UnableToDetermineGpgRecipients</code></td><td>No <code>.gpg-id</code> found walking up from the entry</td></tr>
+            <tr><td>29</td><td><code>UnableToEncryptPasswordFile</code></td><td>GPG encryption failed</td></tr>
+            <tr><td>30</td><td><code>UnableToDeletePasswordFile</code></td><td>File-system delete failed</td></tr>
+            <tr><td>31</td><td><code>UnableToDetermineIsDirectoryEmpty</code></td><td>Empty-directory check failed during parent cleanup</td></tr>
+            <tr><td>32</td><td><code>UnableToDeleteEmptyDirectory</code></td><td>Empty parent-directory removal failed</td></tr>
           </tbody>
         </table>
       </div>
@@ -357,16 +407,26 @@
         Native-messaging frame: little-endian 4-byte length prefix + UTF-8 JSON. Same wire format as upstream.
       </p>
       <pre class="code"><span class="comment"># list every entry in the "personal" store</span>
-{"action":"list","settings":{"stores":[{"id":"personal","path":"~/.password-store"}]}}
+<span class="comment"># `stores` is an object keyed by store id, not an array</span>
+{"action":"list","settings":{"stores":{"personal":{"id":"personal","name":"Personal","path":"~/.password-store"}}}}
 
-<span class="comment"># → ok response: tree-shaped list</span>
-{"status":"ok","data":{"personal":["work/gmail","work/slack","banking/chase"]}}
+<span class="comment"># → ok response: store-keyed file lists, paths keep their .gpg suffix</span>
+{"data":{"files":{"personal":["banking/example-bank.gpg","work/mail.gpg"]}},"status":"ok","version":3001002}
 
 <span class="comment"># fetch + decrypt one entry</span>
-{"action":"fetch","settings":{"stores":[...]},"storeId":"personal","file":"work/gmail.gpg","echoResponse":""}
+{"action":"fetch","storeId":"personal","file":"work/mail.gpg","settings":{"stores":{...}}}
 
-<span class="comment"># → ok response: { plain text from gpg --decrypt }</span>
-{"status":"ok","data":{"contents":"hunter2\nuser: jacob@menketechnologies.com\notpauth://totp/..."}}</pre>
+<span class="comment"># → ok response: the plain text gpg --decrypt wrote to stdout</span>
+{"data":{"contents":"hunter2\nlogin: user\notpauth://totp/..."},"status":"ok","version":3001002}
+
+<span class="comment"># unlock the store so the --batch decrypt above can work without a terminal</span>
+{"action":"pass.unlock","storeId":"personal","passphrase":"…","settings":{"stores":{...}}}
+
+<span class="comment"># → ok response: names the probe entry it decrypted, never its contents</span>
+{"data":{"unlocked":true,"probe":"banking/example-bank.gpg"},"status":"ok","version":3001002}
+
+<span class="comment"># → error response: wrong passphrase (code 24 = UnableToDecryptPasswordFile)</span>
+{"code":24,"params":{"action":"pass.unlock","message":"Bad passphrase",...},"status":"error","version":3001002}</pre>
     </section>
 
     <section class="card">

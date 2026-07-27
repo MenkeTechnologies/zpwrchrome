@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 55 keyboard commands, 12 popup categories, 19 message kinds, 8,106 JS lines, 3,074 tests. Strykelang HUD by MenkeTechnologies.">
+  <meta name="description" content="zpwrchrome — engineering report. Manifest V3 Chrome extension. 55 keyboard commands, 12 popup categories, 19 message kinds, 8,107 JS lines, 3,074 tests. Strykelang HUD by MenkeTechnologies.">
   <title>zpwrchrome &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -116,11 +116,11 @@
       <code>chrome.userScripts</code>; and a frecency-ranked
       <code>chrome.history</code> search replaces Chrome's built-in
       <code>chrome://history</code> page on <code>Cmd+Y</code>.
-      <strong>8,106 JS lines + 1,166 CSS lines + 24,210 test lines &middot; 55 commands &middot; 19 message handlers &middot; 3074 tests passing</strong>.
+      <strong>8,107 JS lines + 1,166 CSS lines + 24,210 test lines &middot; 55 commands &middot; 19 message handlers &middot; 3074 tests passing</strong>.
     </p>
 
     <div class="stat-grid">
-      <div class="stat-card"><div class="v">8,106</div><div class="l">JS Lines</div></div>
+      <div class="stat-card"><div class="v">8,107</div><div class="l">JS Lines</div></div>
       <div class="stat-card"><div class="v">1,166</div><div class="l">CSS Lines</div></div>
       <div class="stat-card"><div class="v a">55</div><div class="l">Keyboard Commands</div></div>
       <div class="stat-card"><div class="v g">3074</div><div class="l">Tests Passing</div></div>
@@ -129,14 +129,14 @@
       <div class="stat-card"><div class="v">40</div><div class="l">Dispatch Handlers</div></div>
       <div class="stat-card"><div class="v">19</div><div class="l">Permissions</div></div>
       <div class="stat-card"><div class="v">15</div><div class="l">Pure Helpers</div></div>
-      <div class="stat-card"><div class="v">396</div><div class="l">Repo Files</div></div>
+      <div class="stat-card"><div class="v">399</div><div class="l">Repo Files</div></div>
       <div class="stat-card"><div class="v y">4</div><div class="l">Default-Keyed</div></div>
       <div class="stat-card"><div class="v">v0.22.38</div><div class="l">Version</div></div>
     </div>
 
     <div>
-      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 33,775 total lines</p>
-      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:24.0%;"></div><span class="bar-label">JS &middot; 8,106 lines &middot; 24.0%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:71.7%;"></div><span class="bar-label">Tests &middot; 24,210 lines &middot; 71.7%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.5%;"></div><span class="bar-label">CSS &middot; 1,166 lines &middot; 3.5%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:0.9%;"></div><span class="bar-label">HTML &middot; 293 lines &middot; 0.9%</span></div>
+      <p class="bar-caption" style="margin-top:14px;">Source distribution &mdash; 33,776 total lines</p>
+      <div class="bar-wrap"><div class="bar-fill bar-cyan" style="width:24.0%;"></div><span class="bar-label">JS &middot; 8,107 lines &middot; 24.0%</span></div><div class="bar-wrap"><div class="bar-fill bar-green" style="width:71.7%;"></div><span class="bar-label">Tests &middot; 24,210 lines &middot; 71.7%</span></div><div class="bar-wrap"><div class="bar-fill bar-magenta" style="width:3.5%;"></div><span class="bar-label">CSS &middot; 1,166 lines &middot; 3.5%</span></div><div class="bar-wrap"><div class="bar-fill bar-accent" style="width:0.9%;"></div><span class="bar-label">HTML &middot; 293 lines &middot; 0.9%</span></div>
     </div>
 
     <h2 class="tutorial-title"><span class="step-hash">~</span>SUBSYSTEM BREAKDOWN</h2>
@@ -144,7 +144,7 @@
     <div class="subsystems">
         <div class="card">
           <h3>Service worker</h3>
-          <ul class="files"><li><code>background.js</code> &mdash; 4,636 lines</li></ul>
+          <ul class="files"><li><code>background.js</code> &mdash; 4,637 lines</li></ul>
           <p>MV3 SW. Cross-window MRU tracker, command dispatcher, popup/modal message API, userscript registration, scenes, history, pass + identity fill, segmented downloads, full-page screenshot.</p>
         </div>
         <div class="card">
@@ -224,7 +224,7 @@
     <table class="file-table">
       <thead><tr><th>Path</th><th class="num">Lines</th><th class="num">Bytes</th></tr></thead>
       <tbody>
-        <tr><td><code>background.js</code></td><td class="num">4,636</td><td class="num">197,637</td></tr>
+        <tr><td><code>background.js</code></td><td class="num">4,637</td><td class="num">197,707</td></tr>
         <tr><td><code>popup.js</code></td><td class="num">1,417</td><td class="num">58,625</td></tr>
         <tr><td><code>tests/dl-integration.test.js</code></td><td class="num">1,054</td><td class="num">54,455</td></tr>
         <tr><td><code>modal/content.template.js</code></td><td class="num">959</td><td class="num">38,713</td></tr>
@@ -348,11 +348,12 @@
         <text class="sub"  x="792" y="114">one process per NM message</text>
         <text class="sub"  x="792" y="128">stdio: length-prefixed JSON</text>
 
-        <rect class="box host" x="780" y="164" width="262" height="76" />
+        <rect class="box host" x="780" y="164" width="262" height="92" />
         <text class="lbl"  x="792" y="184">Extension actions</text>
         <text class="sub"  x="792" y="200">dl.{add,list,pause,resume,cancel}</text>
-        <text class="sub"  x="792" y="214">dl.{clear,openDir,openFile,writeFile}</text>
-        <text class="sub"  x="792" y="228">otp · search · echo</text>
+        <text class="sub"  x="792" y="214">dl.{restart,remove,clear,open*,write*}</text>
+        <text class="sub"  x="792" y="228">otp · search · pass.{unlock,lock}</text>
+        <text class="sub"  x="792" y="242">run.spawn · host.* · zcite.save</text>
 
         <rect class="box host" x="780" y="260" width="262" height="76" />
         <text class="lbl"  x="792" y="280">Detached workers</text>
@@ -768,7 +769,7 @@
   </main>
 
     <footer style="text-align:center;padding:2rem;font-size:10px;color:var(--text-muted);font-family:'Orbitron',sans-serif;letter-spacing:2px;">
-      ZPWRCHROME v0.22.38 &middot; 55 COMMANDS &middot; 3074 TESTS &middot; 8,106 JS LINES &middot; MENKETECHNOLOGIES &middot; <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color:var(--cyan);text-decoration:none;">github.com/MenkeTechnologies/zpwrchrome</a> &middot; regenerate via <code>scripts/gen.sh</code>
+      ZPWRCHROME v0.22.38 &middot; 55 COMMANDS &middot; 3074 TESTS &middot; 8,107 JS LINES &middot; MENKETECHNOLOGIES &middot; <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color:var(--cyan);text-decoration:none;">github.com/MenkeTechnologies/zpwrchrome</a> &middot; regenerate via <code>scripts/gen.sh</code>
     </footer>
   </div>
 
