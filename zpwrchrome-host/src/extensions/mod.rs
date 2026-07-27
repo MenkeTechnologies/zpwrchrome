@@ -6,11 +6,12 @@
 //!
 //! Modules here are invoked by the host binary as extra actions outside the
 //! upstream PROTOCOL.md action set (`dl.add`, `dl.list`, `otp`, `search`,
-//! `run.spawn`, `zcite.save`).
+//! `run.spawn`, `zcite.save`, `pass.unlock`, `pass.lock`).
 //! Upstream browserpass-extension never sends these actions so wire
 //! compatibility with the upstream is preserved.
 
 pub mod dl;
+pub mod gpg_unlock;
 pub mod host;
 pub mod otp;
 pub mod run_command;

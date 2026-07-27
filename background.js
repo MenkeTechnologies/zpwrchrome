@@ -497,7 +497,10 @@ async function passCopyFieldForPath(path, field) {
     await passClipboardCopy(text);
     return { ok: true, length: text.length };
   } catch (e) {
-    return { ok: false, err: String(e?.message || e) };
+    // This resolves rather than throws, so the caller's .catch never runs —
+    // the locked-store flag has to ride the resolved value or the popup can't
+    // tell "store is locked" from "entry has no password".
+    return { ok: false, err: String(e?.message || e), locked: isPassLockedError(e) };
   }
 }
 
@@ -3625,19 +3628,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "pass.fetch") {
     bpFetchParsed(String(msg.path || ""))
       .then((entry) => sendResponse({ ok: true, data: entry }))
-      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e), locked: isPassLockedError(e) }));
     return true;
   }
   if (msg?.kind === "pass.otp") {
     passOtpCodeForPath(String(msg.path || ""))
       .then((otp) => sendResponse({ ok: true, otp }))
-      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e), locked: isPassLockedError(e) }));
     return true;
   }
   if (msg?.kind === "pass.fill") {
     passFillFromPath(String(msg.path || ""), msg.store || undefined)
       .then((ok) => sendResponse({ ok }))
-      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e), locked: isPassLockedError(e) }));
     return true;
   }
   if (msg?.kind === "pass.openUrl") {
@@ -3653,7 +3656,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     // across the SW + NM + GPG round-trip and silently no-ops.
     passCopyFieldForPath(String(msg.path || ""), String(msg.field || ""))
       .then((r) => sendResponse(r))
-      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e), locked: isPassLockedError(e) }));
     return true;
   }
   if (msg?.kind === "pass.save") {
@@ -3665,6 +3668,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind === "pass.delete") {
     bpDeleteEntry(String(msg.path || ""))
       .then(()  => sendResponse({ ok: true }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.unlock") {
+    // The passphrase lives in this message and nowhere else — it is forwarded
+    // to the host and the local reference goes out of scope with the handler.
+    bpPassUnlock(msg.passphrase, msg.file || undefined)
+      .then((r) => sendResponse({ ok: true, ...r }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
+  if (msg?.kind === "pass.lock") {
+    bpPassLock()
+      .then((r) => sendResponse({ ok: true, ...r }))
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
@@ -3924,8 +3941,11 @@ function bpStores() { return { default: PASS_STORE }; }
 function bpSend(req) {
   const t0 = performance.now();
   const action = req?.action || "(no action)";
-  // Don't log password contents or huge payloads — just keys.
-  const reqSummary = { action, keys: Object.keys(req || {}) };
+  // Don't log password contents or huge payloads — just keys. `passphrase`
+  // is dropped from even the key list so a GPG passphrase can never be
+  // inferred from the diag ring (which is readable from the host console and
+  // exportable to a file).
+  const reqSummary = { action, keys: Object.keys(req || {}).filter((k) => k !== "passphrase") };
   diagPush("bp.send", reqSummary);
   return new Promise((resolve, reject) => {
     try {
@@ -4017,6 +4037,51 @@ async function bpDeleteEntry(path) {
     file,
     settings: { stores: bpStores() },
   });
+}
+
+// `pass.unlock` extension action — hand the GPG passphrase to the host so the
+// store can be unlocked from the browser instead of from a terminal.
+//
+// Every decrypt the host performs runs gpg with `--batch`, which forbids gpg
+// from prompting; when the host is spawned by Chrome it has no controlling
+// TTY, so a curses/tty pinentry can't run either. The host therefore only
+// decrypts once gpg-agent already holds the passphrase. `pass.unlock`
+// decrypts one probe entry with `--pinentry-mode loopback`, which primes the
+// agent for its whole `default-cache-ttl` — every later fetch / otp / save
+// then works untouched.
+//
+// The passphrase is used for this one message and never stored: not in
+// chrome.storage, not in a SW variable, not in the diag ring (bpSend drops
+// the key). Callers pass the entry they are about to open as `file` when they
+// have one, so the probe decrypt is the same key the next fetch needs.
+async function bpPassUnlock(passphrase, file) {
+  const req = {
+    action: "pass.unlock",
+    storeId: "default",
+    passphrase: String(passphrase || ""),
+    settings: { stores: bpStores() },
+  };
+  if (file) req.file = file.endsWith(".gpg") ? file : `${file}.gpg`;
+  const resp = await bpSend(req);
+  return { unlocked: !!resp.data?.unlocked, probe: resp.data?.probe || "" };
+}
+
+// `pass.lock` extension action — flush every cached passphrase from gpg-agent.
+async function bpPassLock() {
+  const resp = await bpSend({ action: "pass.lock" });
+  return { locked: !!resp.data?.locked };
+}
+
+// A host error is a locked store (rather than a missing entry / broken host)
+// when it comes back as UnableToDecryptPasswordFile. That's the signal the UI
+// uses to swap a failure message for a passphrase prompt.
+const PASS_ERR_DECRYPT = 24;
+function isPassLockedError(e) {
+  if (e?.code === PASS_ERR_DECRYPT) return true;
+  // Wrappers like passOtpCodeForPath() rethrow with their own Error, which
+  // drops `.code` but keeps the host's message inside the text — match that
+  // too so a locked store is still recognised one layer up.
+  return /unable to decrypt/i.test(String(e?.message || ""));
 }
 
 // `otp` extension action — host shells `pass otp` and returns the code.

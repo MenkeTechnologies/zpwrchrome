@@ -358,6 +358,23 @@ mark.fzf-hl {
 .confirm-box .cbody  { color: var(--text); line-height: 1.5; margin-bottom: 18px; word-break: break-all; }
 .confirm-box .crow   { display: flex; gap: 10px; justify-content: flex-end; }
 
+/* Unlock dialog — same scrim, cyan instead of the delete dialog's danger red. */
+.confirm-box.unlock-box {
+  border-color: var(--cyan);
+  box-shadow: 0 0 24px var(--cyan-glow);
+  min-width: 420px;
+}
+.unlock-box .ctitle { color: var(--cyan); }
+.unlock-box .cbody  { margin-bottom: 12px; word-break: normal; }
+.unlock-box .cbody code { color: var(--cyan); }
+.unlock-input {
+  width: 100%;
+  margin-bottom: 8px;
+  letter-spacing: 2px;
+}
+.unlock-status { font-size: 11px; min-height: 14px; margin-bottom: 12px; }
+.unlock-status.err { color: var(--accent); }
+
 /* ─── Password / passphrase generator popover ─────────────────────── */
 .pw-gen-pop {
   position: fixed; z-index: 1000; width: 320px;

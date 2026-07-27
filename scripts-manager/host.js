@@ -47,6 +47,10 @@ const CATALOG = [
   ["pass · extensions", [
     `{"action":"otp","storeId":"default","file":"github.com/user.gpg","settings":{"stores":${S}}}`,
     `{"action":"search","settings":{"stores":${S}},"echoResponse":"github"}`,
+    // `pass.unlock` is deliberately absent: it carries a GPG passphrase, and
+    // every request typed here lands in the transcript (which is exportable
+    // to a file). Unlock from the popup's PASS category or the pass manager.
+    '{"action":"pass.lock"}',
   ]],
   ["host tools", [
     '{"action":"host.crawl","path":"~/src","ext":"rs"}',
