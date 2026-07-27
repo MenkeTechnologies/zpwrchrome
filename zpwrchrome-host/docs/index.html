@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zpwrchrome-host — Rust port of browserpass-native + extension actions</title>
-  <meta name="description" content="Rust port of browserpass-native (PROTOCOL.md v3.1.2) for the browserpass browser extension, plus additive OTP / whole-store search / segmented download manager actions. Single static binary, pure-Rust dependency tree, wire-compatible with upstream Go.">
+  <meta name="description" content="Rust port of browserpass-native (PROTOCOL.md v3.1.2) for the browserpass browser extension, plus additive OTP / whole-store search / GPG-unlock / segmented download manager actions. Single static binary, pure-Rust dependency tree, wire-compatible with upstream Go.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -184,7 +184,7 @@
 
   <header class="hero">
     <h1>zpwrchrome-host</h1>
-    <p class="tagline">Rust port of <a href="https://github.com/browserpass/browserpass-native" style="color: var(--cyan);">browserpass-native</a> &middot; PROTOCOL.md v3.1.2 wire-compatible &middot; single static binary &middot; pure-Rust dep tree &middot; <span style="color: var(--accent);">+3 additive extension actions</span> for OTP, whole-store search, and segmented downloads.<br>Cyberpunk HUD palette by MenkeTechnologies.</p>
+    <p class="tagline">Rust port of <a href="https://github.com/browserpass/browserpass-native" style="color: var(--cyan);">browserpass-native</a> &middot; PROTOCOL.md v3.1.2 wire-compatible &middot; single static binary &middot; pure-Rust dep tree &middot; <span style="color: var(--accent);">additive extension actions</span> for OTP, whole-store search, browser-side GPG unlock, and segmented downloads.<br>Cyberpunk HUD palette by MenkeTechnologies.</p>
     <div class="stat-row">
       <div class="stat"><div class="n">v0.10.2</div><div class="l">version</div></div>
       <div class="stat"><div class="n">v3.1.2</div><div class="l">protocol pin</div></div>
@@ -209,9 +209,9 @@
         A drop-in replacement for the Go binary that the
         <a href="https://github.com/browserpass/browserpass-extension" style="color: var(--cyan);">browserpass</a>
         browser extension talks to via Chrome / Firefox native messaging — <strong style="color: var(--accent);">plus</strong>
-        three additive actions that <code>browserpass-extension</code> doesn't call but are wired into
+        additive actions that <code>browserpass-extension</code> doesn't call but are wired into
         <a href="https://github.com/MenkeTechnologies/zpwrchrome" style="color: var(--cyan);">zpwrchrome</a>:
-        TOTP retrieval, whole-store fuzzy + substring search, and a multi-segment HTTP/HTTPS download manager.
+        TOTP retrieval, whole-store fuzzy + substring search, browser-side GPG unlock, and a multi-segment HTTP/HTTPS download manager.
       </p>
       <div class="features">
         <div class="feature"><strong>Single static binary</strong>Pure-Rust dep tree: <code>serde</code>, <code>serde_json</code>, <code>ureq</code> with rustls. No aria2, no system OpenSSL, no Go toolchain at runtime.</div>
@@ -219,6 +219,7 @@
         <div class="feature"><strong>Strict 1:1 port discipline</strong>Every <code>src/ported/</code> file mirrors a single upstream Go file. Every Rust fn carries <code>/// Port of &lt;name&gt;() from &lt;go_file&gt;:&lt;line&gt;</code>. Every Go comment carries over with <code>// go:NN</code> citation. Identifiers preserved verbatim (<code>DetectGpgBinary</code>, <code>MakeConfigureResponse</code>).</div>
         <div class="feature"><strong>OTP <span class="tag ext">ext</span></strong>Shells <code>pass otp &lt;entry&gt;</code> with <code>PASSWORD_STORE_DIR</code> set to the matching store. Returns the current TOTP code.</div>
         <div class="feature"><strong>Search <span class="tag ext">ext</span></strong>Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores.</div>
+        <div class="feature"><strong>Unlock without a terminal <span class="tag ext">ext</span></strong>Decrypts a probe entry with a loopback pinentry to prime gpg-agent, so the GPG passphrase can be typed in the browser. <code>--batch</code> gpg can't prompt and a browser-spawned host has no TTY — this is what closes that gap.</div>
         <div class="feature"><strong>Segmented downloads <span class="tag ext">ext</span></strong>N-segment <code>Range</code> GETs with retry / resume. Chrome cookies + User-Agent forwarded. File-state JSON tracker.</div>
         <div class="feature"><strong>Audit-friendly identifiers</strong>Go's PascalCase / camelCase preserved. File-level <code>#![allow(non_snake_case)]</code> makes this an explicit, documented decision rather than a style accident.</div>
         <div class="feature"><strong>Drift pinned by tests</strong><code>tests/ported_errors.rs</code> pins every error code to its PROTOCOL.md value. <code>tests/ported_version.rs</code> pins version triple + packed int. <code>tests/ported_integration.rs</code> exercises every action end-to-end against the compiled binary.</div>
@@ -262,6 +263,16 @@
               <td><code>search</code></td>
               <td>Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores.</td>
               <td><code>{action:"search", settings, echoResponse:"&lt;query&gt;"}</code> → <code>{matches:[{store, path}, …]}</code></td>
+            </tr>
+            <tr>
+              <td><code>pass.unlock</code></td>
+              <td>Enter the GPG passphrase from the browser instead of a terminal. Decrypts one probe entry with <code>--pinentry-mode loopback --passphrase-fd 0</code> (passphrase on stdin, never argv, never disk), which primes gpg-agent for its <code>default-cache-ttl</code> so every later <code>--batch</code> decrypt succeeds through the unmodified ported path. The probe plaintext is discarded.</td>
+              <td><code>{action:"pass.unlock", storeId, passphrase, file?, settings}</code> → <code>{unlocked:true, probe:"&lt;entry&gt;"}</code>; a wrong passphrase returns error 24 with <code>params.message</code> = <code>"Bad passphrase"</code></td>
+            </tr>
+            <tr>
+              <td><code>pass.lock</code></td>
+              <td>Flushes every cached passphrase from gpg-agent (<code>gpg-connect-agent reloadagent /bye</code>), so the next decrypt needs the passphrase again.</td>
+              <td><code>{action:"pass.lock"}</code> → <code>{locked:true}</code></td>
             </tr>
             <tr>
               <td><code>download-start</code> / <code>download-status</code> / <code>download-cancel</code></td>

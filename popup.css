@@ -347,6 +347,50 @@ mark.fzf-hl {
 }
 .tech-link:hover { color: var(--cyan); text-shadow: 0 0 6px var(--cyan-glow); }
 
+/* ----- pass unlock bar (GPG passphrase entry, no terminal needed) ----- */
+.pass-lockbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; letter-spacing: 0.5px;
+}
+.pass-lockbar.open { display: block; }
+.pass-lock-link {
+  color: var(--cyan); text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+.pass-lock-link:hover { border-bottom-color: var(--cyan); text-shadow: 0 0 6px var(--cyan-glow); }
+.pass-lock-link.dim { color: var(--text-dim); }
+.pass-lock-link.dim:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.pass-unlock-row { display: flex; align-items: center; gap: 8px; }
+.pass-unlock-input {
+  flex: 1; min-width: 0;
+  padding: 5px 8px;
+  font-family: inherit; font-size: 12px; letter-spacing: 2px;
+  color: var(--text); background: var(--bg-primary);
+  border: 1px solid var(--cyan); border-radius: 2px;
+  outline: none;
+}
+.pass-unlock-input:focus { box-shadow: 0 0 8px var(--cyan-dim); }
+.pass-unlock-input:disabled { opacity: 0.5; }
+.pass-unlock-go {
+  cursor: pointer;
+  color: var(--cyan); background: transparent;
+  border: 1px solid var(--cyan); border-radius: 2px;
+  padding: 4px 10px; font-family: inherit; font-size: 11px;
+}
+.pass-unlock-go:hover:not(:disabled) {
+  background: var(--cyan); color: var(--bg-primary);
+  box-shadow: 0 0 6px var(--cyan-glow);
+}
+.pass-unlock-status { margin-top: 6px; font-size: 10px; color: var(--text-dim); }
+.pass-unlock-status.ok   { color: var(--green); }
+/* --orange is injected at runtime by lib/ui-scheme.js; popup.css's own :root
+   has no such token, so carry a literal fallback for the unthemed first paint. */
+.pass-unlock-status.warn { color: var(--orange, #ff6b35); }
+.pass-unlock-status.err  { color: var(--accent); }
+
 /* ----- minimap (all tabs across all windows as a colored grid) ----- */
 .minimap {
   display: flex; flex-direction: column; gap: 10px;

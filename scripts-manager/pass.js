@@ -44,6 +44,8 @@ const passFetch  = (path)    => send({ kind: "pass.fetch", path });
 const passSave   = (path, contents) => send({ kind: "pass.save",   path, contents });
 const passDelete = (path)    => send({ kind: "pass.delete", path });
 const passFill   = (path)    => send({ kind: "pass.fill",   path });
+const passUnlock = (passphrase, file) => send({ kind: "pass.unlock", passphrase, file });
+const passLock   = ()        => send({ kind: "pass.lock" });
 
 // ─── Footer status ──────────────────────────────────────────────────
 function setFooter(text, cls = "") {
@@ -201,6 +203,9 @@ async function pickEntry(path) {
     $("ed-mode").textContent = "error";
     $("ed-mode").className = "ed-mode";
     setEdStatus(e.message, "err");
+    // A locked store is the one failure the user can fix from here: prompt
+    // for the passphrase and retry the same entry once it is unlocked.
+    if (isLockedErr(e) && (await unlockDialog(path))) pickEntry(path);
   }
 }
 
@@ -496,6 +501,7 @@ async function doFill() {
     else         setEdStatus("fill returned false", "err");
   } catch (e) {
     setEdStatus(e.message, "err");
+    if (isLockedErr(e) && (await unlockDialog(path))) doFill();
   }
 }
 
@@ -520,6 +526,7 @@ async function copyOtpCode() {
     setEdStatus("otp code copied", "ok");
   } catch (e) {
     setEdStatus(e.message, "err");
+    if (isLockedErr(e) && (await unlockDialog(path))) copyOtpCode();
   }
 }
 
@@ -716,6 +723,87 @@ function confirmDialog({ title, body, confirmLabel = "OK", danger = true }) {
   });
 }
 
+// ─── Unlock ─────────────────────────────────────────────────────────
+//
+// The native host decrypts with `gpg --batch`, which cannot prompt for a
+// passphrase, and a browser-spawned host has no TTY for a pinentry — so
+// without this the store could only be unlocked by running `pass show` in a
+// terminal first. The dialog collects the GPG passphrase and hands it to the
+// host, which decrypts one entry with a loopback pinentry; that primes
+// gpg-agent for its whole cache TTL and every later op just works.
+//
+// The bridge flattens host errors into a message string, so a locked store is
+// recognised by the host's own decrypt-failure wording.
+function isLockedErr(e) {
+  return /unable to decrypt/i.test(String(e?.message || ""));
+}
+
+/// Prompt for the passphrase and unlock. `file` is the entry the caller was
+/// trying to open — the host unlocks against that key so the retry can't hit
+/// a second locked key. Resolves true once the store is unlocked.
+function unlockDialog(file) {
+  return new Promise((resolve) => {
+    const scrim = document.createElement("div");
+    scrim.className = "confirm-scrim";
+    scrim.innerHTML = `
+      <div class="confirm-box unlock-box" role="dialog" aria-modal="true">
+        <div class="ctitle">Store locked</div>
+        <div class="cbody">Enter your GPG passphrase to unlock <code>~/.password-store</code> for the browser. It is sent to the native host and never stored by the extension.</div>
+        <input class="ed-input mono unlock-input" type="password" spellcheck="false"
+               autocomplete="off" placeholder="GPG passphrase">
+        <div class="unlock-status dim"></div>
+        <div class="crow">
+          <button class="btn ghost" data-act="cancel" type="button">Cancel</button>
+          <button class="btn primary" data-act="ok" type="button">Unlock</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(scrim);
+
+    const input  = scrim.querySelector(".unlock-input");
+    const status = scrim.querySelector(".unlock-status");
+    const okBtn  = scrim.querySelector('[data-act="ok"]');
+    const done = (v) => { input.value = ""; scrim.remove(); resolve(v); };
+
+    const submit = async () => {
+      const passphrase = input.value;
+      input.value = "";
+      if (!passphrase) { status.textContent = "passphrase required"; status.className = "unlock-status err"; return; }
+      okBtn.disabled = true;
+      status.textContent = "unlocking…";
+      status.className = "unlock-status dim";
+      try {
+        await passUnlock(passphrase, file);
+        setFooter("store unlocked");
+        done(true);
+      } catch (e) {
+        okBtn.disabled = false;
+        status.textContent = e.message;
+        status.className = "unlock-status err";
+        input.focus();
+      }
+    };
+
+    scrim.addEventListener("click", (ev) => { if (ev.target === scrim) done(false); });
+    scrim.querySelector('[data-act="cancel"]').addEventListener("click", () => done(false));
+    okBtn.addEventListener("click", submit);
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter")  { ev.preventDefault(); submit(); }
+      if (ev.key === "Escape") { ev.preventDefault(); done(false); }
+    });
+    input.focus();
+  });
+}
+
+async function doLock() {
+  try {
+    await passLock();
+    setFooter("store locked — gpg-agent cache flushed");
+  } catch (e) {
+    setFooter(`lock failed: ${e.message}`, "ed-status err");
+  }
+}
+
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -728,6 +816,8 @@ function wire() {
   $("t-new-profile").addEventListener("click", startNewProfileTemplate);
   $("t-new-card").addEventListener("click",    startNewCardTemplate);
   $("t-refresh").addEventListener("click", loadTree);
+  $("t-unlock").addEventListener("click", () => unlockDialog(state.selected || undefined));
+  $("t-lock").addEventListener("click", doLock);
   $("t-expand").addEventListener("click", () => { state.collapsed.clear(); renderTree(); });
   $("t-collapse").addEventListener("click", () => {
     state.collapsed.clear();

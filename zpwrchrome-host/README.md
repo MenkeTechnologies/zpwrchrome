@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/zpwrchrome-host.svg)](https://crates.io/crates/zpwrchrome-host)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Rust port of [browserpass-native](https://github.com/browserpass/browserpass-native)** — a drop-in replacement for the Go binary that the [browserpass-extension](https://github.com/browserpass/browserpass-extension) browser extension talks to via Chrome / Firefox native messaging — **plus** three additive actions (OTP, whole-store search, segmented download manager) that browserpass-extension does not call.
+**Rust port of [browserpass-native](https://github.com/browserpass/browserpass-native)** — a drop-in replacement for the Go binary that the [browserpass-extension](https://github.com/browserpass/browserpass-extension) browser extension talks to via Chrome / Firefox native messaging — **plus** additive actions that browserpass-extension does not call (OTP, whole-store search, browser-side GPG unlock, segmented download manager, post-download command spawn, filesystem crawl/exec, zcite handoff).
 
 Single static binary. Pure-Rust dependency tree (`serde`, `serde_json`, `ureq` with rustls). No `aria2`, no system OpenSSL, no Go toolchain at runtime.
 
@@ -47,6 +47,19 @@ These are additive — `browserpass-extension` never sends them, so wire compati
 | ---------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `otp`      | Shells `pass otp <entry>` with `PASSWORD_STORE_DIR` set to the matching store. Returns the current TOTP code. | request `{action:"otp", storeId, file, settings}` → ok `{code:"123456"}`                                                                                            |
 | `search`   | Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores. | request `{action:"search", settings, echoResponse:"<query>"}` → ok `{matches:[{store, path}, …]}`                                                                  |
+
+### Unlocking without a terminal
+
+Every decrypt in the ported path runs `gpg --decrypt --yes --quiet --batch -`. `--batch` forbids gpg from prompting, and a host spawned by the browser has no controlling TTY for a curses/tty pinentry, so decryption only worked once gpg-agent already held the passphrase — which meant unlocking the store from a shell first.
+
+`pass.unlock` closes that gap: it decrypts one probe entry with `--pinentry-mode loopback --passphrase-fd 0`, feeding the passphrase on gpg's stdin. gpg passes it to gpg-agent, which caches it for the agent's `default-cache-ttl`, so every later `--batch` decrypt — `fetch`, `save`, `otp`, and `pass show` from a shell — succeeds through the unmodified code path. The decrypted probe plaintext is discarded; this action never returns a secret.
+
+The passphrase is never placed in argv (readable via `ps`) and never written to a temp file; the host's copy is overwritten with volatile writes before exit. Loopback pinentry is allowed by default (`man gpg-agent`: "Allow is the default"); an agent started with `--no-allow-loopback-pinentry` produces an error naming the `gpg-agent.conf` line to add.
+
+| Action        | Behavior                                                                                                                                                                                | Wire shape                                                                                                                              |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `pass.unlock` | Primes gpg-agent by decrypting a probe entry with a loopback pinentry. `file` selects the probe (use the entry you are about to fetch); omitted, the first entry by sorted relative path is used. | request `{action:"pass.unlock", storeId, passphrase, file?, settings}` → ok `{unlocked:true, probe:"<entry>"}`; a wrong passphrase returns error 24 with `params.message` = `"Bad passphrase"` |
+| `pass.lock`   | Flushes every cached passphrase from gpg-agent via `gpg-connect-agent reloadagent /bye`, so the next decrypt needs the passphrase again. A missing agent is not an error.                | request `{action:"pass.lock"}` → ok `{locked:true}`                                                                                     |
 
 ### zcite connector
 
@@ -161,6 +174,8 @@ zpwrchrome-host/src/
 │   │                            # apply_naming_mask, probe_headers,
 │   │                            # parse_content_disposition_filename, expand_home,
 │   │                            # looks_like_query_garbage, percent_decode.
+│   ├── gpg_unlock.rs            # pass.unlock / pass.lock — loopback-pinentry
+│   │                            # passphrase entry, gpg-agent cache priming
 │   ├── otp.rs                   # shells pass otp
 │   └── search.rs                # host-side fuzzy + substring scoring
 └── bin/
@@ -175,14 +190,14 @@ zpwrchrome-host/src/
 cargo test
 ```
 
-**121 tests, 0 failures** across:
+**137 tests, 0 failures** across:
 
 - Pure protocol pins (`tests/ported_version.rs`, `tests/ported_errors.rs`)
 - Pure helpers (`tests/ported_helpers.rs`, `tests/ported_common.rs`, `tests/ported_configure_helpers.rs`)
 - End-to-end with spawned binary (`tests/ported_integration.rs`) — echo round-trip, every error code path, configure/list/tree/delete against tempdir stores
 - Frame round-trip (`tests/frame_roundtrip.rs`)
 - Live pass store (`tests/live_password_store.rs`) — gated on `~/.password-store/.gpg-id` presence; verifies byte-equal `pass show` round-trip
-- Extensions: `extensions_otp.rs`, `extensions_search.rs`, `extensions_run_command.rs`, `extensions_dl_state.rs`, `extensions_dl_integration.rs` (78 cases: 2 MiB segmented download against a local HTTP server with Range support, dl.clear scopes, dl.remove cancel-and-delete, dl.writeFile + writeFileChunk streaming protocol, naming-mask token substitution, probe_headers HEAD-then-Range-GET fallback, spawn_worker setsid + close-fd, dl.resume worker-pid liveness check, expand_home tilde resolution).
+- Extensions: `extensions_otp.rs`, `extensions_search.rs`, `extensions_gpg_unlock.rs` (cold-cache fetch fails → `pass.unlock` → the same fetch succeeds → `pass.lock` → it fails again; plus bad-passphrase classification — the whole test builds its own disposable GNUPGHOME and key, and skips when gpg is absent), `extensions_run_command.rs`, `extensions_dl_state.rs`, `extensions_dl_integration.rs` (78 cases: 2 MiB segmented download against a local HTTP server with Range support, dl.clear scopes, dl.remove cancel-and-delete, dl.writeFile + writeFileChunk streaming protocol, naming-mask token substitution, probe_headers HEAD-then-Range-GET fallback, spawn_worker setsid + close-fd, dl.resume worker-pid liveness check, expand_home tilde resolution).
 
 All green on push/PR via GitHub Actions on `ubuntu-latest` — the repo `.github/workflows/ci.yml` runs `cargo test --locked` for this crate on the Node 22 matrix leg, alongside the extension's `npm test`.
 

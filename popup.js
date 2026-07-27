@@ -58,6 +58,11 @@ const state = {
   // the host-side `pass.search` op streams subsequence-scored results into
   // `searchResults`. `searchQuery` is the last query we asked the host for,
   // used to dedupe redundant NM calls per keystroke.
+  // `unlock` drives the passphrase bar: `open` shows the field (opened by the
+  // user, or automatically when an op comes back locked), `status` is the last
+  // unlock attempt's message, `busy` blocks a second submit while one is in
+  // flight. The passphrase itself is never mirrored here — it is read straight
+  // off the input at submit time and the input is cleared immediately after.
   pass: {
     matches: [],
     host: "",
@@ -65,7 +70,8 @@ const state = {
     err: null,
     searchResults: [],
     searchQuery: null,
-    searching: false
+    searching: false,
+    unlock: { open: false, status: "", statusCls: "", busy: false }
   },
   // Wappalyzer tech detection — lazily loaded for the active tab when
   // the user enters the Tech category. `hits` is sorted by category +
@@ -297,6 +303,8 @@ function renderList() {
     </div>
   ` : "";
 
+  const passHeader = cat.id === "pass" ? renderPassUnlockBar() : "";
+
   const techHeader = (cat.id === "tech" && state.tech.loaded && state.tech.hits.length) ? `
     <div class="tech-header">
       <span class="tech-count">${state.tech.hits.length} technolog${state.tech.hits.length === 1 ? "y" : "ies"} detected</span>
@@ -310,7 +318,8 @@ function renderList() {
       if (!state.pass.loaded)  passMsg = `searching ${escapeHtml(state.pass.host || "…")}`;
       else if (state.pass.err) passMsg = `native host: ${escapeHtml(state.pass.err)} — run cargo install zpwrchrome-host &amp;&amp; zpwrchrome-host --install &lt;ext-id&gt;`;
       else                     passMsg = `no pass entries match ${escapeHtml(state.pass.host || "(no host)")}`;
-      $list.innerHTML = `<div class="empty">${passMsg}</div>`;
+      $list.innerHTML = passHeader + `<div class="empty">${passMsg}</div>`;
+      wirePassUnlockBar();
       return;
     }
     if (cat.id === "tech") {
@@ -321,14 +330,14 @@ function renderList() {
       $list.innerHTML = `<div class="empty">${msg}</div>`;
       return;
     }
-    $list.innerHTML = saveForm + techHeader + `<div class="empty">${isScenes ? "no scenes saved yet" : "no matches"}</div>`;
+    $list.innerHTML = saveForm + passHeader + techHeader + `<div class="empty">${isScenes ? "no scenes saved yet" : "no matches"}</div>`;
     if (isScenes) wireSceneForm();
     return;
   }
   if (state.rowIdx >= items.length) state.rowIdx = items.length - 1;
   if (state.rowIdx < 0) state.rowIdx = 0;
 
-  $list.innerHTML = saveForm + techHeader + items.map((t, i) => {
+  $list.innerHTML = saveForm + passHeader + techHeader + items.map((t, i) => {
     if (t.kind === "tech") {
       const name    = hlText(t.name, t._nameHl);
       const ver     = t.version ? `<span class="tech-version">${escapeHtml(t.version)}</span>` : "";
@@ -453,6 +462,7 @@ function renderList() {
       chrome.runtime.sendMessage({ kind: "pass.fill", path: btn.dataset.path, store: btn.dataset.store || undefined }, (r) => {
         if (chrome.runtime.lastError || !r?.ok) {
           flashButton(btn, false, "fill");
+          if (r?.locked) promptPassUnlock(btn.dataset.path);
           return;
         }
         flashButton(btn, true, "fill");
@@ -489,6 +499,7 @@ function renderList() {
               console.warn("[zpwrchrome] pass.copyField", field, ":",
                 chrome.runtime.lastError?.message || r?.err || "(no response)");
               flashButton(btn, false, label);
+              if (r?.locked) promptPassUnlock(btn.dataset.path);
               return;
             }
             flashButton(btn, true, label);
@@ -525,6 +536,7 @@ function renderList() {
     });
   });
   if (isScenes) wireSceneForm();
+  wirePassUnlockBar();
   const exportLink = document.getElementById("tech-export");
   if (exportLink) {
     exportLink.addEventListener("click", (ev) => {
@@ -729,6 +741,133 @@ function renderMinimap(items) {
   });
 }
 
+// ─── Pass unlock bar ─────────────────────────────────────────────────────
+//
+// The host decrypts with `gpg --batch`, which cannot prompt, and a
+// browser-spawned host has no TTY for a pinentry — so without this the store
+// could only be unlocked by running `pass show` in a terminal first. The bar
+// collects the GPG passphrase here and hands it to the host, which primes
+// gpg-agent for its whole cache TTL.
+//
+// `pendingPath` is the entry whose op tripped the lock: the host unlocks
+// against it (same key the retry needs) and the retry re-runs it on success.
+let passUnlockPendingPath = null;
+
+function renderPassUnlockBar() {
+  const u = state.pass.unlock;
+  if (!u.open) {
+    return `
+      <div class="pass-lockbar">
+        <a href="#" id="pass-unlock-open" class="pass-lock-link" title="enter your GPG passphrase — unlocks the store for the browser without a terminal">🔓 unlock store</a>
+        <a href="#" id="pass-lock-now" class="pass-lock-link dim" title="flush the passphrase from gpg-agent">lock</a>
+      </div>
+    `;
+  }
+  const status = u.status
+    ? `<div class="pass-unlock-status ${escapeHtml(u.statusCls)}">${escapeHtml(u.status)}</div>`
+    : "";
+  return `
+    <div class="pass-lockbar open">
+      <div class="pass-unlock-row">
+        <input type="password" id="pass-unlock-pw" class="pass-unlock-input"
+               placeholder="GPG passphrase" autocomplete="off" spellcheck="false"
+               ${u.busy ? "disabled" : ""}>
+        <button id="pass-unlock-go" class="badge pass-unlock-go" ${u.busy ? "disabled" : ""}>${u.busy ? "…" : "unlock"}</button>
+        <a href="#" id="pass-unlock-close" class="pass-lock-link dim" title="cancel">✕</a>
+      </div>
+      ${status}
+    </div>
+  `;
+}
+
+// Open the bar in response to a locked-store failure and remember which entry
+// tripped it so the retry can re-run exactly that op.
+function promptPassUnlock(path) {
+  passUnlockPendingPath = path || null;
+  state.pass.unlock.open = true;
+  state.pass.unlock.status = "store is locked — enter your GPG passphrase";
+  state.pass.unlock.statusCls = "warn";
+  renderList();
+  document.getElementById("pass-unlock-pw")?.focus();
+}
+
+function wirePassUnlockBar() {
+  document.getElementById("pass-unlock-open")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    state.pass.unlock.open = true;
+    state.pass.unlock.status = "";
+    renderList();
+    document.getElementById("pass-unlock-pw")?.focus();
+  });
+  document.getElementById("pass-unlock-close")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    state.pass.unlock.open = false;
+    state.pass.unlock.status = "";
+    passUnlockPendingPath = null;
+    renderList();
+  });
+  document.getElementById("pass-lock-now")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.runtime.sendMessage({ kind: "pass.lock" }, (r) => {
+      state.pass.unlock.open = true;
+      state.pass.unlock.status = r?.ok ? "locked — gpg-agent cache flushed" : `lock failed: ${r?.err || "no response"}`;
+      state.pass.unlock.statusCls = r?.ok ? "ok" : "err";
+      renderList();
+    });
+  });
+
+  const pw = document.getElementById("pass-unlock-pw");
+  const go = document.getElementById("pass-unlock-go");
+  if (!pw || !go) return;
+
+  const submit = () => {
+    const passphrase = pw.value;
+    // Clear the field before the round-trip so the passphrase never sits in
+    // the DOM while the popup is open and waiting.
+    pw.value = "";
+    if (!passphrase) {
+      state.pass.unlock.status = "passphrase required";
+      state.pass.unlock.statusCls = "err";
+      renderList();
+      document.getElementById("pass-unlock-pw")?.focus();
+      return;
+    }
+    state.pass.unlock.busy = true;
+    state.pass.unlock.status = "unlocking…";
+    state.pass.unlock.statusCls = "";
+    renderList();
+    chrome.runtime.sendMessage(
+      { kind: "pass.unlock", passphrase, file: passUnlockPendingPath || undefined },
+      (r) => {
+        state.pass.unlock.busy = false;
+        if (chrome.runtime.lastError || !r?.ok) {
+          state.pass.unlock.status = chrome.runtime.lastError?.message || r?.err || "unlock failed";
+          state.pass.unlock.statusCls = "err";
+          renderList();
+          document.getElementById("pass-unlock-pw")?.focus();
+          return;
+        }
+        state.pass.unlock.open = false;
+        state.pass.unlock.status = "";
+        passUnlockPendingPath = null;
+        // The store is warm now — reload matches so the rows reflect it.
+        state.pass.loaded = false;
+        renderList();
+      },
+    );
+  };
+
+  go.addEventListener("click", (e) => { e.preventDefault(); submit(); });
+  pw.addEventListener("keydown", (e) => {
+    if (e.key === "Enter")  { e.preventDefault(); e.stopPropagation(); submit(); }
+    if (e.key === "Escape") { e.stopPropagation(); state.pass.unlock.open = false; renderList(); }
+  });
+  // No focus() here on purpose: renderList() re-runs this wiring on every
+  // keystroke in the search box, and grabbing focus there would make the
+  // filter unusable while the bar is open. Focus is set only at the points
+  // that open the bar or report a failed attempt.
+}
+
 function wireSceneForm() {
   const nameInput = $list.querySelector(".scene-name");
   const saveBtn   = $list.querySelector(".scene-save-btn");
@@ -839,6 +978,12 @@ $q.addEventListener("input", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
+  // While the GPG passphrase field has focus it owns every key: the global
+  // bindings below would otherwise close a tab on Backspace and move the row
+  // selection on the arrows. The field handles its own Enter / Escape.
+  const $pw = document.getElementById("pass-unlock-pw");
+  if ($pw && document.activeElement === $pw) return;
+
   // Cmd/Ctrl+1..9 + Cmd/Ctrl+0 (10th slot → History).
   if ((e.metaKey || e.ctrlKey) && /^[0-9]$/.test(e.key)) {
     // 1..9 map to indices 0..8; 0 maps to index 9 (History).
