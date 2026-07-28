@@ -4,8 +4,8 @@
 //! Wire-compatible with upstream `browserpass-extension`: every upstream
 //! action ("configure", "list", "tree", "fetch", "save", "delete", "echo")
 //! is handled by the ported strict-1:1 code path in `ported::request::*`.
-//! `pass.unlock` / `pass.lock` are dotted names upstream never sends, so the
-//! `pass.` prefix does not collide with any upstream action.
+//! `pass.unlock` / `pass.lock` / `pass.status` are dotted names upstream never
+//! sends, so the `pass.` prefix does not collide with any upstream action.
 //! The additive actions live under `extensions::*` and are dispatched
 //! *before* falling back to the upstream dispatcher — upstream never sends
 //! those action names, so this layering does not alter upstream behavior.
@@ -198,7 +198,7 @@ fn main() {
         diag::log("EXIT code=0 reason=ext_returned");
         return;
     }
-    if action_str == "pass.unlock" || action_str == "pass.lock" {
+    if action_str == "pass.unlock" || action_str == "pass.lock" || action_str == "pass.status" {
         diag::log(&format!("DISPATCH category=extension target={action_str}"));
         match action_str.as_str() {
             // `pass.unlock` needs both parses: the passphrase rides outside
@@ -209,6 +209,7 @@ fn main() {
                 gpg_unlock::unlock(&value, &req);
             }
             "pass.lock" => gpg_unlock::lock(&value),
+            "pass.status" => gpg_unlock::status(&value),
             _ => unreachable!(),
         }
         diag::log("EXIT code=0 reason=ext_returned");
@@ -286,7 +287,7 @@ const BANNER: &str = concat!(
 
 /// Static body of the `--help` screen (a plain string literal so the `dl.*`
 /// dotted names and section rules stay verbatim).
-const HELP_BODY: &str = "  \x1b[35m>> BROWSER NATIVE HOST // PASS · OTP · SEARCH · DOWNLOADS <<\x1b[0m\n\n  native-messaging host — browserpass PROTOCOL v3.1.2 + zpwrchrome actions\n\n\x1b[33m  USAGE:\x1b[0m zpwrchrome-host [MODE]\n\n\x1b[36m  ── MODES ─────────────────────────────────────────────────────\x1b[0m\n  zpwrchrome-host                    \x1b[32m//\x1b[0m native-messaging on stdio (Chrome default)\n  zpwrchrome-host --install <id>…    \x1b[32m//\x1b[0m register as NM host for every detected browser\n  zpwrchrome-host -version           \x1b[32m//\x1b[0m print protocol version and exit\n  zpwrchrome-host -v                 \x1b[32m//\x1b[0m verbose log to stderr\n  zpwrchrome-host -h | --help        \x1b[32m//\x1b[0m print this help\n\n\x1b[36m  ── PROTOCOL ACTIONS (browserpass) ────────────────────────────\x1b[0m\n  configure · list · tree · fetch · save · delete · echo\n\n\x1b[36m  ── EXTENSION ACTIONS (zpwrchrome) ────────────────────────────\x1b[0m\n  otp · search · run.spawn · host.crawl · host.exec · zcite.save\n  pass.unlock · pass.lock\n\n\x1b[36m  ── DOWNLOAD MANAGER ──────────────────────────────────────────\x1b[0m\n  dl.add · dl.list · dl.pause · dl.resume · dl.cancel · dl.remove · dl.clear\n  dl.openDir · dl.openFile · dl.writeFile · dl.writeFileChunk\n";
+const HELP_BODY: &str = "  \x1b[35m>> BROWSER NATIVE HOST // PASS · OTP · SEARCH · DOWNLOADS <<\x1b[0m\n\n  native-messaging host — browserpass PROTOCOL v3.1.2 + zpwrchrome actions\n\n\x1b[33m  USAGE:\x1b[0m zpwrchrome-host [MODE]\n\n\x1b[36m  ── MODES ─────────────────────────────────────────────────────\x1b[0m\n  zpwrchrome-host                    \x1b[32m//\x1b[0m native-messaging on stdio (Chrome default)\n  zpwrchrome-host --install <id>…    \x1b[32m//\x1b[0m register as NM host for every detected browser\n  zpwrchrome-host -version           \x1b[32m//\x1b[0m print protocol version and exit\n  zpwrchrome-host -v                 \x1b[32m//\x1b[0m verbose log to stderr\n  zpwrchrome-host -h | --help        \x1b[32m//\x1b[0m print this help\n\n\x1b[36m  ── PROTOCOL ACTIONS (browserpass) ────────────────────────────\x1b[0m\n  configure · list · tree · fetch · save · delete · echo\n\n\x1b[36m  ── EXTENSION ACTIONS (zpwrchrome) ────────────────────────────\x1b[0m\n  otp · search · run.spawn · host.crawl · host.exec · zcite.save\n  pass.unlock · pass.lock · pass.status\n\n\x1b[36m  ── DOWNLOAD MANAGER ──────────────────────────────────────────\x1b[0m\n  dl.add · dl.list · dl.pause · dl.resume · dl.cancel · dl.remove · dl.clear\n  dl.openDir · dl.openFile · dl.writeFile · dl.writeFileChunk\n";
 
 /// Build the styled `--help` / `-h` screen in the MenkeTechnologies house
 /// style (see `zwire-host` / `tp -h`): banner, a status box padded at runtime

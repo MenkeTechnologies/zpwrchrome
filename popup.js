@@ -71,7 +71,10 @@ const state = {
     searchResults: [],
     searchQuery: null,
     searching: false,
-    unlock: { open: false, status: "", statusCls: "", busy: false }
+    // `lockState` is the host's view of the gpg-agent cache: "unknown" until
+    // pass.status answers, then "locked" / "unlocked". Rendered in the lockbar
+    // so the state is visible before an op fails on it.
+    unlock: { open: false, status: "", statusCls: "", busy: false, lockState: "unknown" }
   },
   // Wappalyzer tech detection — lazily loaded for the active tab when
   // the user enters the Tech category. `hits` is sorted by category +
@@ -618,6 +621,9 @@ function loadTech() {
 }
 
 function loadPass() {
+  // Chip first: the lock state is what tells the user whether the rows below
+  // will open silently or stop for a passphrase.
+  refreshPassLockState();
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const h = host(tabs?.[0]?.url || "");
     state.pass.host = h;
@@ -753,12 +759,28 @@ function renderMinimap(items) {
 // against it (same key the retry needs) and the retry re-runs it on success.
 let passUnlockPendingPath = null;
 
+// Chip text for the three states pass.status can report. "unknown" covers both
+// a store whose keys could not be resolved and an unreachable gpg-agent —
+// neither is safe to render as locked.
+const PASS_LOCK_CHIP = {
+  unlocked: { label: "unlocked", title: "gpg-agent holds this store's key — entries open without a passphrase" },
+  locked:   { label: "locked",   title: "gpg-agent holds no key for this store — the next entry asks for your passphrase" },
+  unknown:  { label: "state unknown", title: "could not resolve this store's keys or reach gpg-agent" },
+};
+
+function renderPassLockChip() {
+  const s = state.pass.unlock.lockState;
+  const chip = PASS_LOCK_CHIP[s] || PASS_LOCK_CHIP.unknown;
+  return `<span class="pass-lock-chip ${escapeHtml(s)}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.label)}</span>`;
+}
+
 function renderPassUnlockBar() {
   const u = state.pass.unlock;
   if (!u.open) {
     return `
       <div class="pass-lockbar">
         <a href="#" id="pass-unlock-open" class="pass-lock-link" title="enter your GPG passphrase — unlocks the store for the browser without a terminal">🔓 unlock store</a>
+        ${renderPassLockChip()}
         <a href="#" id="pass-lock-now" class="pass-lock-link dim" title="flush the passphrase from gpg-agent">lock</a>
       </div>
     `;
@@ -768,6 +790,7 @@ function renderPassUnlockBar() {
     : "";
   return `
     <div class="pass-lockbar open">
+      ${renderPassLockChip()}
       <div class="pass-unlock-row">
         <input type="password" id="pass-unlock-pw" class="pass-unlock-input"
                placeholder="GPG passphrase" autocomplete="off" spellcheck="false"
@@ -778,6 +801,20 @@ function renderPassUnlockBar() {
       ${status}
     </div>
   `;
+}
+
+// Ask the host whether gpg-agent currently holds this store's key and repaint
+// the chip. Fire-and-forget: a failure leaves the chip at "unknown" rather than
+// blocking the row render behind a native round-trip.
+function refreshPassLockState() {
+  chrome.runtime.sendMessage({ kind: "pass.status" }, (r) => {
+    const next = chrome.runtime.lastError || !r?.ok || !r.known
+      ? "unknown"
+      : r.unlocked ? "unlocked" : "locked";
+    if (next === state.pass.unlock.lockState) return;
+    state.pass.unlock.lockState = next;
+    renderList();
+  });
 }
 
 // Open the bar in response to a locked-store failure and remember which entry
@@ -813,6 +850,7 @@ function wirePassUnlockBar() {
       state.pass.unlock.status = r?.ok ? "locked — gpg-agent cache flushed" : `lock failed: ${r?.err || "no response"}`;
       state.pass.unlock.statusCls = r?.ok ? "ok" : "err";
       renderList();
+      refreshPassLockState();
     });
   });
 
@@ -853,6 +891,7 @@ function wirePassUnlockBar() {
         // The store is warm now — reload matches so the rows reflect it.
         state.pass.loaded = false;
         renderList();
+        refreshPassLockState();
       },
     );
   };

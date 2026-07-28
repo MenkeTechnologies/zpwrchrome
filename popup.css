@@ -363,6 +363,19 @@ mark.fzf-hl {
 .pass-lock-link:hover { border-bottom-color: var(--cyan); text-shadow: 0 0 6px var(--cyan-glow); }
 .pass-lock-link.dim { color: var(--text-dim); }
 .pass-lock-link.dim:hover { color: var(--accent); border-bottom-color: var(--accent); }
+/* Lock-state chip — what the host says about the gpg-agent cache, so the bar
+   reports state instead of only offering two buttons. `unknown` (unresolvable
+   keys or an unreachable agent) stays muted: it is not a claim either way. */
+.pass-lock-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid currentColor; border-radius: 9px;
+  font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-dim);
+}
+.pass-lock-chip.unlocked { color: var(--green); }
+.pass-lock-chip.locked   { color: var(--accent); }
+.pass-lockbar.open .pass-lock-chip { margin-bottom: 6px; }
 .pass-unlock-row { display: flex; align-items: center; gap: 8px; }
 .pass-unlock-input {
   flex: 1; min-width: 0;

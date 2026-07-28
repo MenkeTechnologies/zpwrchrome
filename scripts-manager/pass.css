@@ -54,11 +54,33 @@ body {
 }
 .tbtn:hover { background: var(--bg-hover); color: var(--cyan); border-color: var(--cyan); }
 .tbtn:active { background: var(--cyan); color: var(--bg-primary); }
-.tbtn.tmpl {
+/* Any toolbar button that carries a text label — `.tbtn` on its own is a
+   fixed 32x32 icon box, so a label overflows it and collides with the next
+   button. Every labelled button opts into this one rule; never restyle a
+   labelled `.tbtn` on its own. */
+.tbtn.tmpl,
+.tbtn.lbl {
   width: auto; padding: 0 10px;
   font-size: 11px; letter-spacing: 0.5px;
   text-transform: lowercase;
+  white-space: nowrap;
 }
+
+/* Lock-state chip — the persistent readout of whether gpg-agent currently
+   holds the store's key, sat between the unlock and lock buttons. */
+.lockchip {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: 11px;
+  font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--text-muted); white-space: nowrap;
+  cursor: default;
+}
+.lockchip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
+.lockchip.unlocked { color: var(--green); border-color: currentColor; }
+.lockchip.unlocked .dot { background: currentColor; }
+.lockchip.locked { color: var(--accent); border-color: currentColor; }
+.lockchip.locked .dot { background: currentColor; }
 .tsep { width: 1px; height: 22px; background: var(--border); margin: 0 6px; }
 .searchwrap { display: flex; flex: 1; min-width: 0; margin-left: 8px; }
 .search {

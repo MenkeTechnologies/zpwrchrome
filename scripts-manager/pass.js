@@ -46,6 +46,7 @@ const passDelete = (path)    => send({ kind: "pass.delete", path });
 const passFill   = (path)    => send({ kind: "pass.fill",   path });
 const passUnlock = (passphrase, file) => send({ kind: "pass.unlock", passphrase, file });
 const passLock   = ()        => send({ kind: "pass.lock" });
+const passStatus = ()        => send({ kind: "pass.status" });
 
 // ─── Footer status ──────────────────────────────────────────────────
 function setFooter(text, cls = "") {
@@ -775,6 +776,7 @@ function unlockDialog(file) {
       try {
         await passUnlock(passphrase, file);
         setFooter("store unlocked");
+        refreshLockState();
         done(true);
       } catch (e) {
         okBtn.disabled = false;
@@ -801,6 +803,33 @@ async function doLock() {
     setFooter("store locked — gpg-agent cache flushed");
   } catch (e) {
     setFooter(`lock failed: ${e.message}`, "ed-status err");
+  }
+  refreshLockState();
+}
+
+/// Repaint the toolbar chip from the host's view of the gpg-agent cache. Called
+/// on load and after anything that can move the lock state, so the toolbar is a
+/// live readout rather than a pair of buttons with no feedback.
+async function refreshLockState() {
+  const chip = $("lock-state");
+  const text = $("lock-state-text");
+  try {
+    const r = await passStatus();
+    if (!r.known) {
+      chip.className = "lockchip";
+      text.textContent = "state unknown";
+      chip.title = "Could not resolve this store's keys or reach gpg-agent";
+      return;
+    }
+    chip.className = `lockchip ${r.unlocked ? "unlocked" : "locked"}`;
+    text.textContent = r.unlocked ? "unlocked" : "locked";
+    chip.title = r.unlocked
+      ? `gpg-agent holds ${r.cached}/${r.total} of this store's keys — entries open without a passphrase`
+      : "gpg-agent holds none of this store's keys — the next entry will ask for your passphrase";
+  } catch (e) {
+    chip.className = "lockchip";
+    text.textContent = "state unknown";
+    chip.title = `pass.status failed: ${e.message}`;
   }
 }
 
@@ -883,3 +912,4 @@ function wire() {
 
 wire();
 loadTree();
+refreshLockState();
