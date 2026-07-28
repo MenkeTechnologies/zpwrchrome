@@ -376,7 +376,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 | Total chrome.commands | **55** (manifest cap on default keys is 4 — this ext ships 4; the other 51 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **3074** `node:test` cases (JS) + 134 `cargo test` cases (Rust) |
+| Test suite | **3078** `node:test` cases (JS) + 134 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -431,7 +431,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 3074 tests across 192 files. Covers:
+Stock Node ≥ 20, no external dependencies. 3078 tests across 192 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
