@@ -130,3 +130,53 @@ test("the new pass-manager toolbar buttons carry no inline handlers", () => {
     assert.doesNotMatch(b, /\son[a-z]+=/i, `inline handler in ${b} would be CSP-blocked`);
   }
 });
+
+// ─── lock-state readout (`pass.status`) ──────────────────────────────────
+//
+// The chip is the only thing that tells the user whether the next entry will
+// open silently or stop for a passphrase, so both surfaces must ask the host
+// rather than infer state from the last op they happened to run.
+
+test("background.js exposes pass.status and routes it from the UI surfaces", () => {
+  assert.match(bg, /async function bpPassStatus\b/, "bpPassStatus helper must exist");
+  assert.match(bg, /action:\s*"pass\.status"/, "must use the pass.status wire action");
+  assert.match(bg, /msg\?\.kind === "pass\.status"/, "SW must handle the pass.status message");
+});
+
+// A failed or unresolvable status must read "unknown", never "locked":
+// claiming locked sends the user to a passphrase prompt that changes nothing.
+test("an unresolvable status renders as unknown rather than locked", () => {
+  assert.match(popup, /lockState: "unknown"/, "popup state must start at unknown");
+  assert.match(popup, /!r\?\.ok \|\| !r\.known\s*\n?\s*\? "unknown"/,
+    "popup must map a failed or unknown host answer to the unknown chip");
+  assert.match(mgrJs, /if \(!r\.known\)/, "pass manager must special-case an unknown answer");
+  assert.match(mgrJs, /text\.textContent = "state unknown"/,
+    "pass manager must label the unknown state explicitly");
+});
+
+test("both surfaces repaint the lock state after unlock and lock", () => {
+  assert.match(popup, /refreshPassLockState\(\);/, "popup must have a refresh path");
+  assert.equal(
+    (popup.match(/refreshPassLockState\(\)/g) || []).length >= 4,
+    true,
+    "popup must refresh on load, after unlock, and after lock (plus the definition)",
+  );
+  assert.match(mgrJs, /async function refreshLockState\b/, "pass manager must have a refresh path");
+  assert.equal(
+    (mgrJs.match(/refreshLockState\(\)/g) || []).length >= 4,
+    true,
+    "pass manager must refresh on load, after unlock, and after lock (plus the definition)",
+  );
+});
+
+// A labelled `.tbtn` is a 32x32 icon box unless it opts into the shared
+// labelled-button rule — without it the text overflows onto its neighbour.
+test("labelled pass-manager toolbar buttons opt into the labelled-button rule", () => {
+  const css = read("scripts-manager/pass.css");
+  assert.match(css, /\.tbtn\.tmpl,\s*\n\.tbtn\.lbl \{/,
+    "the labelled-button rule must be shared, not duplicated per button");
+  for (const id of ["t-unlock", "t-lock"]) {
+    const tag = mgrHtml.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0] || "";
+    assert.match(tag, /class="tbtn lbl"/, `${id} carries a text label, so it needs .lbl`);
+  }
+});

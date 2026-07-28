@@ -3685,6 +3685,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
     return true;
   }
+  if (msg?.kind === "pass.status") {
+    bpPassStatus()
+      .then((r) => sendResponse({ ok: true, ...r }))
+      .catch((e) => sendResponse({ ok: false, err: String(e?.message || e) }));
+    return true;
+  }
   if (msg?.kind === "pass.openManager") {
     openPassManager().then(() => sendResponse({ ok: true }));
     return true;
@@ -4069,8 +4075,26 @@ async function bpPassUnlock(passphrase, file) {
 
 // `pass.lock` extension action — flush every cached passphrase from gpg-agent.
 async function bpPassLock() {
-  const resp = await bpSend({ action: "pass.lock" });
+  const resp = await bpSend({ action: "pass.lock", settings: { stores: bpStores() } });
   return { locked: !!resp.data?.locked };
+}
+
+// `pass.status` extension action — does gpg-agent hold this store's keys right
+// now? Lets the UI show a lock state instead of only discovering it by failing
+// an op. `known: false` means the store's recipients could not be resolved, so
+// the state is indeterminate rather than locked.
+async function bpPassStatus() {
+  const resp = await bpSend({
+    action: "pass.status",
+    storeId: "default",
+    settings: { stores: bpStores() },
+  });
+  return {
+    unlocked: !!resp.data?.unlocked,
+    known: !!resp.data?.known,
+    cached: resp.data?.cached || 0,
+    total: resp.data?.total || 0,
+  };
 }
 
 // A host error is a locked store (rather than a missing entry / broken host)

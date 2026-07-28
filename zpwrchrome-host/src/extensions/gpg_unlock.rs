@@ -65,6 +65,23 @@ pub struct LockResponse {
     pub Locked: bool,
 }
 
+#[derive(Serialize, Debug, Default)]
+pub struct StatusResponse {
+    /// True only when every encryption keygrip this store is encrypted to is
+    /// cached by gpg-agent — a partially cached multi-recipient store still
+    /// fails some decrypts, so it is not "unlocked".
+    #[serde(rename = "unlocked")]
+    pub Unlocked: bool,
+    /// False when the store's recipients could not be resolved at all, so the
+    /// UI shows an unknown state instead of a wrong one.
+    #[serde(rename = "known")]
+    pub Known: bool,
+    #[serde(rename = "cached")]
+    pub Cached: u32,
+    #[serde(rename = "total")]
+    pub Total: u32,
+}
+
 /// Run the `pass.unlock` action. `value` is the raw request (the passphrase
 /// lives outside the ported request struct), `req` the same message parsed
 /// through the ported shape for `settings` / `storeId` / `file`.
@@ -192,16 +209,215 @@ pub fn unlock(value: &Value, req: &request) {
 
 /// Run the `pass.lock` action — drop every cached passphrase from gpg-agent so
 /// the next decrypt needs the passphrase again. `reloadagent` is the same
-/// command `gpg-connect-agent` documents for flushing the cache; a missing
-/// agent is not an error (nothing is cached in that case).
-pub fn lock(_value: &Value) {
-    let _ = Command::new("gpg-connect-agent")
-        .args(["reloadagent", "/bye"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-    response::SendOk(LockResponse { Locked: true });
+/// command `gpg-connect-agent` documents for flushing the cache.
+///
+/// The agent binary is looked up next to the detected gpg before falling back
+/// to `$PATH`: a browser-spawned host inherits the browser's PATH, which on
+/// macOS is `/usr/bin:/bin:/usr/sbin:/sbin` — Homebrew's `gpg-connect-agent`
+/// is not on it, so a bare-name spawn fails. Reporting `locked: true` off a
+/// spawn that never ran is what made the UI claim a lock it had not performed.
+pub fn lock(value: &Value) {
+    let req: request = serde_json::from_value(value.clone()).unwrap_or_default();
+    let gpgPath = resolve_gpg_path(&req, "").unwrap_or_else(|_| "gpg".to_string());
+    match run_connect_agent(&gpgPath, "reloadagent") {
+        Ok(_) => response::SendOk(LockResponse { Locked: true }),
+        Err(e) => response::SendErrorAndExit(
+            errors::Code::UnableToDetectGpgPath,
+            Some(response::params_of(&[
+                (field::MESSAGE, "Unable to reach gpg-agent to flush its cache"),
+                (field::ACTION, "pass.lock"),
+                (field::ERROR, &e),
+            ])),
+        ),
+    }
+}
+
+/// Run the `pass.status` action — report whether gpg-agent currently holds the
+/// passphrase for the keys this store is encrypted to, so the UI can show a
+/// lock state instead of only finding out by failing an op.
+///
+/// `.gpg-id` at the store root names the recipients; each recipient's
+/// encryption-capable keygrips are resolved through gpg, and `keyinfo --list`
+/// says which grips the agent has cached. Per-directory `.gpg-id` overrides are
+/// not consulted — the readout is for the store as a whole.
+pub fn status(value: &Value) {
+    let req: request = serde_json::from_value(value.clone()).unwrap_or_default();
+    let store = match req.Settings.Stores.get(&req.StoreID) {
+        Some(s) => s.clone(),
+        None => {
+            response::SendErrorAndExit(
+                errors::Code::InvalidPasswordStore,
+                Some(response::params_of(&[
+                    (
+                        field::MESSAGE,
+                        "The password store is not present in the list of stores",
+                    ),
+                    (field::ACTION, "pass.status"),
+                    (field::STORE_ID, &req.StoreID),
+                ])),
+            );
+        }
+    };
+
+    let normalized = match normalizePasswordStorePath(&store.Path) {
+        Ok(p) => p,
+        Err(e) => {
+            response::SendErrorAndExit(
+                errors::Code::InaccessiblePasswordStore,
+                Some(response::params_of(&[
+                    (field::MESSAGE, "The password store is not accessible"),
+                    (field::ACTION, "pass.status"),
+                    (field::ERROR, &e),
+                    (field::STORE_ID, &store.ID),
+                    (field::STORE_PATH, &store.Path),
+                ])),
+            );
+        }
+    };
+
+    let gpgPath =
+        resolve_gpg_path(&req, &store.Settings.GpgPath).unwrap_or_else(|_| "gpg".to_string());
+    let grips = store_keygrips(&normalized, &gpgPath);
+    let agentKeys = agent_keyinfo(&gpgPath).unwrap_or_default();
+    // Only the store keys whose secret half this agent actually holds can ever
+    // decrypt an entry — a multi-recipient store lists other people's keys too,
+    // and those are never going to be cached here.
+    let usable: Vec<&(String, bool)> = agentKeys
+        .iter()
+        .filter(|(grip, _)| grips.contains(grip))
+        .collect();
+    let cached = usable.iter().filter(|(_, isCached)| *isCached).count();
+
+    response::SendOk(StatusResponse {
+        // Any one usable key being cached is enough: gpg decrypts an entry with
+        // whichever recipient key it can, so waiting for all of them (a key can
+        // have several encryption subkeys) would report a working store locked.
+        Unlocked: cached > 0,
+        // Unresolvable recipients (no readable `.gpg-id`, gpg missing) and an
+        // unreachable agent both mean "cannot tell" — reporting either as
+        // locked would prompt for a passphrase that changes nothing.
+        Known: !usable.is_empty(),
+        Cached: cached as u32,
+        Total: usable.len() as u32,
+    });
+}
+
+/// Encryption keygrips for every recipient in the store's root `.gpg-id`.
+/// Signing-only grips are skipped: caching those says nothing about whether a
+/// decrypt will succeed.
+fn store_keygrips(store: &Path, gpgPath: &str) -> Vec<String> {
+    let Ok(gpgIds) = fs::read_to_string(store.join(".gpg-id")) else {
+        return Vec::new();
+    };
+    let mut grips: Vec<String> = Vec::new();
+    for recipient in gpgIds.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let Ok(out) = Command::new(gpgPath)
+            .args(["--list-keys", "--with-colons", "--with-keygrip", recipient])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+        else {
+            continue;
+        };
+        let listing = String::from_utf8_lossy(&out.stdout);
+        // `pub`/`sub` records carry the capabilities in field 12; the `grp`
+        // record that follows carries that key's keygrip in field 10.
+        let mut encrypts = false;
+        for line in listing.lines() {
+            let fields: Vec<&str> = line.split(':').collect();
+            match fields.first().copied() {
+                Some("pub") | Some("sub") => {
+                    encrypts = fields.get(11).is_some_and(|caps| caps.contains('e'));
+                }
+                Some("grp") => {
+                    if encrypts {
+                        if let Some(grip) = fields.get(9).filter(|g| !g.is_empty()) {
+                            let grip = grip.to_string();
+                            if !grips.contains(&grip) {
+                                grips.push(grip);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    grips
+}
+
+/// Every secret key gpg-agent knows about, paired with whether it currently
+/// holds that key's passphrase. `keyinfo --list` answers one
+/// `S KEYINFO <grip> <type> <serial> <idstr> <cached> …` line per key, where
+/// `<cached>` is `1` when the passphrase is in the cache.
+///
+/// `Err` means the agent could not be reached at all — the caller must report
+/// that as an unknown state, never as "nothing is cached", which reads as a
+/// locked store and would send the user to a passphrase prompt they don't need.
+fn agent_keyinfo(gpgPath: &str) -> Result<Vec<(String, bool)>, String> {
+    let out = run_connect_agent(gpgPath, "keyinfo --list")?;
+    Ok(out
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            if fields.next() != Some("S") || fields.next() != Some("KEYINFO") {
+                return None;
+            }
+            let grip = fields.next()?.to_string();
+            // type, serialno, idstr, then the cache flag.
+            let cached = fields.nth(3)? == "1";
+            Some((grip, cached))
+        })
+        .collect())
+}
+
+/// Run one `gpg-connect-agent` command. A browser-spawned host inherits the
+/// browser's PATH (`/usr/bin:/bin:/usr/sbin:/sbin` on macOS), which holds no
+/// GnuPG at all, so a bare-name spawn is not enough.
+///
+/// Candidates, in order: beside the resolved gpg, beside its symlink target
+/// (`DetectGpgBinary` finds `/usr/local/bin/gpg`, a Homebrew symlink into
+/// `../Cellar/gnupg/<ver>/bin/` where the agent binary actually lives, and
+/// `/usr/local/bin/gpg-connect-agent` does not exist), then the usual install
+/// prefixes, then `$PATH`.
+fn run_connect_agent(gpgPath: &str, command: &str) -> Result<String, String> {
+    const PREFIXES: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"];
+    const BIN: &str = "gpg-connect-agent";
+
+    let mut candidates: Vec<String> = Vec::new();
+    let push_dir = |dir: &Path, out: &mut Vec<String>| {
+        let candidate = dir.join(BIN).to_string_lossy().into_owned();
+        if !out.contains(&candidate) {
+            out.push(candidate);
+        }
+    };
+    let resolved = Path::new(gpgPath);
+    if let Some(dir) = resolved.parent().filter(|p| !p.as_os_str().is_empty()) {
+        push_dir(dir, &mut candidates);
+    }
+    if let Ok(real) = fs::canonicalize(resolved) {
+        if let Some(dir) = real.parent() {
+            push_dir(dir, &mut candidates);
+        }
+    }
+    for prefix in PREFIXES {
+        push_dir(Path::new(prefix), &mut candidates);
+    }
+    candidates.push(BIN.to_string());
+
+    let mut lastErr = format!("{BIN} not found");
+    for candidate in candidates {
+        match Command::new(&candidate)
+            .args([command, "/bye"])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+        {
+            Ok(out) => return Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+            Err(e) => lastErr = format!("{candidate}: {e}"),
+        }
+    }
+    Err(lastErr)
 }
 
 /// Decrypt `file_path` with the passphrase supplied on gpg's stdin. The

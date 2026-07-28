@@ -51,6 +51,7 @@ const CATALOG = [
     // every request typed here lands in the transcript (which is exportable
     // to a file). Unlock from the popup's PASS category or the pass manager.
     '{"action":"pass.lock"}',
+    `{"action":"pass.status","storeId":"default","settings":{"stores":${S}}}`,
   ]],
   ["host tools", [
     '{"action":"host.crawl","path":"~/src","ext":"rs"}',

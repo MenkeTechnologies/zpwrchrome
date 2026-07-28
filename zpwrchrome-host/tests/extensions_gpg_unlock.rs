@@ -1,4 +1,4 @@
-// Tests for the `pass.unlock` / `pass.lock` extension actions — entering the
+// Tests for the `pass.unlock` / `pass.lock` / `pass.status` extension actions — entering the
 // GPG passphrase from the browser instead of from a terminal.
 //
 // The pure helpers (`classify`, `first_entry`) always run. The end-to-end test
@@ -10,6 +10,9 @@
 //   3. the same `fetch`          → decrypts, unchanged ported code path
 //   4. `pass.lock` + `fetch`     → error 24 again
 //   5. `pass.unlock` (wrong pw)  → error 24, message "Bad passphrase"
+//
+// `pass.status` is covered separately: it must report the same locked /
+// unlocked state the fetch path experiences, since the toolbar chip renders it.
 //
 // Step 3 is the contract: unlocking primes gpg-agent, so `--batch` decrypts
 // that previously needed a terminal now succeed.
@@ -77,7 +80,7 @@ fn first_entry_is_none_for_a_store_with_no_entries() {
 
 #[test]
 fn unlock_primes_the_agent_so_batch_fetch_stops_needing_a_terminal() {
-    let Some(fx) = Fixture::build() else {
+    let Some(fx) = Fixture::build("unlock") else {
         eprintln!("skipping — gpg unavailable or key generation failed");
         return;
     };
@@ -132,6 +135,71 @@ fn unlock_primes_the_agent_so_batch_fetch_stops_needing_a_terminal() {
     );
 }
 
+/// `pass.status` is what the toolbar's lock chip renders, so it has to track
+/// the agent cache rather than guess: locked before an unlock, unlocked after
+/// one, locked again after a lock. A wrong answer here either hides a locked
+/// store or prompts for a passphrase that is already cached.
+#[test]
+fn status_follows_the_agent_cache_through_unlock_and_lock() {
+    let Some(fx) = Fixture::build("status") else {
+        eprintln!("skipping — gpg unavailable or key generation failed");
+        return;
+    };
+
+    fx.flush_agent();
+    let cold = fx.run(&fx.status_req());
+    assert_eq!(cold["status"], "ok", "status must answer, got: {cold}");
+    assert_eq!(cold["data"]["unlocked"], false, "cold agent is locked");
+    assert_eq!(
+        cold["data"]["known"], true,
+        "recipients come from .gpg-id, so the state is knowable: {cold}"
+    );
+    // `total` counts the store's encryption keygrips this agent holds a secret
+    // half for — the fixture key carries more than one encryption subkey, so
+    // assert the shape, not a subkey count gpg is free to change.
+    assert!(
+        cold["data"]["total"].as_u64().unwrap() >= 1,
+        "fixture store must have at least one usable key: {cold}"
+    );
+    assert_eq!(cold["data"]["cached"], 0);
+
+    assert_eq!(fx.run(&fx.unlock_req(PASSPHRASE))["status"], "ok");
+    let warm = fx.run(&fx.status_req());
+    assert_eq!(
+        warm["data"]["unlocked"], true,
+        "status must see the primed agent, got: {warm}"
+    );
+    assert!(
+        warm["data"]["cached"].as_u64().unwrap() >= 1,
+        "the unlocked key must be counted as cached: {warm}"
+    );
+
+    assert_eq!(fx.run(&json!({"action": "pass.lock"}))["status"], "ok");
+    let relocked = fx.run(&fx.status_req());
+    assert_eq!(
+        relocked["data"]["unlocked"], false,
+        "status must see the flushed cache, got: {relocked}"
+    );
+}
+
+/// A store with no readable `.gpg-id` has no resolvable recipients. Reporting
+/// that as locked would prompt for a passphrase that cannot help, so the host
+/// reports it as unknown instead.
+#[test]
+fn status_reports_unknown_when_recipients_cannot_be_resolved() {
+    let Some(fx) = Fixture::build("unknown") else {
+        eprintln!("skipping — gpg unavailable or key generation failed");
+        return;
+    };
+    std::fs::remove_file(fx.store.join(".gpg-id")).unwrap();
+
+    let unknown = fx.run(&fx.status_req());
+    assert_eq!(unknown["status"], "ok", "status must still answer");
+    assert_eq!(unknown["data"]["known"], false, "got: {unknown}");
+    assert_eq!(unknown["data"]["unlocked"], false, "unknown is never unlocked");
+    assert_eq!(unknown["data"]["total"], 0);
+}
+
 // ─── fixture ─────────────────────────────────────────────────────────────
 
 /// Disposable GNUPGHOME + password store. Dropping it kills the agent it
@@ -142,7 +210,7 @@ struct Fixture {
 }
 
 impl Fixture {
-    fn build() -> Option<Self> {
+    fn build(name: &str) -> Option<Self> {
         if Command::new("gpg").arg("--version").output().is_err() {
             return None;
         }
@@ -150,7 +218,7 @@ impl Fixture {
         // AF_UNIX paths cap at ~104 bytes, which macOS's $TMPDIR
         // (/var/folders/…/T/) blows through — gpg then dies with
         // "can't connect to the gpg-agent: File name too long".
-        let home = PathBuf::from(format!("/tmp/zpc-gpg-{}", std::process::id()));
+        let home = PathBuf::from(format!("/tmp/zpc-gpg-{name}-{}", std::process::id()));
         std::fs::remove_dir_all(&home).ok();
         std::fs::create_dir_all(&home).ok()?;
         set_mode_700(&home);
@@ -288,6 +356,14 @@ impl Fixture {
             "action": "fetch",
             "storeId": "default",
             "file": "site.gpg",
+            "settings": self.settings(),
+        })
+    }
+
+    fn status_req(&self) -> Value {
+        json!({
+            "action": "pass.status",
+            "storeId": "default",
             "settings": self.settings(),
         })
     }
