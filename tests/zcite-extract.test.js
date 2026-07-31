@@ -122,3 +122,100 @@ test("a non-DOI citation_doi is dropped (only 10.x DOIs kept)", () => {
   );
   assert.equal(csl.DOI, undefined);
 });
+
+// A corporate author split into given/family renders as garbage in every author-date style:
+// "National Research Council (US) Subcommittee on Laboratory Animal Nutrition" became family
+// "Nutrition" + given "National Research Council (US) Subcommittee on Laboratory Animal", which
+// APA initialised to "Nutrition, N. R. C. (. S. o. L. A." — observed in a real saved library.
+test("a corporate author stays a single-field CSL literal name", () => {
+  const csl = withDom(
+    {
+      metas: [
+        { name: "citation_title", content: "Nutrient Requirements of the Mouse" },
+        {
+          name: "citation_author",
+          content: "National Research Council (US) Subcommittee on Laboratory Animal Nutrition",
+        },
+      ],
+    },
+    extractCslFromPage
+  );
+  assert.deepEqual(csl.author, [
+    { literal: "National Research Council (US) Subcommittee on Laboratory Animal Nutrition" },
+  ]);
+});
+
+test("organisation keywords and parenthesised qualifiers mark a literal name", () => {
+  const cases = [
+    "World Health Organization",
+    "Mouse Genome Sequencing Consortium",
+    "Massachusetts Institute of Technology",
+    "Acme Corp",
+    "Broad Institute (US)",
+  ];
+  for (const name of cases) {
+    const csl = withDom(
+      { metas: [{ name: "citation_author", content: name }] },
+      extractCslFromPage
+    );
+    assert.deepEqual(csl.author, [{ literal: name }], `${name} must stay literal`);
+  }
+});
+
+test("ordinary personal names are still split into given/family", () => {
+  const csl = withDom(
+    {
+      metas: [
+        { name: "citation_author", content: "Jean Louis Guénet" },
+        { name: "citation_author", content: "Waterston, Robert H." },
+      ],
+    },
+    extractCslFromPage
+  );
+  assert.deepEqual(csl.author, [
+    { family: "Guénet", given: "Jean Louis" },
+    { family: "Waterston", given: "Robert H." },
+  ]);
+});
+
+// Publishers emit the same author in citation_author and DC.creator; the two lists are unioned,
+// so without dedup every author appeared twice (seen on a real Genome Research save).
+test("an author repeated across citation_author and DC.creator is listed once", () => {
+  const csl = withDom(
+    {
+      metas: [
+        { name: "citation_author", content: "Jean Louis Guénet" },
+        { name: "dc.creator", content: "Jean Louis  Guénet" },
+        { name: "citation_author", content: "Ada Lovelace" },
+      ],
+    },
+    extractCslFromPage
+  );
+  assert.equal(csl.author.length, 2, "the duplicate collapsed");
+  assert.deepEqual(csl.author[1], { family: "Lovelace", given: "Ada" });
+});
+
+// Springer-Nature wraps the article in a WebPage node, so a walker that only looks at the top
+// level and @graph skips the JSON-LD entirely.
+test("JSON-LD nested under mainEntity is read", () => {
+  const csl = withDom(
+    {
+      jsonld: [
+        {
+          "@type": "WebPage",
+          mainEntity: {
+            "@type": "ScholarlyArticle",
+            headline: "Initial sequencing and comparative analysis of the mouse genome",
+            author: [{ name: "Robert H. Waterston" }],
+            datePublished: "2002-12-05",
+          },
+        },
+      ],
+    },
+    extractCslFromPage
+  );
+  assert.equal(csl.title, "Initial sequencing and comparative analysis of the mouse genome");
+  assert.deepEqual(csl.author, [{ family: "Waterston", given: "Robert H." }]);
+  assert.deepEqual(csl.issued, { "date-parts": [[2002]] });
+  assert.equal(csl.type, "article-journal");
+});
