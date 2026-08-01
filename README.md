@@ -338,7 +338,7 @@ Every request is one native-messaging frame on stdin. `src/bin/zpwrchrome_host.r
 | `host` | `host.crawl` / `host.exec` | Filesystem crawl + program exec, delegated to `zwire_host::api` (see below) |
 | `gpg_unlock` | `pass.unlock` / `pass.lock` / `pass.status` | Enter the GPG passphrase from the browser instead of a terminal: decrypts one probe entry with `--pinentry-mode loopback --passphrase-fd 0`, which primes gpg-agent for its cache TTL so every later `--batch` decrypt works. `pass.lock` flushes the cache via `gpg-connect-agent reloadagent`; `pass.status` resolves the store's recipients from `.gpg-id` to encryption keygrips and asks the agent (`keyinfo --list`) which of them are cached, so the UI can show a lock state instead of discovering it by failing an op. Both locate `gpg-connect-agent` beside the resolved gpg (and through its symlink target) rather than on `$PATH`, which a browser-spawned host inherits empty of GnuPG |
 | `run_command` | `run.spawn` | Post-download argv execution via `std::process::Command` (no shell); stdout/stderr capped 64 KiB each, 30 s default / 5 min max timeout |
-| `zcite` | `zcite.save` | Writes extracted CSL-JSON into `dirs::data_dir()/zcite/inbox` — the well-known drop-box zcite's `inbox.import` drains alongside its own profile inbox. A separate process can't know where zcite's profile lives (its Tauri host migrates the library to the bundle-identifier dir), so this bare-name path is the contract, not a guess at the profile location |
+| `zcite` | `zcite.save` | Writes extracted CSL-JSON into zcite's inbox, path resolved with `dirs::data_dir()` to match zcite-core exactly |
 
 Identity / credit-card autofill (`profile/*`, `creditcard/*`) is **not** a separate wire action — it rides the ported `fetch`, then `lib/identity-tokens.js` + the page-injected `fillIdentityForm()` map the decrypted key:value body onto WHATWG autocomplete tokens client-side. The combined `pass-fill-identity` additionally reuses the login path: it host-matches an entry and injects the shared `fillLoginForm()` (username/password) on any host-match — the same gate as `pass-fill`, so 2-step username-first logins fill too — giving one keystroke over login + address + card.
 
@@ -376,7 +376,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 | Total chrome.commands | **55** (manifest cap on default keys is 4 — this ext ships 4; the other 51 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **3078** `node:test` cases (JS) + 134 `cargo test` cases (Rust) |
+| Test suite | **3083** `node:test` cases (JS) + 134 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
@@ -431,7 +431,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 3078 tests across 192 files. Covers:
+Stock Node ≥ 20, no external dependencies. 3083 tests across 192 files. Covers:
 
 - **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
 - **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
