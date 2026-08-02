@@ -186,7 +186,7 @@ A Chrome MV3 extension that bundles every daily-driver browser tool into one too
 - [\\[0x01\\] Install](#0x01-install)
 - [\\[0x02\\] Keyboard Commands](#0x02-keyboard-commands)
 - [\\[0x03\\] Popup UI](#0x03-popup-ui)
-- [\\[0x04\\] Tab Switcher Modal](#0x04-tab-switcher-modal)
+- [\\[0x04\\] Tab Switcher](#0x04-tab-switcher)
 - [\\[0x05\\] Companion Theme](#0x05-companion-theme)
 - [\\[0x06\\] Architecture](#0x06-architecture)
 - [\\[0x07\\] Capability Surface](#0x07-capability-surface)
@@ -204,7 +204,7 @@ A Chrome MV3 extension that bundles every daily-driver browser tool into one too
 
 - **MRU stack** — cross-window most-recently-used tracking via \`chrome.storage.session\`, survives service-worker restarts
 - **Alt+T popup** — the cyberpunk HUD with 12 categories (All / Current Window / Pinned / Audible / Muted / Recently Closed / Scenes / Tree / Minimap / History / **Pass** / **Tech**), Cmd+1–0 jumps for the first ten, Cmd+P → Pass, Cmd+K → Tech, fzf scoring on every row
-- **Cmd+E / Ctrl+E modal** — JetBrains-style Recent Files overlay: 2-column shadow-DOM modal injected into the active page with categories (All / Current Window / Pinned / Audible / Muted / Recently Closed), Cmd+1–6 category jumps, live filter, hold-cycle on the trigger key
+- **Cmd+E / Ctrl+E MRU switch** — \`switch-previous-tab\` jumps straight to the previously active tab, across windows, with no intermediate UI. The handler re-pushes the real active tab and drops ids that no longer resolve, so a service-worker suspend that swallowed \`tabs.onActivated\` / \`onRemoved\` can't leave the shortcut pointing at a dead tab. (The JetBrains-style shadow-DOM overlay that used to own this key is retired — see [Tab Switcher](#0x04-tab-switcher))
 - **Cmd+Y / Ctrl+Y history** — replaces Chrome’s built-in chrome://history page with an fzf-fuzzy search over up to ${5000} entries, Backspace deletes the highlighted URL from history
 - **UNIX \`pass\` integration** — replaces browserpass via a vendored Rust native-messaging host that walks \`~/.password-store\` with eTLD+1 + multi-label PSL matching, shells to \`pass show\`/\`pass otp\`, returns credentials over a length-prefixed JSON port. PASS popup category with fill / user / pw / otp buttons. Hotkeys: \`pass-fill\` autofills the active tab via injected \`HTMLInputElement.value\` setter (React/Vue safe) + input/change dispatch; \`pass-copy-{pw,user,otp}\` write to clipboard with 45 s auto-clear matching \`pass -c\`
 - **Unlock the store from the browser** — the GPG passphrase is entered in zpwrchrome, not in a terminal. Every decrypt the host performs runs \`gpg --batch\`, which forbids gpg from prompting, and a browser-spawned host has no controlling TTY for a pinentry to draw on — so until now the store had to be primed by running \`pass show\` in a shell first. The \`pass.unlock\` action takes the passphrase, decrypts one probe entry with \`--pinentry-mode loopback --passphrase-fd 0\` (passphrase on stdin, never in argv, never on disk), and gpg hands it to gpg-agent, which caches it for the agent's \`default-cache-ttl\` — every later fetch / otp / save / \`pass show\` then succeeds through the unmodified code path. Surfaces: \`🔓 unlock store\` in the popup's PASS category, and \`🔓 unlock\` / \`🔒 lock\` in the pass manager's toolbar. Both surfaces carry a live lock-state chip (\`unlocked\` / \`locked\` / \`state unknown\`) fed by \`pass.status\`, which resolves the store's recipients from \`.gpg-id\` to their encryption keygrips and asks gpg-agent (\`keyinfo --list\`) which of them it currently holds — a store whose keys or agent cannot be resolved reads \`state unknown\` rather than claiming a state it did not verify. Any op that fails on a locked store auto-opens the prompt and retries itself once unlocked; the unlock is performed against the entry that tripped the lock, so the retry can't hit a second locked key. \`pass.lock\` flushes the agent cache (\`gpg-connect-agent reloadagent\`) to re-lock on demand. The extension never stores the passphrase — it is read off the input at submit, forwarded, and cleared; it is excluded from the diagnostic ring, and the host wipes its copy with volatile writes. Loopback pinentry is allowed by default (\`man gpg-agent\`: *"Allow is the default"*), so no gpg-agent configuration is normally needed; if an agent has been started with \`--no-allow-loopback-pinentry\`, the error names the exact \`gpg-agent.conf\` line to add
@@ -280,7 +280,7 @@ cargo install zpwrchrome-host
 zpwrchrome-host --install <ext-id>
 \`\`\`
 
-The installer writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir (Chrome / Chromium / Brave / Edge / Arc / Vivaldi on macOS + Linux). \`allowed_origins\` is populated with \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension. Reload the extension at \`chrome://extensions\` after running it.
+The installer writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir — Chrome, Chromium, Brave and Edge on macOS + Linux, each written only when that browser's config root already exists, so no manifest is littered for a browser you don't have. It also registers into the [zwire](https://github.com/MenkeTechnologies/zwire-host) profile's own \`NativeMessagingHosts/\` (zwire is a Chromium fork run against its own \`--user-data-dir\`, and registration happens before its first launch, so that directory is created unconditionally; \`\$ZWIRE_STATE\` overrides the location). \`allowed_origins\` is populated with \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension. Reload the extension at \`chrome://extensions\` after running it.
 
 To upgrade later: \`cargo install zpwrchrome-host --force\` — the NM manifest already points at \`$CARGO_HOME/bin/zpwrchrome-host\` so no re-install is needed.
 
@@ -322,22 +322,23 @@ Click any row to activate it. Hover reveals a \`×\` icon to close.
 
 ---
 
-## [0x04] TAB SWITCHER MODAL
+## [0x04] TAB SWITCHER
 
-JetBrains IDEs have a Recent Files modal (\`Cmd+E\` on Mac). \`zpwrchrome\` ports the same UX to Chrome: a full-page shadow-DOM overlay injected into the active tab, with categories on the left and the live tab list on the right.
+Switching is split between one no-UI keystroke and the popup. \`Cmd+E\` / \`Ctrl+E\` is bound to \`switch-previous-tab\`: it activates the previously used tab directly, across windows, and focuses that tab's window. Everything with a list attached goes through the popup.
 
-| Key | Action |
-| --- | --- |
-| \`Cmd+E\` / \`Ctrl+E\` | open the modal — and, while open, cycle MRU forward |
-| \`Cmd+Shift+E\` / \`Ctrl+Shift+E\` | cycle MRU backward (when modal is open) |
-| \`Cmd+1\` … \`Cmd+6\` | jump to category (All / Current Window / Pinned / Audible / Muted / Recently Closed) |
-| \`↑\` / \`↓\` | move selection |
-| \`Enter\` | switch to / restore selection |
-| \`Delete\` / \`Shift+Backspace\` | close the highlighted open tab in place |
-| \`Esc\` | dismiss without activating |
-| any letter | live-filter by title / URL / hostname |
+| Key | Command | Action |
+| --- | --- | --- |
+| \`Cmd+E\` / \`Ctrl+E\` | \`switch-previous-tab\` | switch to the previously active tab (MRU step, no UI) |
+| \`Alt+T\` | \`_execute_action\` | open the popup |
+| \`Cmd+Y\` / \`Ctrl+Y\` | \`open-history\` | open the popup on the History category |
+| *(user-set)* | \`mru-next\` / \`mru-prev\` | step forward / backward through the MRU stack |
+| *(user-set)* | \`recent-modal\` / \`search-tabs\` | open the popup (same surface as Alt+T) |
 
-Implementation: \`modal/content.js\` is a content script registered on \`<all_urls>\` (excluded from the Chrome Web Store, which rejects all extensions). It builds the modal inside a closed shadow root so host-page CSS can never leak in. Visuals are the strykelang HUD palette inline-rendered into a \`<style>\` block. On restricted pages (\`chrome://\`, \`view-source://\`, the Web Store) the command transparently falls back to the regular action popup.
+Inside the popup: \`Cmd+1\`…\`Cmd+0\` jump to the first ten categories (\`Cmd+0\` = History), \`Cmd+P\` → Pass, \`Cmd+K\` → Tech, \`↑\`/\`↓\` move the selection, \`Enter\` activates or restores it, \`Delete\` closes the highlighted tab (or deletes the highlighted history URL), \`Esc\` clears a non-empty filter and otherwise closes the popup, and any letter live-filters by title / URL / hostname.
+
+MRU durability: the \`switch-previous-tab\` handler re-pushes the genuinely-active tab before reading the stack, then walks down it skipping ids that no longer resolve and dropping them as it goes. A service-worker suspend that swallowed \`tabs.onActivated\` / \`onRemoved\` therefore can't leave the shortcut aimed at a stale id.
+
+**The in-page modal is retired.** JetBrains IDEs have a Recent Files modal (\`Cmd+E\` on Mac) and \`zpwrchrome\` originally shipped that UX as a full-page closed-shadow-root overlay in \`modal/content.js\`. It landed center-of-viewport while every other command anchors top-right at the toolbar icon, so \`recent-modal\` was rewired to \`chrome.action.openPopup()\` and \`Cmd+E\` was handed to the MRU primitive. The content script is still registered on \`<all_urls>\` and still opens on an \`open-modal\` message, but nothing sends one — \`tests/dispatch-popup.test.js\` and \`tests/protocol.test.js\` pin that the service worker must not.
 
 ---
 
@@ -412,7 +413,7 @@ Color anchors (RGB triplets in \`theme/manifest.json\`):
                                                      └──────────────────┘
 \`\`\`
 
-The service worker holds no globals — MRU lives in \`chrome.storage.session\`. Pure helpers in \`lib/util.js\` (JS) and \`zpwrchrome-host/src/{ported,extensions}/\` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / \`cargo test\`. The native host is a **1:1 Rust port of \`browserpass-native\` v3.1.2**: \`zpwrchrome-host/src/ported/**\` mirrors the upstream Go source file-for-file (per-fn \`// go:NN\` citations, Go comments carried over verbatim — see \`zpwrchrome-host/docs/port_report.html\`), while \`src/extensions/**\` layers on six Rust-only tool families upstream never had. One binary serves both; each request is one process spawn (BP process model), with download workers detaching to keep state under \`$XDG_CACHE_HOME/zpwrchrome/dl/\`.
+The service worker holds no globals — MRU lives in \`chrome.storage.session\`. Pure helpers in \`lib/util.js\` (JS) and \`zpwrchrome-host/src/{ported,extensions}/\` (Rust) carry no Chrome / Process references and are unit-tested in plain Node / \`cargo test\`. The native host is a **1:1 Rust port of \`browserpass-native\` v3.1.2**: \`zpwrchrome-host/src/ported/**\` mirrors the upstream Go source file-for-file (per-fn \`// go:NN\` citations, Go comments carried over verbatim — see \`zpwrchrome-host/docs/port_report.html\`), while \`src/extensions/**\` layers on seven Rust-only tool families upstream never had. One binary serves both; each request is one process spawn (BP process model), with download workers detaching to keep state under \`$XDG_CACHE_HOME/zpwrchrome/dl/\`.
 
 ### Additive-action multiplexing over the browserpass wire
 
@@ -446,7 +447,7 @@ Identity / credit-card autofill (\`profile/*\`, \`creditcard/*\`) is **not** a s
 
 ### \`zwire-host\` reuse — one native agent, two front-ends
 
-\`host.crawl\` / \`host.exec\` do not re-implement a recursive walk or a capture-stdout exec: they call \`zwire_host::api::walk\` and \`zwire_host::api::exec\`, the **same native capability library the [zwire](https://github.com/MenkeTechnologies/zwire-host) browser agent runs**. \`zpwrchrome-host/Cargo.toml\` pins it as a git dependency (\`tag = "v0.3.0"\`, \`default-features = false\`) so only the light filesystem/exec half compiles in — the heavy \`portable-pty\` / \`sysinfo\` deps stay out of this tree. The zwire browser and this NM host share the exact crawl/exec code path.
+\`host.crawl\` / \`host.exec\` do not re-implement a recursive walk or a capture-stdout exec: they call \`zwire_host::api::walk\` and \`zwire_host::api::exec\`, the **same native capability library the [zwire](https://github.com/MenkeTechnologies/zwire-host) browser agent runs**. \`zpwrchrome-host/Cargo.toml\` pins it from crates.io (\`zwire-host = { version = "0.3", default-features = false }\`) so only the light filesystem/exec half compiles in — the heavy \`portable-pty\` / \`sysinfo\` deps stay out of this tree. The zwire browser and this NM host share the exact crawl/exec code path.
 
 ---
 
@@ -461,7 +462,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 | GPG passphrase entry from the browser (\`pass.unlock\` / \`pass.lock\`) + a live lock-state readout (\`pass.status\`) | browserpass (no unlock path — the store must be primed from a terminal) · GUI pinentries (\`pinentry-mac\`, \`pinentry-gnome3\`), which need a desktop session the NM host may not have | The host decrypts a probe entry with \`--pinentry-mode loopback --passphrase-fd 0\`, priming gpg-agent for its cache TTL so the unmodified \`--batch\` decrypt path works afterwards. Passphrase on stdin only — never argv, never disk, never \`chrome.storage\`, excluded from the diag ring, wiped with volatile writes host-side |
 | Profile + credit-card autofill from \`pass\` (\`profile/*\` + \`creditcard/*\` entries) | Chrome's built-in autofill profiles · 1Password / Bitwarden card filler | \`lib/identity-tokens.js\` + page-injected \`fillIdentityForm()\`. Entry keys use WHATWG HTML autocomplete tokens directly — the store IS the schema. Recognition via an ordered regex ruleset ported from the Firefox + Chromium autofill heuristics, over camelCase/dotted/bracketed-flattened names (nested framework fields like \`billing[postcode]\` / \`address.line1\` resolve), with lookbehind collision guards; alias chains backfill missing tokens; React/Vue-safe native value-setter pattern across all frames; widget-aware fill drives native \`<select>\`, custom comboboxes (react-select / MUI / Ant / Radix / react-aria via \`role=option\` clicking) and \`intl-tel-input\` phones; field + option scans pierce open shadow roots (web-component forms: SmartRecruiters spl-input, LWC, Vaadin); ISO country / US-state / CA-province code→name resolution (\`lib/geo-data.js\`); cross-origin hosted-card fields (Stripe / Braintree / Adyen / …) detected + reported as unfillable; in-tab shadow-DOM picker with last-used cache per host |
 | Segmented download accelerator (multi-connection, default-handler takeover) | Chrome's built-in single-stream download UI · IDM / FDM / DAP · \`aria2c\` · \`axel\` | A real download accelerator: HEAD probe → split the file into N byte ranges → fetch them over N concurrent \`Range\` connections to saturate bandwidth a single stream can't, then reassemble in a pre-allocated dest file. Cookies + User-Agent forwarded, retry with backoff, file-state worker model, full sidebar-nav queue page |
-| JetBrains-style tab switcher (MRU + scenes + opener-tree + minimap) | [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) · OneTab · Workona | cross-window MRU via \`chrome.storage.session\`, Alt+T popup with 12 categories, Cmd+E modal overlay, fzf scoring on every row, batch tab ops + clipboard utilities |
+| JetBrains-style tab switcher (MRU + scenes + opener-tree + minimap) | [Recent Tabs by Jason Savard](https://jasonsavard.com/wiki/Recent_Tabs) · OneTab · Workona | cross-window MRU via \`chrome.storage.session\`, Alt+T popup with 12 categories, Cmd+E one-keystroke MRU switch, fzf scoring on every row, batch tab ops + clipboard utilities |
 | Wappalyzer-compatible technology detection | [Wappalyzer](https://www.wappalyzer.com/) · BuiltWith · Stack Inspector | \`lib/wappalyzer/engine.js\` runs the vendored 3,993-fingerprint HTTPArchive/wappalyzer corpus (\`lib/wappalyzer/data/technologies.json\`, GPL-3 isolated under \`LICENSE-WAPPALYZER\`). Every matcher type implemented: html / scripts / scriptSrc / text / url / meta / headers / cookies / js / dom (exists + text + attributes + properties). Implies / requires / excludes graph rewrites. Cmd+K from the popup, ⤓ Export to JSON, three-channel toolbar badge with letter tags (\`10tl\` = 10 downloads + tech + login matches) |
 | fzf history search | Chrome's \`chrome://history\` page · the omnibox | re-ranks \`chrome.history.search\` results by frecency, up to ${5000} entries, Backspace deletes inline |
 | Tampermonkey-equivalent userscript engine | Tampermonkey · Greasemonkey · Violentmonkey | \`@metadata\` block parser, \`@match\` pattern compilation, full GM_* shim (getValue/setValue/openInTab/setClipboard/notification), fire-log ring buffer |
@@ -507,7 +508,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 | \`scripts-manager/find-all.{html,css,js}\` + \`lib/find-snippet.js\` | Find-in-all-tabs — fzf-fuzzy search across every open tab's \`innerText\` (parallel scrape capped at 200 KB / tab). Enter activates the chosen tab and scrolls to the match via \`window.find()\` |
 | \`modal/json-viewer.js\` + \`lib/json-format.js\` | Auto-detects JSON-served pages and replaces \`<pre>\` with a collapsible tree (RFC 6901 pointer copy, prettyPrint / minify toggles, clipboard with \`execCommand\` fallback for non-secure contexts) |
 | \`modal/xml-viewer.js\` + \`lib/xml-format.js\` | Auto-detects XML/SVG/RSS/Atom/plist/KML/GPX served pages and replaces \`<pre>\` with a DOMParser-driven collapsible tree. Attribute coloring, CDATA / comment / PI rendering, XPath copy per node, live filter, prettyPrint / minify / raw toggles, http(s) auto-linkify in text + attribute values |
-| \`zpwrchrome-host/Cargo.toml\` / \`zpwrchrome-host/src/{lib,frame}.rs\` + \`src/ported/**\` + \`src/extensions/**\` + \`src/bin/zpwrchrome_host.rs\` | Rust port of \`browserpass-native\` v3.1.2 + seven additive extension modules over length-prefixed JSON on stdio: \`dl\` (\`dl.*\` segmented downloads), \`otp\`, \`search\`, \`host\` (\`host.crawl\` / \`host.exec\` via \`zwire_host::api\`, a git dependency on the [zwire](https://github.com/MenkeTechnologies/zwire-host) agent), \`run_command\` (\`run.spawn\`), \`gpg_unlock\` (\`pass.unlock\` / \`pass.lock\` — GPG passphrase entry from the browser), \`zcite\` (\`zcite.save\`). Additive actions dispatched *before* the ported upstream switch, so the browserpass wire stays byte-compatible. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see \`zpwrchrome-host/docs/port_report.html\` |
+| \`zpwrchrome-host/Cargo.toml\` / \`zpwrchrome-host/src/{lib,frame}.rs\` + \`src/ported/**\` + \`src/extensions/**\` + \`src/bin/zpwrchrome_host.rs\` | Rust port of \`browserpass-native\` v3.1.2 + seven additive extension modules over length-prefixed JSON on stdio: \`dl\` (\`dl.*\` segmented downloads), \`otp\`, \`search\`, \`host\` (\`host.crawl\` / \`host.exec\` via \`zwire_host::api\`, the [zwire](https://github.com/MenkeTechnologies/zwire-host) agent's capability crate, pulled from crates.io), \`run_command\` (\`run.spawn\`), \`gpg_unlock\` (\`pass.unlock\` / \`pass.lock\` — GPG passphrase entry from the browser), \`zcite\` (\`zcite.save\`). Additive actions dispatched *before* the ported upstream switch, so the browserpass wire stays byte-compatible. Strict 1:1 port discipline (per-fn citations, Go comment carry-over) — see \`zpwrchrome-host/docs/port_report.html\` |
 | \`zpwrchrome-host --install <ext-id>\` (CLI flag on the binary, not a separate script) | Writes \`com.menketechnologies.zpwrchrome.json\` into every detected Chromium-family browser config dir on macOS / Linux. \`allowed_origins\` is set to \`chrome-extension://<ext-id>/\` so the browser will only spawn the host for this extension |
 | \`lib/zpc-palette.js\` + \`lib/palette-cmds.js\` + \`lib/cmd-defaults.js\` + \`lib/zgui/{util,fzf,command-palette}.js\` | zwire command palette (⌘K) on every dashboard page — the SAME palette as the HUD (\`hud-internal/zpalette.js\`) and the New Tab (\`newtab/palette.js\`), sharing one item source (\`palette-cmds.js\`, vendored identically into all three) so the surfaces can't drift: zpwrchrome's own tool pages, chrome:// destinations + settings, keyword web-search, shared custom commands (host/shell/stryke bridged to hud-internal), inline compute, history + open-tab rows. Opened only by hud-internal's ⌘K router (chrome.commands → cross-ext relay → this extension's SW → the focused page); no local ⌘K, so standalone (outside zwire) it stays inert. The HUD + New Tab palettes list zpwrchrome's pages too, gated on a \`zwirePing\` so they drop when zpwrchrome is disabled |
 | \`scripts-manager/host.{html,css,js}\` | Host console — interactive REPL to the \`zpwrchrome-host\` native binary over one-shot \`chrome.runtime.sendNativeMessage\`. Grouped catalog of the full \`{action:…}\` surface (browserpass \`configure\` / \`list\` / \`tree\` / \`fetch\` / \`save\` / \`delete\` / \`echo\` + \`otp\` / \`search\` / \`pass.lock\` / \`pass.status\` / \`host.crawl\` / \`host.exec\` / \`run.spawn\` / \`zcite.save\` / \`dl.*\` — \`pass.unlock\` is deliberately absent, since every request typed here lands in the exportable transcript and that one carries a passphrase); click-to-load JSON templates, editable editor (⌘/Ctrl-Enter to send), collapsible JSON-tree responses, transcript filter + Export. STATUS pane echo-probes the host for protocol version + round-trip latency; COMMAND LOG tails the service-worker diag ring (\`diag.read\`) so every native round-trip from any surface is visible. Adapted from the zwire HUD host console (\`hud-internal/pages/host.js\`) to this extension's browserpass-model host |
@@ -857,7 +858,7 @@ const html = `<!DOCTYPE html>
       <div class="features">
         <div class="feature"><strong>MRU tracking</strong>Cross-window most-recently-used stack. Survives service-worker restarts.</div>
         <div class="feature"><strong>Cmd+Y history</strong>Replaces Chrome's chrome://history with an fzf-fuzzy search over up to ${5000} URLs. Backspace deletes.</div>
-        <div class="feature"><strong>Cmd+E modal</strong>JetBrains-style Recent Files overlay injected into the active page.</div>
+        <div class="feature"><strong>Cmd+E MRU switch</strong>One keystroke back to the previously active tab, across windows. Re-pushes the live active tab and drops dead ids first, so a service-worker suspend can't leave it aimed at a closed tab.</div>
         <div class="feature"><strong>UNIX <code>pass</code> integration</strong>Replaces browserpass via a Rust native host. Walks <code>~/.password-store</code>, autofills active-tab login forms, copies user / pw / OTP with 45 s clipboard auto-clear (matches <code>pass -c</code>). React/Vue/Lit-safe autofill.</div>
         <div class="feature"><strong>Segmented download accelerator</strong>Multi-connection HTTP/HTTPS download accelerator (IDM / aria2 / axel class). Splits each file into N byte-range segments fetched over N concurrent <code>Range</code> connections to beat single-stream throughput, with retry / resume, Chrome cookies + User-Agent forwarded for logged-in URLs. Live queue UI, right-click <em>Download with zpwrchrome</em>. Pure-Rust, ureq + rustls, no <code>aria2</code> binary.</div>
         <div class="feature"><strong>Filtered popup</strong>Live filter over open + closed tabs, ↑↓/Enter/Del nav.</div>
@@ -953,7 +954,7 @@ ${popupCategories.map((c) => `        <div class="cat"><span class="lbl">${escap
         <code>pass</code>, GPG, and segmented downloads can't run inside an MV3 service
         worker, so a small Rust binary handles them over Chrome native messaging
         (length-prefixed JSON on stdio). It is a strict 1:1 port of
-        <code>browserpass-native</code> v3.1.2 with <strong>six additive Rust tool families</strong>
+        <code>browserpass-native</code> v3.1.2 with <strong>seven additive Rust tool families</strong>
         layered on top &mdash; matched <em>before</em> the ported upstream switch, so a stock
         browserpass client still gets byte-identical upstream behavior.
         Install and register it for your extension ID:
@@ -968,9 +969,10 @@ ${popupCategories.map((c) => `        <div class="cat"><span class="lbl">${escap
         exits &mdash; one process per request, mirroring upstream. It handles the upstream
         browserpass actions <code>configure</code>, <code>list</code>, <code>tree</code>,
         <code>fetch</code>, <code>save</code>, <code>delete</code>, <code>echo</code>; the six
-        additive tool families &mdash; <code>otp</code>, <code>search</code>,
+        additive non-download tool families &mdash; <code>otp</code>, <code>search</code>,
         <code>host.crawl</code> / <code>host.exec</code> (via <code>zwire_host::api</code>),
-        <code>run.spawn</code>, and <code>zcite.save</code>; and the download-manager
+        <code>run.spawn</code>, <code>pass.unlock</code> / <code>pass.lock</code> /
+        <code>pass.status</code>, and <code>zcite.save</code>; and the download-manager
         actions <code>dl.add</code> / <code>dl.list</code> / <code>dl.pause</code> /
         <code>dl.resume</code> / <code>dl.cancel</code> / <code>dl.remove</code> /
         <code>dl.clear</code> / <code>dl.openDir</code> / <code>dl.openFile</code> /
@@ -1105,12 +1107,12 @@ const subsystems = [
   {
     name: "Popup",
     files: ["popup.html", "popup.css", "popup.js"],
-    role: "Cyberpunk HUD toolbar action. 12 categories (incl. PASS + TECH), fzf filter, keyboard nav, opens via Alt+T / Cmd+Y (history) / Cmd+P (pass) / Cmd+K (tech).",
+    role: "Cyberpunk HUD toolbar action. 12 categories (incl. PASS + TECH), fzf filter, keyboard nav. Opened by _execute_action (Alt+T), open-history (Cmd+Y, lands on History), pass-open-popup, search-tabs and recent-modal; once open, Cmd+1..Cmd+0 / Cmd+P / Cmd+K switch category.",
   },
   {
     name: "Modal (content script)",
     files: ["modal/content.template.js"],
-    role: "Shadow-DOM overlay matching the popup category set. Dormant by default after v0.4.16 — Cmd+E now opens the toolbar popup directly.",
+    role: "Closed-shadow-root overlay carrying the popup's first 10 categories. Retired: nothing sends it open-modal any more — recent-modal calls chrome.action.openPopup(), and Cmd+E is bound to switch-previous-tab (the MRU step).",
   },
   {
     name: "Page-theme injector (content script)",
@@ -1621,14 +1623,14 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
                                        ▼
               popup.html/.js                          modal/content.js (shadow DOM)
               ───────────────                         ─────────────────────────────
-              ${num(popupCategories.length)} categories                            ${num(modalCategories.length)} categories (dormant since v0.4.16)
-              fzf filter                              ${num(modalCategories.length)} categories
+              ${num(popupCategories.length)} categories                            ${num(modalCategories.length)} categories (retired — nothing
+              fzf filter                              sends it open-modal any more)
               keyboard nav                            same protocol kinds
 
               scripts-manager/manager.html
               ────────────────────────────
               Tampermonkey-style dashboard
-              4 tabs &middot; sortable table &middot; firelog reader
+              5 tabs &middot; sortable table &middot; firelog reader
 </pre>
 
     <h2 class="tutorial-title"><span class="step-hash">&amp;</span>MESSAGE PROTOCOL</h2>
@@ -1644,7 +1646,7 @@ ${bgKinds.map((k) => kindCard(k, messageRoles[k] || "(handler in background.js)"
     </div>
 
     <h2 class="tutorial-title"><span class="step-hash">%</span>POPUP CATEGORIES</h2>
-    <p class="tutorial-subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders ${popupCategories.length} categories with fzf scoring against title + host. Each category is jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot). The modal mirrors the same list since v0.4.15.</p>
+    <p class="tutorial-subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders ${popupCategories.length} categories with fzf scoring against title + host. The first ten are jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot); <code>Cmd+P</code> and <code>Cmd+K</code> reach Pass and Tech. The retired modal carries only the first ${modalCategories.length}.</p>
     <ul class="cat-list">
 ${popupCategories.map((c) => `      <li><span class="label">${reportEsc(c.label)}</span><span class="key">${reportEsc(c.key)}</span></li>`).join("\n")}
     </ul>

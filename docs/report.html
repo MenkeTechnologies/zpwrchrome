@@ -150,12 +150,12 @@
         <div class="card">
           <h3>Popup</h3>
           <ul class="files"><li><code>popup.html</code> &mdash; 47 lines</li><li><code>popup.css</code> &mdash; 665 lines</li><li><code>popup.js</code> &mdash; 1,456 lines</li></ul>
-          <p>Cyberpunk HUD toolbar action. 12 categories (incl. PASS + TECH), fzf filter, keyboard nav, opens via Alt+T / Cmd+Y (history) / Cmd+P (pass) / Cmd+K (tech).</p>
+          <p>Cyberpunk HUD toolbar action. 12 categories (incl. PASS + TECH), fzf filter, keyboard nav. Opened by _execute_action (Alt+T), open-history (Cmd+Y, lands on History), pass-open-popup, search-tabs and recent-modal; once open, Cmd+1..Cmd+0 / Cmd+P / Cmd+K switch category.</p>
         </div>
         <div class="card">
           <h3>Modal (content script)</h3>
           <ul class="files"><li><code>modal/content.template.js</code> &mdash; 959 lines</li></ul>
-          <p>Shadow-DOM overlay matching the popup category set. Dormant by default after v0.4.16 — Cmd+E now opens the toolbar popup directly.</p>
+          <p>Closed-shadow-root overlay carrying the popup&#39;s first 10 categories. Retired: nothing sends it open-modal any more — recent-modal calls chrome.action.openPopup(), and Cmd+E is bound to switch-previous-tab (the MRU step).</p>
         </div>
         <div class="card">
           <h3>Page-theme injector (content script)</h3>
@@ -446,14 +446,14 @@
                                        ▼
               popup.html/.js                          modal/content.js (shadow DOM)
               ───────────────                         ─────────────────────────────
-              12 categories                            10 categories (dormant since v0.4.16)
-              fzf filter                              10 categories
+              12 categories                            10 categories (retired — nothing
+              fzf filter                              sends it open-modal any more)
               keyboard nav                            same protocol kinds
 
               scripts-manager/manager.html
               ────────────────────────────
               Tampermonkey-style dashboard
-              4 tabs &middot; sortable table &middot; firelog reader
+              5 tabs &middot; sortable table &middot; firelog reader
 </pre>
 
     <h2 class="tutorial-title"><span class="step-hash">&amp;</span>MESSAGE PROTOCOL</h2>
@@ -493,7 +493,7 @@
     </div>
 
     <h2 class="tutorial-title"><span class="step-hash">%</span>POPUP CATEGORIES</h2>
-    <p class="tutorial-subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders 12 categories with fzf scoring against title + host. Each category is jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot). The modal mirrors the same list since v0.4.15.</p>
+    <p class="tutorial-subtitle">The popup (<code>popup.html</code>/<code>popup.css</code>/<code>popup.js</code>) renders 12 categories with fzf scoring against title + host. The first ten are jumpable via <code>Cmd+1</code>..<code>Cmd+0</code> (where <code>Cmd+0</code> = History, the 10th slot); <code>Cmd+P</code> and <code>Cmd+K</code> reach Pass and Tech. The retired modal carries only the first 10.</p>
     <ul class="cat-list">
       <li><span class="label">All Tabs</span><span class="key">⌘1</span></li>
       <li><span class="label">Current Window</span><span class="key">⌘2</span></li>
