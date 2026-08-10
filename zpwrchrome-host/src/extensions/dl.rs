@@ -1512,6 +1512,48 @@ fn with_gid_lock(gid: u64) -> Option<GidLock> {
     }
 }
 
+/// Highest file descriptor currently open in this process.
+///
+/// `spawn_worker` closes every descriptor the worker could inherit above the
+/// std fds. That sweep used to be bounded by `sysconf(_SC_OPEN_MAX)`, i.e.
+/// RLIMIT_NOFILE, which is 1048576 on a stock macOS/Linux box — about a
+/// million `close()` syscalls, measured at 0.5–0.8s of pure syscall time
+/// between `exec` and the worker's first instruction. The worker cannot stamp
+/// the job "active" until it has run, so every dl.add and dl.resume paid that
+/// delay before the transfer started.
+///
+/// The descriptors a forked child can inherit are exactly the ones open in the
+/// parent, so the live high-water mark is a sound bound for the same sweep and
+/// is normally under a dozen. It is read here, in the parent, because
+/// `pre_exec` runs after `fork()` where a directory walk is not
+/// async-signal-safe.
+#[cfg(unix)]
+fn highest_open_fd() -> i32 {
+    // Linux exposes the live descriptor table at /proc/self/fd, macOS and the
+    // BSDs at /dev/fd. Both list one entry per open descriptor.
+    let fd_dir = if cfg!(target_os = "linux") {
+        "/proc/self/fd"
+    } else {
+        "/dev/fd"
+    };
+    let Ok(entries) = fs::read_dir(fd_dir) else {
+        // No readable descriptor table: fall back to the rlimit bound rather
+        // than guessing a ceiling and leaving one of Chrome's fds in the worker.
+        return match unsafe { libc::sysconf(libc::_SC_OPEN_MAX) } {
+            n if n > 0 => n as i32,
+            _ => 1024,
+        };
+    };
+    entries
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name();
+            name.to_str().and_then(|s| s.parse::<i32>().ok())
+        })
+        .max()
+        .unwrap_or(2)
+}
+
 // Spawn detached worker. On Unix, redirecting stdio decouples the worker
 // from the parent's stdin/stdout (which Chrome will close when the BP host
 // replies). The child becomes a child of init when parent exits.
@@ -1537,7 +1579,10 @@ fn spawn_worker(gid: u64) -> std::io::Result<()> {
     #[cfg(unix)]
     unsafe {
         use std::os::unix::process::CommandExt;
-        cmd.pre_exec(|| {
+        // Read the descriptor high-water mark here, in the parent: the closure
+        // below runs post-fork and may only make async-signal-safe calls.
+        let max_fd = highest_open_fd();
+        cmd.pre_exec(move || {
             // New session — survive the parent host exit.
             if libc::setsid() == -1 {
                 // Already a session leader → not fatal.
@@ -1545,12 +1590,11 @@ fn spawn_worker(gid: u64) -> std::io::Result<()> {
             // Close every FD >= 3 in the worker child. Std uses CLOEXEC on
             // most opens since Rust 1.7, but Chrome's pipe-to-stdout dup is
             // a kernel-level inheritance we can't tag — only the brute close
-            // sweep guarantees the worker holds none of Chrome's FDs.
-            let max_fd = match libc::sysconf(libc::_SC_OPEN_MAX) {
-                n if n > 0 => n as i32,
-                _ => 1024,
-            };
-            for fd in 3..max_fd {
+            // sweep guarantees the worker holds none of Chrome's FDs. The
+            // sweep is inclusive of max_fd and stops there; see
+            // highest_open_fd() for why that bound is both sound and ~1M
+            // syscalls cheaper than RLIMIT_NOFILE.
+            for fd in 3..=max_fd {
                 libc::close(fd);
             }
             Ok(())
