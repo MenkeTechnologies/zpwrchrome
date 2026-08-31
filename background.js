@@ -2016,6 +2016,39 @@ async function isTakeOverEnabled() {
   }
 }
 
+// Downloads that were issued by a non-GET request cannot be replayed by the
+// segmented downloader: chrome.downloads.DownloadItem exposes neither the
+// request method nor the body, so re-issuing the URL is always a bare GET.
+// SharePoint / OneDrive "download this folder" POSTs the file list to
+// .../transform/zip?cs=... and answers a GET with 405, so the takeover killed
+// the real download and left a job failing with "status code 405". Record the
+// method from webRequest and leave those to Chrome.
+const nonGetDlUrls = new Map();          // url -> timestamp (ms)
+const NON_GET_TTL_MS = 5 * 60 * 1000;
+
+function noteNonGetRequest(url, method) {
+  if (!url || !method || method === "GET") return;
+  const now = Date.now();
+  for (const [u, t] of nonGetDlUrls) {
+    if (now - t > NON_GET_TTL_MS) nonGetDlUrls.delete(u);
+  }
+  nonGetDlUrls.set(url, now);
+}
+
+function wasNonGetRequest(url) {
+  const t = nonGetDlUrls.get(String(url || ""));
+  if (t === undefined) return false;
+  if (Date.now() - t > NON_GET_TTL_MS) { nonGetDlUrls.delete(url); return false; }
+  return true;
+}
+
+if (chrome.webRequest?.onBeforeRequest) {
+  chrome.webRequest.onBeforeRequest.addListener(
+    (info) => { noteNonGetRequest(info?.url, info?.method); },
+    { urls: ["http://*/*", "https://*/*"] },
+  );
+}
+
 function shouldInterceptDownload(item) {
   const url = String(item?.url || "");
   if (!url) return false;
@@ -2029,6 +2062,10 @@ function shouldInterceptDownload(item) {
   // dl.* extension actions never go through chrome.downloads so this won't
   // happen in practice, but bail just in case.
   if (url.startsWith("file:"))            return false;
+  // POST/PUT-issued downloads (SharePoint folder-zip, many "export" buttons):
+  // the body is gone by the time onCreated fires, so a GET replay 405s.
+  if (wasNonGetRequest(url))                        return false;
+  if (item?.finalUrl && wasNonGetRequest(item.finalUrl)) return false;
   return true;
 }
 

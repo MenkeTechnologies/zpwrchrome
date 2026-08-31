@@ -312,6 +312,22 @@ test("default-download takeover: chrome.downloads.onCreated cancels + reissues v
   }
 });
 
+test("takeover skips downloads issued by a non-GET request", () => {
+  // SharePoint/OneDrive folder download POSTs a file list to
+  // .../transform/zip?cs=...; DownloadItem carries neither method nor body,
+  // so a GET replay through the segmented downloader gets 405 and the real
+  // download is lost. The method is recorded from webRequest and those items
+  // are left to Chrome.
+  assert.match(bg, /chrome\.webRequest\.onBeforeRequest\.addListener/);
+  assert.match(bg, /noteNonGetRequest\(info\?\.url, info\?\.method\)/);
+  const note = bg.match(/function noteNonGetRequest\([\s\S]*?\n\}/);
+  assert.ok(note, "noteNonGetRequest missing");
+  assert.match(note[0], /method === "GET"/, "GET requests must not be recorded");
+  const filter = bg.match(/function shouldInterceptDownload\([\s\S]*?\n\}/);
+  assert.match(filter[0], /wasNonGetRequest\(url\)/);
+  assert.match(filter[0], /wasNonGetRequest\(item\.finalUrl\)/);
+});
+
 test("default-download takeover lands files in ~/Downloads (matches Chrome default)", () => {
   // So the takeover is transparent — same destination Chrome would have
   // used. The lastDir setting can override the default when
