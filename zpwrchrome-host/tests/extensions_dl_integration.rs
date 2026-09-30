@@ -870,6 +870,40 @@ fn guess_filename_rejects_query_garbage_so_worker_can_rename_later() {
 }
 
 #[test]
+fn guess_filename_prefers_filename_named_in_the_query() {
+    use zpwrchrome_host::extensions::dl::guess_filename;
+    // Amazon privacy-central export: the path is a script page, the query
+    // names the zip. Landed as "download.html" before.
+    assert_eq!(
+        guess_filename(
+            "https://www.amazon.com/hz/privacy-central/data-requests/download.html\
+             ?version=AyMd&filename=Your+Orders.zip&id=17b638b3"
+        ),
+        Some("Your Orders.zip".into()),
+    );
+    // S3/GCS pre-signed override carries a full Content-Disposition value.
+    assert_eq!(
+        guess_filename(
+            "https://bucket.s3.amazonaws.com/obj/abc123\
+             ?X-Amz-Signature=f00&response-content-disposition=attachment%3B%20filename%3D%22Q3%20Report.pdf%22"
+        ),
+        Some("Q3 Report.pdf".into()),
+    );
+    // Path components in the parameter are stripped (no traversal).
+    assert_eq!(
+        guess_filename("https://x/dl.php?filename=..%2F..%2Fetc%2Fpasswd.txt"),
+        Some("passwd.txt".into()),
+    );
+    // An extensionless `filename` doesn't displace a real path basename.
+    assert_eq!(
+        guess_filename("https://x/files/setup.exe?filename=setup"),
+        Some("setup.exe".into()),
+    );
+    // Unrelated query params still leave the path basename in charge.
+    assert_eq!(guess_filename("https://x/a.exe?v=2"), Some("a.exe".into()));
+}
+
+#[test]
 fn percent_decode_handles_utf8_and_invalid_escapes() {
     use zpwrchrome_host::extensions::dl::percent_decode;
     assert_eq!(percent_decode("hello%20world"), "hello world");

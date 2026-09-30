@@ -214,6 +214,9 @@ pub fn expand_home(p: &str) -> PathBuf {
 }
 
 pub fn guess_filename(url: &str) -> Option<String> {
+    if let Some(name) = query_filename(url) {
+        return Some(name);
+    }
     let trimmed = url.trim_end_matches('/');
     let after_scheme = trimmed.split("://").nth(1).unwrap_or(trimmed);
     let path = after_scheme
@@ -242,6 +245,33 @@ pub fn guess_filename(url: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// A filename the URL names explicitly in its query string, which beats the
+/// path basename: `.../download.html?filename=Your+Orders.zip` is a zip, not an
+/// HTML page. Checks S3/GCS-style `response-content-disposition` first (a full
+/// Content-Disposition value), then a bare `filename` parameter. Values are
+/// form-decoded (`+` → space, then `%xx`). A `filename` value must carry an
+/// extension, so `?filename=report` doesn't displace a real path basename.
+pub fn query_filename(url: &str) -> Option<String> {
+    let query = url.split('#').next()?.split_once('?')?.1;
+    let param = |key: &str| {
+        query.split('&').find_map(|kv| {
+            let (k, v) = kv.split_once('=')?;
+            k.eq_ignore_ascii_case(key)
+                .then(|| percent_decode(&v.replace('+', " ")))
+        })
+    };
+    if let Some(name) = param("response-content-disposition")
+        .as_deref()
+        .and_then(parse_content_disposition_filename)
+    {
+        return Some(name);
+    }
+    let decoded = param("filename")?;
+    let name = decoded.rsplit(|c| c == '/' || c == '\\').next()?;
+    let cleaned = sanitize_filename(name);
+    has_file_extension(&cleaned).then_some(cleaned)
 }
 
 /// A URL path segment usable as a filename stem even without an extension —
@@ -1855,7 +1885,10 @@ fn probe_headers(url: &str, cookies: &str, user_agent: &str) -> Result<ProbeResu
             .header("Content-Disposition")
             .and_then(parse_content_disposition_filename);
         head_ct = resp.header("Content-Type").map(str::to_string);
-        if total > 0 {
+        // Short-circuit only when HEAD also named the file. Some servers send
+        // Content-Disposition on GET alone; without the Range GET below the
+        // job keeps its URL-derived name ("download.html" for a zip).
+        if total > 0 && head_cd.is_some() {
             return Ok(ProbeResult {
                 total,
                 accept_ranges: head_accept_ranges,
