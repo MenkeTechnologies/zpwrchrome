@@ -377,7 +377,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 | Total chrome.commands | **55** (manifest cap on default keys is 4 — this ext ships 4; the other 51 are user-bindable at `chrome://extensions/shortcuts`) |
 | Manifest | **MV3** |
 | License | **MIT** |
-| Test suite | **3084** `node:test` cases (JS) + 134 `cargo test` cases (Rust) |
+| Test suite | **3084** `node:test` cases (JS) + 135 `cargo test` cases (Rust) |
 | Generator + doc-drift CI | Yes — README + landing page regenerated from `manifest.json` by `scripts/gen.sh`; CI fails on drift |
 | Runtime deps | Zero on the JS side (pure ES-module SW). The Rust host adds `serde` / `serde_json` / `ureq` (foundational pure-Rust crates) and ships as a single static binary |
 
