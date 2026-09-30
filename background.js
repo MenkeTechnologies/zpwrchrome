@@ -1387,11 +1387,21 @@ function openIdentityPicker(reqId, kind, paths) {
     lst.innerHTML = filt.map((p, i) =>
       `<li class="${i === idx ? "sel" : ""}" data-i="${i}">${p.replace(/[<>&"]/g, (c) => ({ "<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;" }[c]))}</li>`
     ).join("");
-    Array.from(lst.querySelectorAll("li[data-i]")).forEach((el) => {
-      el.addEventListener("click", () => { idx = Number(el.dataset.i); send(filt[idx]); });
-      el.addEventListener("mouseenter", () => { idx = Number(el.dataset.i); render(); });
-    });
   }
+  // Delegated once on the list. Hover only moves the .sel class: re-rendering
+  // on mouseenter replaced the <li> under the cursor, so mousedown and mouseup
+  // landed on different nodes and the click never reached a row.
+  lst.addEventListener("mouseover", (ev) => {
+    const li = ev.target.closest("li[data-i]");
+    if (!li) return;
+    idx = Number(li.dataset.i);
+    lst.querySelectorAll("li.sel").forEach((el) => el.classList.remove("sel"));
+    li.classList.add("sel");
+  });
+  lst.addEventListener("click", (ev) => {
+    const li = ev.target.closest("li[data-i]");
+    if (li && filt[Number(li.dataset.i)]) send(filt[Number(li.dataset.i)]);
+  });
   function refilter() {
     const s = q.value.trim().toLowerCase();
     filt = s ? paths.filter((p) => p.toLowerCase().includes(s)) : paths.slice();
