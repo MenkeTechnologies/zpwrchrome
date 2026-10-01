@@ -1,11 +1,20 @@
 <!DOCTYPE html>
 <!--PORT-REPORT-SCHEMA
 This file is the definitive Go→Rust port mapping for zpwrchrome-host.
+It is hand-maintained: no generator script exists in this repo. Rust-side
+figures were last re-counted by hand at zpwrchrome-host v0.10.3 with:
+  rust_lines        wc -l over the 13 mapped Rust files (src/ported/**/*.rs
+                    minus mod.rs, plus src/bin/zpwrchrome_host.rs)
+  rust_tests        grep -cE '^[[:space:]]*#\[test\]' over tests/ and src/,
+                    excluding tests/live_password_store.rs (gated on a real store)
+  extension_actions action strings dispatched in src/bin/zpwrchrome_host.rs
+                    plus the dl.* arms of dispatch_dl in src/extensions/dl.rs
+Go-side figures describe the pinned upstream v3.1.2 source and were not re-counted.
 
 Machine-readable surface: JSON dataset in <script id="port-report-data"
 type="application/json">. Schema:
   {
-    "generated": ISO-8601 timestamp,
+    "measured":  ISO-8601 date the figures were last re-counted by hand,
     "upstream":  { repo, tag/sha, version_string, version_code },
     "stats":     { go_files, go_lines, go_fns, rust_files, rust_lines,
                    ported, unported, coverage_pct, error_codes_pinned },
@@ -128,11 +137,11 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
   <div class="stat-card"><div class="v green">30</div><div class="l">Ported</div></div>
   <div class="stat-card"><div class="v">0</div><div class="l">Unported</div></div>
   <div class="stat-card"><div class="v green">100%</div><div class="l">Coverage</div></div>
-  <div class="stat-card"><div class="v">1,751</div><div class="l">Rust lines</div></div>
+  <div class="stat-card"><div class="v">2,366</div><div class="l">Rust lines</div></div>
   <div class="stat-card"><div class="v magenta">23</div><div class="l">Error codes pinned</div></div>
   <div class="stat-card"><div class="v">7</div><div class="l">BP actions</div></div>
-  <div class="stat-card"><div class="v cyan">3</div><div class="l" style="color:var(--cyan)">Extension actions</div></div>
-  <div class="stat-card"><div class="v yellow">69</div><div class="l">Rust tests</div></div>
+  <div class="stat-card"><div class="v cyan">21</div><div class="l" style="color:var(--cyan)">Extension actions</div></div>
+  <div class="stat-card"><div class="v yellow">135</div><div class="l">Rust tests</div></div>
   <div class="stat-card"><div class="v">3.1.2</div><div class="l">Upstream version pinned</div></div>
 </div>
 
@@ -145,21 +154,21 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
   </tr></thead>
   <tbody>
     <tr><td><code>errors/errors.go</code></td><td class="right">58</td><td class="right">1</td><td><code>src/ported/errors/errors.rs</code></td><td class="right">73</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>helpers/helpers.go</code></td><td class="right">114</td><td class="right">6</td><td><code>src/ported/helpers/helpers.rs</code></td><td class="right">170</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>main.go</code></td><td class="right">38</td><td class="right">1</td><td><code>src/bin/zpwrchrome_host.rs</code></td><td class="right">174</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>request/common.go</code></td><td class="right">34</td><td class="right">1</td><td><code>src/ported/request/common.rs</code></td><td class="right">70</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>request/configure.go</code></td><td class="right">169</td><td class="right">3</td><td><code>src/ported/request/configure.rs</code></td><td class="right">227</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>request/delete.go</code></td><td class="right">132</td><td class="right">1</td><td><code>src/ported/request/delete.rs</code></td><td class="right">145</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>request/fetch.go</code></td><td class="right">123</td><td class="right">1</td><td><code>src/ported/request/fetch.rs</code></td><td class="right">138</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>request/list.go</code></td><td class="right">86</td><td class="right">1</td><td><code>src/ported/request/list.rs</code></td><td class="right">109</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>request/process.go</code></td><td class="right">109</td><td class="right">3</td><td><code>src/ported/request/process.rs</code></td><td class="right">145</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>request/save.go</code></td><td class="right">153</td><td class="right">1</td><td><code>src/ported/request/save.rs</code></td><td class="right">162</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>request/tree.go</code></td><td class="right">112</td><td class="right">1</td><td><code>src/ported/request/tree.rs</code></td><td class="right">106</td><td class="center"><span class="pill green">complete</span></td></tr>
-    <tr><td><code>response/response.go</code></td><td class="right">129</td><td class="right">9</td><td><code>src/ported/response/response.rs</code></td><td class="right">211</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>helpers/helpers.go</code></td><td class="right">114</td><td class="right">6</td><td><code>src/ported/helpers/helpers.rs</code></td><td class="right">192</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>main.go</code></td><td class="right">38</td><td class="right">1</td><td><code>src/bin/zpwrchrome_host.rs</code></td><td class="right">507</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/common.go</code></td><td class="right">34</td><td class="right">1</td><td><code>src/ported/request/common.rs</code></td><td class="right">81</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/configure.go</code></td><td class="right">169</td><td class="right">3</td><td><code>src/ported/request/configure.rs</code></td><td class="right">271</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/delete.go</code></td><td class="right">132</td><td class="right">1</td><td><code>src/ported/request/delete.rs</code></td><td class="right">178</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/fetch.go</code></td><td class="right">123</td><td class="right">1</td><td><code>src/ported/request/fetch.rs</code></td><td class="right">177</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/list.go</code></td><td class="right">86</td><td class="right">1</td><td><code>src/ported/request/list.rs</code></td><td class="right">125</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/process.go</code></td><td class="right">109</td><td class="right">3</td><td><code>src/ported/request/process.rs</code></td><td class="right">166</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/save.go</code></td><td class="right">153</td><td class="right">1</td><td><code>src/ported/request/save.rs</code></td><td class="right">207</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>request/tree.go</code></td><td class="right">112</td><td class="right">1</td><td><code>src/ported/request/tree.rs</code></td><td class="right">125</td><td class="center"><span class="pill green">complete</span></td></tr>
+    <tr><td><code>response/response.go</code></td><td class="right">129</td><td class="right">9</td><td><code>src/ported/response/response.rs</code></td><td class="right">243</td><td class="center"><span class="pill green">complete</span></td></tr>
     <tr><td><code>version/version.go</code></td><td class="right">15</td><td class="right">1</td><td><code>src/ported/version/version.rs</code></td><td class="right">21</td><td class="center"><span class="pill green">complete</span></td></tr>
     <tr style="background:var(--bg-secondary);font-weight:700;color:var(--cyan)">
       <td>TOTAL (13 files)</td><td class="right">1,272</td><td class="right">30</td>
-      <td>13 ported files</td><td class="right">1,751</td><td class="center"><span class="pill green">100%</span></td>
+      <td>13 ported files</td><td class="right">2,366</td><td class="center"><span class="pill green">100%</span></td>
     </tr>
   </tbody>
 </table>
@@ -236,15 +245,19 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
 </table>
 
 <h2><span class="hash">+</span>EXTENSIONS (NOT IN UPSTREAM)</h2>
-<p class="lead">Three additive modules live under <code>src/extensions/</code> — features <code>browserpass-native</code> does not have. <code>browserpass-extension</code> never sends these action names, so wire compat with upstream is preserved. Each is dispatched by <code>bin/zpwrchrome_host.rs</code> before falling through to the ported BP dispatcher.</p>
+<p class="lead">Seven additive modules live under <code>src/extensions/</code> — features <code>browserpass-native</code> does not have. <code>browserpass-extension</code> never sends these action names, so wire compat with upstream is preserved. Each is dispatched by <code>bin/zpwrchrome_host.rs</code> before falling through to the ported BP dispatcher.</p>
 <table>
   <thead><tr>
     <th>Module</th><th>Rust LOC</th><th>Action(s)</th><th>Purpose</th>
   </tr></thead>
   <tbody>
-    <tr><td><code>src/extensions/otp.rs</code></td><td class="right">120</td><td><code>otp</code></td><td>Shells <code>pass otp &lt;entry&gt;</code> with the matching store's <code>PASSWORD_STORE_DIR</code>. Upstream v3 dropped OTP; we add it back because zpwrchrome's PASS popup needs it.</td></tr>
-    <tr><td><code>src/extensions/search.rs</code></td><td class="right">175</td><td><code>search</code></td><td>Host-side fuzzy + substring scoring across every configured store. Faster than client-side scoring for large stores. Pure scorer pinned by <code>tests/extensions_search.rs</code>.</td></tr>
-    <tr><td><code>src/extensions/dl.rs</code></td><td class="right">793</td><td><code>dl.add</code> / <code>dl.list</code> / <code>dl.pause</code> / <code>dl.resume</code> / <code>dl.cancel</code></td><td>File-backed segmented HTTP/HTTPS downloader. <code>dl.add</code> detaches a worker (<code>zpwrchrome-host --dl-worker &lt;gid&gt;</code>); state persists at <code>$XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json</code>. HEAD probe → N parallel Range GETs → atomic state-file rewrites; pause/cancel via state-file flags polled by the worker between chunks. Retry 200ms × 3ⁿ on transient errors. End-to-end verified by <code>tests/extensions_dl_integration.rs</code> against a Range-aware HTTP fixture.</td></tr>
+    <tr><td><code>src/extensions/otp.rs</code></td><td class="right">135</td><td><code>otp</code></td><td>Shells <code>pass otp &lt;entry&gt;</code> with the matching store's <code>PASSWORD_STORE_DIR</code>. Upstream v3 dropped OTP; this restores it for zpwrchrome's PASS popup.</td></tr>
+    <tr><td><code>src/extensions/search.rs</code></td><td class="right">171</td><td><code>search</code></td><td>Host-side fuzzy + substring scoring across every configured store, so large stores do not round-trip every entry path per keystroke. Pinned by <code>tests/extensions_search.rs</code>.</td></tr>
+    <tr><td><code>src/extensions/dl.rs</code></td><td class="right">2,464</td><td><code>dl.add</code> / <code>dl.list</code> / <code>dl.pause</code> / <code>dl.resume</code> / <code>dl.cancel</code> / <code>dl.restart</code> / <code>dl.clear</code> / <code>dl.remove</code> / <code>dl.openDir</code> / <code>dl.openFile</code> / <code>dl.writeFile</code> / <code>dl.writeFileChunk</code></td><td>File-backed segmented HTTP/HTTPS downloader. <code>dl.add</code> detaches a worker (<code>zpwrchrome-host --dl-worker &lt;gid&gt;</code>); job state lives in <code>$XDG_CACHE_HOME/zpwrchrome/dl/gid_NNNNNN.json</code> so every short-lived host invocation can read or mutate it. End-to-end tests in <code>tests/extensions_dl_integration.rs</code> run against a Range-aware HTTP fixture.</td></tr>
+    <tr><td><code>src/extensions/run_command.rs</code></td><td class="right">281</td><td><code>run.spawn</code></td><td>Executes a user-configured argv (optional cwd / env / timeout) after a download finishes, for post-download rules fired by the service worker.</td></tr>
+    <tr><td><code>src/extensions/host.rs</code></td><td class="right">114</td><td><code>host.crawl</code> / <code>host.exec</code></td><td>Filesystem crawl and command execution via <code>zwire_host::api</code> (the <code>zwire-host</code> capability crate, <code>default-features = false</code>).</td></tr>
+    <tr><td><code>src/extensions/gpg_unlock.rs</code></td><td class="right">566</td><td><code>pass.unlock</code> / <code>pass.lock</code> / <code>pass.status</code></td><td>GPG passphrase entry from the browser: <code>pass.unlock</code> primes gpg-agent via a loopback-pinentry probe decrypt, <code>pass.lock</code> flushes the agent cache, <code>pass.status</code> reports whether the store's keys are cached.</td></tr>
+    <tr><td><code>src/extensions/zcite.rs</code></td><td class="right">106</td><td><code>zcite.save</code></td><td>Writes a CSL-JSON reference extracted from the active page into zcite's inbox directory as a plain file handoff.</td></tr>
   </tbody>
 </table>
 
@@ -265,13 +278,13 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
 </table>
 
 <footer>
-  Generated for <code>zpwrchrome-host</code> v0.10.2 · Upstream pinned to <code>browserpass/browserpass-native</code> v3.1.2 (packed int <code>3_001_002</code>).
+  Hand-maintained (no generator script) · Rust-side figures re-counted at <code>zpwrchrome-host</code> v0.10.3 · Upstream pinned to <code>browserpass/browserpass-native</code> v3.1.2 (packed int <code>3_001_002</code>).
   Repository: <a href="https://github.com/MenkeTechnologies/zpwrchrome">github.com/MenkeTechnologies/zpwrchrome</a>
 </footer>
 
 <script id="port-report-data" type="application/json">
 {
-  "generated": "2026-06-05T00:00:00Z",
+  "measured": "2026-10-01",
   "upstream": {
     "repo": "https://github.com/browserpass/browserpass-native",
     "version_string": "3.1.2",
@@ -282,28 +295,28 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
     "go_lines": 1272,
     "go_fns": 30,
     "rust_files": 13,
-    "rust_lines": 1751,
+    "rust_lines": 2366,
     "ported": 30,
     "unported": 0,
     "coverage_pct": 100,
     "error_codes_pinned": 23,
     "bp_actions": 7,
-    "extension_actions": 3,
-    "rust_tests": 69
+    "extension_actions": 21,
+    "rust_tests": 135
   },
   "files": [
     { "go": "errors/errors.go",       "go_lines": 58,  "go_fns": 1, "rust": "src/ported/errors/errors.rs",      "rust_lines": 73,  "status": "complete" },
-    { "go": "helpers/helpers.go",     "go_lines": 114, "go_fns": 6, "rust": "src/ported/helpers/helpers.rs",    "rust_lines": 170, "status": "complete" },
-    { "go": "main.go",                "go_lines": 38,  "go_fns": 1, "rust": "src/bin/zpwrchrome_host.rs",   "rust_lines": 174, "status": "complete" },
-    { "go": "request/common.go",      "go_lines": 34,  "go_fns": 1, "rust": "src/ported/request/common.rs",     "rust_lines": 70,  "status": "complete" },
-    { "go": "request/configure.go",   "go_lines": 169, "go_fns": 3, "rust": "src/ported/request/configure.rs",  "rust_lines": 227, "status": "complete" },
-    { "go": "request/delete.go",      "go_lines": 132, "go_fns": 1, "rust": "src/ported/request/delete.rs",     "rust_lines": 145, "status": "complete" },
-    { "go": "request/fetch.go",       "go_lines": 123, "go_fns": 1, "rust": "src/ported/request/fetch.rs",      "rust_lines": 138, "status": "complete" },
-    { "go": "request/list.go",        "go_lines": 86,  "go_fns": 1, "rust": "src/ported/request/list.rs",       "rust_lines": 109, "status": "complete" },
-    { "go": "request/process.go",     "go_lines": 109, "go_fns": 3, "rust": "src/ported/request/process.rs",    "rust_lines": 145, "status": "complete" },
-    { "go": "request/save.go",        "go_lines": 153, "go_fns": 1, "rust": "src/ported/request/save.rs",       "rust_lines": 162, "status": "complete" },
-    { "go": "request/tree.go",        "go_lines": 112, "go_fns": 1, "rust": "src/ported/request/tree.rs",       "rust_lines": 106, "status": "complete" },
-    { "go": "response/response.go",   "go_lines": 129, "go_fns": 9, "rust": "src/ported/response/response.rs",  "rust_lines": 211, "status": "complete" },
+    { "go": "helpers/helpers.go",     "go_lines": 114, "go_fns": 6, "rust": "src/ported/helpers/helpers.rs",    "rust_lines": 192, "status": "complete" },
+    { "go": "main.go",                "go_lines": 38,  "go_fns": 1, "rust": "src/bin/zpwrchrome_host.rs",   "rust_lines": 507, "status": "complete" },
+    { "go": "request/common.go",      "go_lines": 34,  "go_fns": 1, "rust": "src/ported/request/common.rs",     "rust_lines": 81,  "status": "complete" },
+    { "go": "request/configure.go",   "go_lines": 169, "go_fns": 3, "rust": "src/ported/request/configure.rs",  "rust_lines": 271, "status": "complete" },
+    { "go": "request/delete.go",      "go_lines": 132, "go_fns": 1, "rust": "src/ported/request/delete.rs",     "rust_lines": 178, "status": "complete" },
+    { "go": "request/fetch.go",       "go_lines": 123, "go_fns": 1, "rust": "src/ported/request/fetch.rs",      "rust_lines": 177, "status": "complete" },
+    { "go": "request/list.go",        "go_lines": 86,  "go_fns": 1, "rust": "src/ported/request/list.rs",       "rust_lines": 125, "status": "complete" },
+    { "go": "request/process.go",     "go_lines": 109, "go_fns": 3, "rust": "src/ported/request/process.rs",    "rust_lines": 166, "status": "complete" },
+    { "go": "request/save.go",        "go_lines": 153, "go_fns": 1, "rust": "src/ported/request/save.rs",       "rust_lines": 207, "status": "complete" },
+    { "go": "request/tree.go",        "go_lines": 112, "go_fns": 1, "rust": "src/ported/request/tree.rs",       "rust_lines": 125, "status": "complete" },
+    { "go": "response/response.go",   "go_lines": 129, "go_fns": 9, "rust": "src/ported/response/response.rs",  "rust_lines": 243, "status": "complete" },
     { "go": "version/version.go",     "go_lines": 15,  "go_fns": 1, "rust": "src/ported/version/version.rs",    "rust_lines": 21,  "status": "complete" }
   ],
   "symbols": [
@@ -342,23 +355,51 @@ Every function declared in upstream <code>browserpass-native</code>'s Go source 
     {
       "name": "otp",
       "rust_file": "src/extensions/otp.rs",
-      "rust_lines": 120,
+      "rust_lines": 135,
       "purpose": "Shells `pass otp <entry>` with the matching store's PASSWORD_STORE_DIR. Upstream v3 dropped OTP; this restores it for zpwrchrome's PASS popup.",
       "actions": ["otp"]
     },
     {
       "name": "search",
       "rust_file": "src/extensions/search.rs",
-      "rust_lines": 175,
-      "purpose": "Host-side fuzzy + substring scoring across every configured store. Faster than client-side fzf for large stores.",
+      "rust_lines": 171,
+      "purpose": "Host-side fuzzy + substring scoring across every configured store, so large stores do not round-trip every entry path per keystroke.",
       "actions": ["search"]
     },
     {
       "name": "dl",
       "rust_file": "src/extensions/dl.rs",
-      "rust_lines": 793,
-      "purpose": "File-backed segmented HTTP/HTTPS downloader. dl.add detaches a worker process; state persists in JSON files under $XDG_CACHE_HOME/zpwrchrome/dl/. Pause/cancel via atomic state-file flags. Retry 200ms × 3^n on transient errors.",
-      "actions": ["dl.add", "dl.list", "dl.pause", "dl.resume", "dl.cancel"]
+      "rust_lines": 2464,
+      "purpose": "File-backed segmented HTTP/HTTPS downloader. dl.add detaches a worker process; job state persists in JSON files under $XDG_CACHE_HOME/zpwrchrome/dl/.",
+      "actions": ["dl.add", "dl.list", "dl.pause", "dl.resume", "dl.cancel", "dl.restart", "dl.clear", "dl.remove", "dl.openDir", "dl.openFile", "dl.writeFile", "dl.writeFileChunk"]
+    },
+    {
+      "name": "run_command",
+      "rust_file": "src/extensions/run_command.rs",
+      "rust_lines": 281,
+      "purpose": "Executes a user-configured argv (optional cwd / env / timeout) after a download finishes, for post-download rules fired by the service worker.",
+      "actions": ["run.spawn"]
+    },
+    {
+      "name": "host",
+      "rust_file": "src/extensions/host.rs",
+      "rust_lines": 114,
+      "purpose": "Filesystem crawl and command execution via zwire_host::api (the zwire-host capability crate, default-features = false).",
+      "actions": ["host.crawl", "host.exec"]
+    },
+    {
+      "name": "gpg_unlock",
+      "rust_file": "src/extensions/gpg_unlock.rs",
+      "rust_lines": 566,
+      "purpose": "GPG passphrase entry from the browser: pass.unlock primes gpg-agent via a loopback-pinentry probe decrypt, pass.lock flushes the agent cache, pass.status reports whether the store's keys are cached.",
+      "actions": ["pass.unlock", "pass.lock", "pass.status"]
+    },
+    {
+      "name": "zcite",
+      "rust_file": "src/extensions/zcite.rs",
+      "rust_lines": 106,
+      "purpose": "Writes a CSL-JSON reference extracted from the active page into zcite's inbox directory as a plain file handoff.",
+      "actions": ["zcite.save"]
     }
   ]
 }
