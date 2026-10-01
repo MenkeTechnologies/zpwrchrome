@@ -67,9 +67,9 @@ pub struct LockResponse {
 
 #[derive(Serialize, Debug, Default)]
 pub struct StatusResponse {
-    /// True only when every encryption keygrip this store is encrypted to is
-    /// cached by gpg-agent — a partially cached multi-recipient store still
-    /// fails some decrypts, so it is not "unlocked".
+    /// True when at least one of the store's encryption keygrips that this
+    /// gpg-agent holds is cached (`Cached > 0`) — gpg decrypts an entry with
+    /// whichever recipient key it can, so one cached usable key is enough.
     #[serde(rename = "unlocked")]
     pub Unlocked: bool,
     /// False when the store's recipients could not be resolved at all, so the
