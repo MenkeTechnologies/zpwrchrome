@@ -66,7 +66,7 @@ test("highlightWithIndices alternates mark and plain segments correctly", () => 
 });
 
 test("highlightWithIndices handles apostrophe in matched text", () => {
-  const out = highlightWithIndices("Menke's", [0, 1, 2, 3, 4], escape);
+  const out = highlightWithIndices("Smith's", [0, 1, 2, 3, 4], escape);
   assert.ok(out.includes("&#39;"));
 });
 

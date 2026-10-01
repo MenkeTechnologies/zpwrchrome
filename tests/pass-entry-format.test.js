@@ -350,8 +350,8 @@ test("buildTree: paths produced are the entry's relative path (no leading /)", (
 
 test("fallbackUrlFromPath: uses first dir segment verbatim (no https:// prepend)", () => {
   const parsed = parseEntry("hunter2\nlogin: alice\n");
-  fallbackUrlFromPath(parsed, "adobe.com/jmenke@wccnet.edu");
-  assert.equal(parsed.url, "adobe.com");
+  fallbackUrlFromPath(parsed, "example.com/user@example.com");
+  assert.equal(parsed.url, "example.com");
 });
 
 test("fallbackUrlFromPath: leaves url alone when entry already has one", () => {

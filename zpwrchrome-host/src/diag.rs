@@ -4,7 +4,7 @@
 //! line to `$XDG_CACHE_HOME/zpwrchrome/host.log` (or `~/.cache/zpwrchrome/host.log`).
 //! Lines are kept short and grep-friendly:
 //!
-//!   2026-06-02T22:35:01.234Z pid=12345 START args=[] cwd=/ env_HOME=/Users/wizard
+//!   2026-06-02T22:35:01.234Z pid=12345 START args=[] cwd=/ env_HOME=/Users/user
 //!   2026-06-02T22:35:01.234Z pid=12345 RECV bytes=22 action=dl.list
 //!   2026-06-02T22:35:01.235Z pid=12345 DISPATCH category=extension target=dl
 //!   2026-06-02T22:35:01.235Z pid=12345 SEND status=ok bytes=52

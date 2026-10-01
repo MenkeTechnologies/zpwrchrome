@@ -38,7 +38,7 @@ test("every command has a non-empty description", () => {
 });
 
 test("no default suggested key uses macOS-reserved shortcuts", () => {
-  // Per /Users/wizard/.claude/CLAUDE.md: Cmd+Tab/H/M/Q never reach the WebView.
+  // macOS reserves these: Cmd+Tab/H/M/Q never reach the WebView.
   // Cmd+T/W/N are reserved by Chrome itself.
   const banned = [
     /^Command\+(Tab|H|M|Q|T|W|N|R|L|F|G)$/i,

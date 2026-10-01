@@ -20,9 +20,9 @@ test("STATE_KEY + DEFAULTS shape", () => {
 
 // ─── Path metadata ─────────────────────────────────────────────────
 test("pathMeta: POSIX path splits cleanly", () => {
-  assert.deepEqual(pathMeta("/Users/jacob/Downloads/foo.tar.gz"), {
-    path: "/Users/jacob/Downloads/foo.tar.gz",
-    dir:  "/Users/jacob/Downloads",
+  assert.deepEqual(pathMeta("/Users/user/Downloads/foo.tar.gz"), {
+    path: "/Users/user/Downloads/foo.tar.gz",
+    dir:  "/Users/user/Downloads",
     name: "foo.tar.gz",
     base: "foo.tar",
     ext:  "gz",

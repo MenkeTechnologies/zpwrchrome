@@ -6,7 +6,7 @@ import { hostnameOf } from "../lib/util.js";
 import { expandMatchPatterns, matchUrl, matchPatternToRegex } from "../lib/userscript.js";
 
 test("hostnameOf returns (local) for file:// URLs", () => {
-  assert.equal(hostnameOf("file:///Users/wizard/page.html"), "(local)");
+  assert.equal(hostnameOf("file:///Users/user/page.html"), "(local)");
 });
 
 test("hostnameOf returns (other) for garbage strings", () => {
