@@ -5,7 +5,7 @@
 
 **Rust port of [browserpass-native](https://github.com/browserpass/browserpass-native)** — a drop-in replacement for the Go binary that the [browserpass-extension](https://github.com/browserpass/browserpass-extension) browser extension talks to via Chrome / Firefox native messaging — **plus** additive actions that browserpass-extension does not call (OTP, whole-store search, browser-side GPG unlock, segmented download manager, post-download command spawn, filesystem crawl/exec, zcite handoff).
 
-Single static binary. Pure-Rust dependency tree (`serde`, `serde_json`, `ureq` with rustls). No `aria2`, no system OpenSSL, no Go toolchain at runtime.
+Single static binary. Pure-Rust dependency tree (`serde`, `serde_json`, `ureq` with rustls, `dirs`, `zwire-host` with default features off, `libc` on Unix). No `aria2`, no system OpenSSL, no Go toolchain at runtime.
 
 ## Wire compatibility with upstream
 
@@ -59,13 +59,22 @@ The passphrase is never placed in argv (readable via `ps`) and never written to 
 | Action        | Behavior                                                                                                                                                                                | Wire shape                                                                                                                              |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `pass.unlock` | Primes gpg-agent by decrypting a probe entry with a loopback pinentry. `file` selects the probe (use the entry you are about to fetch); omitted, the first entry by sorted relative path is used. | request `{action:"pass.unlock", storeId, passphrase, file?, settings}` → ok `{unlocked:true, probe:"<entry>"}`; a wrong passphrase returns error 24 with `params.message` = `"Bad passphrase"` |
-| `pass.lock`   | Flushes every cached passphrase from gpg-agent via `gpg-connect-agent reloadagent /bye`, so the next decrypt needs the passphrase again. A missing agent is not an error.                | request `{action:"pass.lock"}` → ok `{locked:true}`                                                                                     |
+| `pass.lock`   | Flushes every cached passphrase from gpg-agent via `gpg-connect-agent reloadagent /bye`, so the next decrypt needs the passphrase again. If `gpg-connect-agent` cannot be run, it returns error 22 instead of reporting `locked:true`.                | request `{action:"pass.lock"}` → ok `{locked:true}` |
+| `pass.status` | Reports whether gpg-agent holds the passphrase for this store: root `.gpg-id` recipients are resolved to encryption keygrips and checked against `gpg-connect-agent keyinfo --list`. Any one usable key cached reads as unlocked; unresolvable recipients or an unreachable agent return `known:false`. | request `{action:"pass.status", storeId, settings}` → ok `{unlocked, known, cached, total}` |
 
 ### zcite connector
 
 | Action        | Behavior                                                                                                                                                                                              | Wire shape                                                                                          |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `zcite.save`  | Writes a CSL-JSON reference (extracted from the active web page by the extension's "Save to zcite") to zcite's inbox at `<data_dir>/zcite/inbox/zpwrchrome-<nanos>.json`. zcite's `inbox.import` drains it into the library. No link to the proprietary zcite engine — the handoff is a plain CSL-JSON file in a shared directory. | request `{action:"zcite.save", item:<CSL-JSON object\|array>}` → ok `{status:"ok", path, bytes}` |
+
+### Command execution
+
+| Action       | Behavior | Wire shape |
+| ------------ | -------- | ---------- |
+| `run.spawn`  | Executes a post-download argv via `std::process::Command` — argv[0] resolved against PATH, argv[1..] passed as literal strings, no shell. stdout/stderr capped at 64 KiB each; default 30 s timeout, 5 min max, a timed-out child reports code 124. | `{action:"run.spawn", argv:[…], cwd?, env?, timeoutMs?}` → ok `{code, stdout, stderr, durationMs, truncated}` |
+| `host.crawl` | Recursive filesystem walk via `zwire_host::api::walk`. | `{action:"host.crawl", path, ext?}` → ok `{count, entries:[{path, name, dir, size}, …]}` |
+| `host.exec`  | Program execution with captured output via `zwire_host::api::exec`. | `{action:"host.exec", program, args:[…]}` → ok `{code, stdout, stderr}` |
 
 ### Download manager
 
@@ -76,6 +85,7 @@ The passphrase is never placed in argv (readable via `ps`) and never written to 
 | `dl.pause`            | Writes `paused=true` into the state file. Worker polls the flag between chunks.                                                                                                                                       | `{action:"dl.pause", gid}` → ok `{gid, status:"paused"}`                                                                                                            |
 | `dl.resume`           | Clears `paused`/`cancelled` flags. Respawns the worker if the prior `worker_pid` is dead (SW-suspension self-heal).                                                                                                   | `{action:"dl.resume", gid}` → ok `{gid, status:"resumed"}`                                                                                                          |
 | `dl.cancel`           | Writes `cancelled=true`. Worker removes partial dest file + state file on exit.                                                                                                                                       | `{action:"dl.cancel", gid}` → ok `{gid, status:"cancelled"}`                                                                                                        |
+| `dl.restart`          | Kills a live worker, deletes the partial dest file, resets the job state, and spawns a fresh worker that re-probes and downloads from byte zero. | `{action:"dl.restart", gid}` → ok `{gid, status:"restarted"}` |
 | `dl.remove`           | Cancels (if running) + deletes the state file. The dest file on disk is **left alone** so partial bytes survive. UI: 🗑 button on every row.                                                                          | `{action:"dl.remove", gid}` → ok `{gid, status:"removed"}`                                                                                                          |
 | `dl.clear`            | Bulk variant of `dl.remove` scoped by status. Optional `deleteFromDisk` also unlinks the destination files.                                                                                                            | `{action:"dl.clear", scope:"done"\|"failed"\|"missing"\|"all", deleteFromDisk:bool}` → ok `{cleared:[gid,…], deletedOnDisk:[path,…]}`                                  |
 | `dl.openDir`          | Spawn the platform file manager (`open` / `xdg-open` / `explorer`) for a directory. Empty `dir` opens the host's default download dir; a path opens that dir (refuses if the path doesn't exist — no fake folders).   | `{action:"dl.openDir", dir?}` → ok `{opened:"<path>"}`                                                                                                              |
@@ -169,15 +179,18 @@ zpwrchrome-host/src/
 │   └── version/version.rs       # 3.1.2 / 3_001_002
 ├── extensions/                  # additive — not in upstream
 │   ├── dl.rs                    # file-state segmented downloader, worker process,
-│   │                            # dl.add/list/pause/resume/cancel/remove/clear,
+│   │                            # dl.add/list/pause/resume/cancel/restart/remove/clear,
 │   │                            # dl.openDir/openFile, dl.writeFile/writeFileChunk,
 │   │                            # apply_naming_mask, probe_headers,
 │   │                            # parse_content_disposition_filename, expand_home,
 │   │                            # looks_like_query_garbage, percent_decode.
-│   ├── gpg_unlock.rs            # pass.unlock / pass.lock — loopback-pinentry
+│   ├── gpg_unlock.rs            # pass.unlock / pass.lock / pass.status — loopback-pinentry
 │   │                            # passphrase entry, gpg-agent cache priming
+│   ├── host.rs                  # host.crawl / host.exec via zwire_host::api
 │   ├── otp.rs                   # shells pass otp
-│   └── search.rs                # host-side fuzzy + substring scoring
+│   ├── run_command.rs           # run.spawn — post-download argv exec, no shell
+│   ├── search.rs                # host-side fuzzy + substring scoring
+│   └── zcite.rs                 # zcite.save — CSL-JSON into zcite's inbox
 └── bin/
     └── zpwrchrome_host.rs   # port of main.go + extension dispatch hook
                                  # + --install <ext-id> NM manifest writer
@@ -190,14 +203,14 @@ zpwrchrome-host/src/
 cargo test
 ```
 
-**137 tests, 0 failures** across:
+**140 tests, 0 failures** across:
 
 - Pure protocol pins (`tests/ported_version.rs`, `tests/ported_errors.rs`)
 - Pure helpers (`tests/ported_helpers.rs`, `tests/ported_common.rs`, `tests/ported_configure_helpers.rs`)
 - End-to-end with spawned binary (`tests/ported_integration.rs`) — echo round-trip, every error code path, configure/list/tree/delete against tempdir stores
 - Frame round-trip (`tests/frame_roundtrip.rs`)
 - Live pass store (`tests/live_password_store.rs`) — gated on `~/.password-store/.gpg-id` presence; verifies byte-equal `pass show` round-trip
-- Extensions: `extensions_otp.rs`, `extensions_search.rs`, `extensions_gpg_unlock.rs` (cold-cache fetch fails → `pass.unlock` → the same fetch succeeds → `pass.lock` → it fails again; plus bad-passphrase classification — the whole test builds its own disposable GNUPGHOME and key, and skips when gpg is absent), `extensions_run_command.rs`, `extensions_dl_state.rs`, `extensions_dl_integration.rs` (78 cases: 2 MiB segmented download against a local HTTP server with Range support, dl.clear scopes, dl.remove cancel-and-delete, dl.writeFile + writeFileChunk streaming protocol, naming-mask token substitution, probe_headers HEAD-then-Range-GET fallback, spawn_worker setsid + close-fd, dl.resume worker-pid liveness check, expand_home tilde resolution).
+- Extensions: `extensions_otp.rs`, `extensions_search.rs`, `extensions_gpg_unlock.rs` (cold-cache fetch fails → `pass.unlock` → the same fetch succeeds → `pass.lock` → it fails again; plus bad-passphrase classification — the whole test builds its own disposable GNUPGHOME and key, and skips when gpg is absent), `extensions_run_command.rs`, `extensions_dl_state.rs`, `extensions_dl_integration.rs` (92 cases: 2 MiB segmented download against a local HTTP server with Range support, dl.clear scopes, dl.remove cancel-and-delete, dl.writeFile + writeFileChunk streaming protocol, naming-mask token substitution, probe_headers HEAD-then-Range-GET fallback, spawn_worker setsid + close-fd, dl.resume worker-pid liveness check, expand_home tilde resolution).
 
 All green on push/PR via GitHub Actions on `ubuntu-latest` — the repo `.github/workflows/ci.yml` runs `cargo test --locked` for this crate on the Node 22 matrix leg, alongside the extension's `npm test`.
 

@@ -186,12 +186,12 @@
     <h1>zpwrchrome-host</h1>
     <p class="tagline">Rust port of <a href="https://github.com/browserpass/browserpass-native" style="color: var(--cyan);">browserpass-native</a> &middot; PROTOCOL.md v3.1.2 wire-compatible &middot; single static binary &middot; pure-Rust dep tree &middot; <span style="color: var(--accent);">additive extension actions</span> for OTP, whole-store search, browser-side GPG unlock, and segmented downloads.<br>Cyberpunk HUD palette by MenkeTechnologies.</p>
     <div class="stat-row">
-      <div class="stat"><div class="n">v0.10.2</div><div class="l">version</div></div>
+      <div class="stat"><div class="n">v0.10.3</div><div class="l">version</div></div>
       <div class="stat"><div class="n">v3.1.2</div><div class="l">protocol pin</div></div>
       <div class="stat"><div class="n">7</div><div class="l">ported actions</div></div>
-      <div class="stat"><div class="n">20</div><div class="l">extension actions</div></div>
-      <div class="stat"><div class="n">6,125</div><div class="l">LOC Rust (src)</div></div>
-      <div class="stat"><div class="n">137</div><div class="l">#[test] fns</div></div>
+      <div class="stat"><div class="n">21</div><div class="l">extension actions</div></div>
+      <div class="stat"><div class="n">6,420</div><div class="l">LOC Rust (src)</div></div>
+      <div class="stat"><div class="n">140</div><div class="l">#[test] fns</div></div>
     </div>
     <div class="ctas">
       <a class="btn btn-primary"   href="https://github.com/MenkeTechnologies/zpwrchrome">▸ source on github</a>
@@ -276,7 +276,12 @@
             <tr>
               <td><code>pass.lock</code></td>
               <td>Flushes every cached passphrase from gpg-agent (<code>gpg-connect-agent reloadagent /bye</code>), so the next decrypt needs the passphrase again.</td>
-              <td><code>{action:"pass.lock"}</code> → <code>{locked:true}</code></td>
+              <td><code>{action:"pass.lock"}</code> → <code>{locked:true}</code>; if <code>gpg-connect-agent</code> cannot be run, error 22</td>
+            </tr>
+            <tr>
+              <td><code>pass.status</code></td>
+              <td>Reports whether gpg-agent holds the passphrase for this store: the root <code>.gpg-id</code> recipients are resolved to their encryption keygrips and checked against <code>gpg-connect-agent keyinfo --list</code>. Any one usable key cached reads as unlocked; unresolvable recipients or an unreachable agent return <code>known:false</code>.</td>
+              <td><code>{action:"pass.status", storeId, settings}</code> → <code>{unlocked, known, cached, total}</code></td>
             </tr>
             <tr>
               <td><code>run.spawn</code></td>
