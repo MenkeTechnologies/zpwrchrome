@@ -1,4 +1,4 @@
-//! `pass.unlock` / `pass.lock` extension actions — enter the GPG passphrase
+//! `pass.unlock` / `pass.lock` / `pass.status` extension actions — enter the GPG passphrase
 //! from the browser instead of from a terminal.
 //!
 //! Why this exists: every decrypt in the ported path runs
@@ -26,6 +26,10 @@
 //!
 //!   request:  {"action":"pass.lock"}
 //!   response: ok { "locked": true }
+//!
+//!   request:  {"action":"pass.status", "storeId":"<id>", "settings":{"stores":{…}}}
+//!   response: ok { "unlocked": <any usable key cached>, "known": <recipients
+//!                  resolved>, "cached": n, "total": n }
 //! ```
 //!
 //! The passphrase is written to gpg's stdin — never to argv (argv is readable
