@@ -203,7 +203,7 @@ zpwrchrome-host/src/
 cargo test
 ```
 
-**140 tests, 0 failures** across:
+Coverage:
 
 - Pure protocol pins (`tests/ported_version.rs`, `tests/ported_errors.rs`)
 - Pure helpers (`tests/ported_helpers.rs`, `tests/ported_common.rs`, `tests/ported_configure_helpers.rs`)
