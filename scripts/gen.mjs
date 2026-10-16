@@ -431,7 +431,7 @@ Every request is one native-messaging frame on stdin. \`src/bin/zpwrchrome_host.
 
 | Module | Wire action(s) | What it does |
 | --- | --- | --- |
-| \`dl\` | \`dl.add\` / \`list\` / \`pause\` / \`resume\` / \`cancel\` / \`remove\` / \`clear\`, \`dl.openDir\`, \`dl.openFile\`, \`dl.writeFile\`, \`dl.writeFileChunk\` | Segmented multi-connection download manager (HEAD probe → N concurrent \`Range\` GETs → pre-allocated dest file); also the chunked file sink the full-page screenshot streams PNG tiles into |
+| \`dl\` | \`dl.add\` / \`list\` / \`pause\` / \`resume\` / \`cancel\` / \`restart\` / \`remove\` / \`clear\`, \`dl.openDir\`, \`dl.openFile\`, \`dl.writeFile\`, \`dl.writeFileChunk\` | Segmented multi-connection download manager (HEAD probe → N concurrent \`Range\` GETs → pre-allocated dest file); also the chunked file sink the full-page screenshot streams PNG tiles into |
 | \`otp\` | \`otp\` | Shells \`pass otp <path>\` for the current TOTP code — browserpass v3 dropped OTP, so it is re-added host-side |
 | \`search\` | \`search\` | Whole-store fuzzy search over every configured store's \`.gpg\` paths (substring outranks subsequence), so large stores don't round-trip every path per keystroke |
 | \`host\` | \`host.crawl\` / \`host.exec\` | Filesystem crawl + program exec, delegated to \`zwire_host::api\` (see below) |
@@ -974,7 +974,7 @@ ${popupCategories.map((c) => `        <div class="cat"><span class="lbl">${escap
         <code>run.spawn</code>, <code>pass.unlock</code> / <code>pass.lock</code> /
         <code>pass.status</code>, and <code>zcite.save</code>; and the download-manager
         actions <code>dl.add</code> / <code>dl.list</code> / <code>dl.pause</code> /
-        <code>dl.resume</code> / <code>dl.cancel</code> / <code>dl.remove</code> /
+        <code>dl.resume</code> / <code>dl.cancel</code> / <code>dl.restart</code> / <code>dl.remove</code> /
         <code>dl.clear</code> / <code>dl.openDir</code> / <code>dl.openFile</code> /
         <code>dl.writeFile</code> / <code>dl.writeFileChunk</code>. Downloads run in
         <strong>detached worker processes</strong> (<code>--dl-worker &lt;gid&gt;</code>,

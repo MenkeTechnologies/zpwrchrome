@@ -333,7 +333,7 @@ Every request is one native-messaging frame on stdin. `src/bin/zpwrchrome_host.r
 
 | Module | Wire action(s) | What it does |
 | --- | --- | --- |
-| `dl` | `dl.add` / `list` / `pause` / `resume` / `cancel` / `remove` / `clear`, `dl.openDir`, `dl.openFile`, `dl.writeFile`, `dl.writeFileChunk` | Segmented multi-connection download manager (HEAD probe → N concurrent `Range` GETs → pre-allocated dest file); also the chunked file sink the full-page screenshot streams PNG tiles into |
+| `dl` | `dl.add` / `list` / `pause` / `resume` / `cancel` / `restart` / `remove` / `clear`, `dl.openDir`, `dl.openFile`, `dl.writeFile`, `dl.writeFileChunk` | Segmented multi-connection download manager (HEAD probe → N concurrent `Range` GETs → pre-allocated dest file); also the chunked file sink the full-page screenshot streams PNG tiles into |
 | `otp` | `otp` | Shells `pass otp <path>` for the current TOTP code — browserpass v3 dropped OTP, so it is re-added host-side |
 | `search` | `search` | Whole-store fuzzy search over every configured store's `.gpg` paths (substring outranks subsequence), so large stores don't round-trip every path per keystroke |
 | `host` | `host.crawl` / `host.exec` | Filesystem crawl + program exec, delegated to `zwire_host::api` (see below) |
