@@ -131,7 +131,7 @@ const totalFiles = (function countTracked() {
 })();
 
 // Top N source files by line count, biggest first.
-const topFiles = [...SOURCES, ...testFiles.map((f) => "tests/" + f)]
+const topFiles = [...SOURCES]
   .map((p) => ({ path: p, lines: lineCount(tryRead(p)), bytes: bytes(p) }))
   .filter((x) => x.lines > 0)
   .sort((a, b) => b.lines - a.lines);
@@ -335,7 +335,7 @@ Inside the popup: \`Cmd+1\`…\`Cmd+0\` jump to the first ten categories (\`Cmd+
 
 MRU durability: the \`switch-previous-tab\` handler re-pushes the genuinely-active tab before reading the stack, then walks down it skipping ids that no longer resolve and dropping them as it goes. A service-worker suspend that swallowed \`tabs.onActivated\` / \`onRemoved\` therefore can't leave the shortcut aimed at a stale id.
 
-**The in-page modal is retired.** JetBrains IDEs have a Recent Files modal (\`Cmd+E\` on Mac) and \`zpwrchrome\` originally shipped that UX as a full-page closed-shadow-root overlay in \`modal/content.js\`. It landed center-of-viewport while every other command anchors top-right at the toolbar icon, so \`recent-modal\` was rewired to \`chrome.action.openPopup()\` and \`Cmd+E\` was handed to the MRU primitive. The content script is still registered on \`<all_urls>\` and still opens on an \`open-modal\` message, but nothing sends one — \`tests/dispatch-popup.test.js\` and \`tests/protocol.test.js\` pin that the service worker must not.
+**The in-page modal is retired.** JetBrains IDEs have a Recent Files modal (\`Cmd+E\` on Mac) and \`zpwrchrome\` originally shipped that UX as a full-page closed-shadow-root overlay in \`modal/content.js\`. It landed center-of-viewport while every other command anchors top-right at the toolbar icon, so \`recent-modal\` was rewired to \`chrome.action.openPopup()\` and \`Cmd+E\` was handed to the MRU primitive. The content script is still registered on \`<all_urls>\` and still opens on an \`open-modal\` message, but nothing sends one and the service worker must not send one.
 
 ---
 
@@ -527,18 +527,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 npm test
 \`\`\`
 
-Stock Node ≥ 20, no external dependencies. ${testCount} tests across ${testFiles.length} files. Covers:
-
-- **Pure logic** (\`tests/logic*.test.js\`, \`tests/util-*.test.js\`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
-- **fzf scoring** (\`tests/fzf*.test.js\`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
-- **Userscript parser** (\`tests/userscript*.test.js\`, \`tests/parseMetadata-*.test.js\`, \`tests/matchPatternToRegex-*.test.js\`) — Tampermonkey/Greasemonkey metadata block parsing, match-pattern compilation per Chrome's spec (file/ftp/* scheme handling), validate→register→matchUrl pipeline roundtrip
-- **GM_*/GM.* shim** (\`tests/gm-shim*.test.js\`, \`tests/gm-background.test.js\`) — every GM_* alias and gm:* message wiring against the background.js dispatcher
-- **Fuzz** (\`tests/fuzz-*.test.js\`) — deterministic-PRNG sweeps over fzfMatch, util helpers, parseMetadata; adversarial inputs (regex metachars, nested markers, 100k-char values, pathological *.host patterns); Monte Carlo scene CRUD against a Map+order-list oracle
-- **Stress** (\`tests/stress-*.test.js\`) — time budgets for keystroke-hot paths (10k fzfMatch < 1s, 100k mruPush < 2s, 500-item filter pipeline < 200ms); scale (1M mruPush, 10k-deep tree, 50k buildScene churn, 10k-pattern matchUrl); pathological inputs (all-same-char haystacks, 50k-char fzf, 60k-char rejection in O(haystack))
-- **Static manifest invariants** (\`tests/static.test.js\`) — MV3, ≤4 suggested keys (Chrome ceiling), no macOS/Chrome-reserved defaults, no key collisions, kebab-case command names, every manifest command has a \`background.js\` handler and vice versa, every referenced file exists with correct PNG dimensions, popup HTML has no inline event handlers or inline \`<script>\` (MV3 CSP), strykelang palette intact in popup.css and docs/index.html, every declared permission is actually used in code, README + docs/index.html stay byte-identical after re-running \`scripts/gen.sh\`
-- **Theme invariants** (\`tests/theme.test.js\`) — MV3 + \`theme\` block, no \`action\`/\`background\` (Chrome rejects mixed manifests), all theme images are PNGs at declared dimensions, every color is a 0–255 integer triplet, strykelang palette anchors pinned, version conforms to Chrome's 1–4-part 0–65535 rule
-- **Popup ↔ background protocol** (\`tests/protocol.test.js\`) — every message \`kind\` sent by \`popup.js\` is handled by \`background.js\` and vice versa, no orphans on either side
-- **Build pipeline** (\`tests/build.test.js\`, \`tests/gen-pipeline.test.js\`) — UTIL_INLINE/FZF_INLINE markers present + balanced, build-modal.mjs strips \`export \` correctly, generated banner pinned, gen.sh counts tests dynamically
+Stock Node ≥ 20, no external dependencies. ${testCount} tests across ${testFiles.length} files.
 
 ---
 
@@ -1009,7 +998,7 @@ ${["GM_getValue", "GM_setValue", "GM_deleteValue", "GM_listValues", "GM_setClipb
       <h2>permissions</h2>
       <p class="prose">
         ${permissions.length} permissions are declared in <code>manifest.json</code>.
-        <code>tests/static.test.js</code> enforces that every declared permission is actually
+        the test suite enforces that every declared permission is actually
         referenced in <code>background.js</code> or <code>popup.js</code> &mdash; no dead
         permissions ship.
       </p>
@@ -1631,7 +1620,7 @@ ${topFiles.slice(0, 15).map(fileTableRow).join("\n")}
 </pre>
 
     <h2 class="tutorial-title"><span class="step-hash">&amp;</span>MESSAGE PROTOCOL</h2>
-    <p class="tutorial-subtitle"><strong>${bgKinds.length}</strong> message kinds handled by the service worker. Popup sends <strong>${popupKinds.length}</strong> kinds; modal sends <strong>${modalKinds.length}</strong>. <code>tests/protocol.test.js</code> guards against orphans on either side.</p>
+    <p class="tutorial-subtitle"><strong>${bgKinds.length}</strong> message kinds handled by the service worker. Popup sends <strong>${popupKinds.length}</strong> kinds; modal sends <strong>${modalKinds.length}</strong>. The test suite guards against orphans on either side.</p>
     <ul class="kinds">
 ${bgKinds.map((k) => kindCard(k, messageRoles[k] || "(handler in background.js)")).join("")}
     </ul>
@@ -1662,7 +1651,7 @@ ${popupCategories.map((c) => `      <li><span class="label">${reportEsc(c.label)
   }</pre>
 
     <h2 class="tutorial-title"><span class="step-hash">!</span>PERMISSIONS</h2>
-    <p class="tutorial-subtitle"><strong>${permissions.length}</strong> declared. <code>tests/static.test.js</code> enforces every declared permission is actually used in <code>background.js</code> or <code>popup.js</code> &mdash; no dead permissions.</p>
+    <p class="tutorial-subtitle"><strong>${permissions.length}</strong> declared. The test suite enforces every declared permission is actually used in <code>background.js</code> or <code>popup.js</code> &mdash; no dead permissions.</p>
     <div>
 ${permissions.map((p) => `      <span class="perm-pill">${reportEsc(p)}</span>`).join("\n")}
 ${(manifest.optional_permissions || []).map((p) => `      <span class="perm-pill opt" title="optional_permissions — not requested at install">${reportEsc(p)}</span>`).join("\n")}
@@ -1670,18 +1659,6 @@ ${(manifest.optional_permissions || []).map((p) => `      <span class="perm-pill
 
     <h2 class="tutorial-title"><span class="step-hash">*</span>TESTS</h2>
     <p class="tutorial-subtitle">Plain <code>node:test</code>. Zero dependencies. <strong>${testCount}</strong> cases across <strong>${testFiles.length}</strong> files in <strong>~1s</strong>. CI matrix: Node 20 + 22 on ubuntu-latest.</p>
-    <table class="file-table">
-      <thead><tr><th>File</th><th class="num">Tests</th><th class="num">Lines</th></tr></thead>
-      <tbody>
-${testFiles.map((f) => {
-  const src = readFileSync(join(ROOT, "tests", f), "utf8");
-  const n = (src.match(/^test\(/gm) || []).length;
-  return `        <tr><td><code>tests/${reportEsc(f)}</code></td><td class="num">${n}</td><td class="num">${num(lineCount(src))}</td></tr>`;
-}).join("\n")}
-        <tr><td><code>TOTAL</code></td><td class="num"><strong>${testCount}</strong></td><td class="num"><strong>${num(totalTestLines)}</strong></td></tr>
-      </tbody>
-    </table>
-
     <h2 class="tutorial-title"><span class="step-hash">?</span>KEY DESIGN DECISIONS</h2>
     <div class="decisions">
 ${designDecisions.map(([h, p]) => `      <div class="card"><h3>${reportEsc(h)}</h3><p>${p}</p></div>`).join("\n")}

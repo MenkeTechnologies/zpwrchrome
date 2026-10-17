@@ -237,7 +237,7 @@ Inside the popup: `Cmd+1`…`Cmd+0` jump to the first ten categories (`Cmd+0` = 
 
 MRU durability: the `switch-previous-tab` handler re-pushes the genuinely-active tab before reading the stack, then walks down it skipping ids that no longer resolve and dropping them as it goes. A service-worker suspend that swallowed `tabs.onActivated` / `onRemoved` therefore can't leave the shortcut aimed at a stale id.
 
-**The in-page modal is retired.** JetBrains IDEs have a Recent Files modal (`Cmd+E` on Mac) and `zpwrchrome` originally shipped that UX as a full-page closed-shadow-root overlay in `modal/content.js`. It landed center-of-viewport while every other command anchors top-right at the toolbar icon, so `recent-modal` was rewired to `chrome.action.openPopup()` and `Cmd+E` was handed to the MRU primitive. The content script is still registered on `<all_urls>` and still opens on an `open-modal` message, but nothing sends one — `tests/dispatch-popup.test.js` and `tests/protocol.test.js` pin that the service worker must not.
+**The in-page modal is retired.** JetBrains IDEs have a Recent Files modal (`Cmd+E` on Mac) and `zpwrchrome` originally shipped that UX as a full-page closed-shadow-root overlay in `modal/content.js`. It landed center-of-viewport while every other command anchors top-right at the toolbar icon, so `recent-modal` was rewired to `chrome.action.openPopup()` and `Cmd+E` was handed to the MRU primitive. The content script is still registered on `<all_urls>` and still opens on an `open-modal` message, but nothing sends one and the service worker must not send one.
 
 ---
 
@@ -429,18 +429,7 @@ Each row names a capability and what it replaces / supersedes in the typical bro
 npm test
 ```
 
-Stock Node ≥ 20, no external dependencies. 3084 tests across 192 files. Covers:
-
-- **Pure logic** (`tests/logic*.test.js`, `tests/util-*.test.js`) — MRU stack semantics (prepend, dedup, cap, wrap, no-mutate, large-|delta| double-mod), hostname parse, jump-index resolution, scene CRUD, opener-tree forest (iterative flatten — handles 50k-deep chains without stack overflow), domain hue distribution, frecency formula
-- **fzf scoring** (`tests/fzf*.test.js`) — match algorithm correctness, scoring constants (BOUNDARY ≥ NON_WORD ≥ CAMEL > CONSECUTIVE > 0), highlight integration (indices spell needle case-insensitively, HTML escape preserved inside marks), ranking stability over realistic filter passes
-- **Userscript parser** (`tests/userscript*.test.js`, `tests/parseMetadata-*.test.js`, `tests/matchPatternToRegex-*.test.js`) — Tampermonkey/Greasemonkey metadata block parsing, match-pattern compilation per Chrome's spec (file/ftp/* scheme handling), validate→register→matchUrl pipeline roundtrip
-- **GM_*/GM.* shim** (`tests/gm-shim*.test.js`, `tests/gm-background.test.js`) — every GM_* alias and gm:* message wiring against the background.js dispatcher
-- **Fuzz** (`tests/fuzz-*.test.js`) — deterministic-PRNG sweeps over fzfMatch, util helpers, parseMetadata; adversarial inputs (regex metachars, nested markers, 100k-char values, pathological *.host patterns); Monte Carlo scene CRUD against a Map+order-list oracle
-- **Stress** (`tests/stress-*.test.js`) — time budgets for keystroke-hot paths (10k fzfMatch < 1s, 100k mruPush < 2s, 500-item filter pipeline < 200ms); scale (1M mruPush, 10k-deep tree, 50k buildScene churn, 10k-pattern matchUrl); pathological inputs (all-same-char haystacks, 50k-char fzf, 60k-char rejection in O(haystack))
-- **Static manifest invariants** (`tests/static.test.js`) — MV3, ≤4 suggested keys (Chrome ceiling), no macOS/Chrome-reserved defaults, no key collisions, kebab-case command names, every manifest command has a `background.js` handler and vice versa, every referenced file exists with correct PNG dimensions, popup HTML has no inline event handlers or inline `<script>` (MV3 CSP), strykelang palette intact in popup.css and docs/index.html, every declared permission is actually used in code, README + docs/index.html stay byte-identical after re-running `scripts/gen.sh`
-- **Theme invariants** (`tests/theme.test.js`) — MV3 + `theme` block, no `action`/`background` (Chrome rejects mixed manifests), all theme images are PNGs at declared dimensions, every color is a 0–255 integer triplet, strykelang palette anchors pinned, version conforms to Chrome's 1–4-part 0–65535 rule
-- **Popup ↔ background protocol** (`tests/protocol.test.js`) — every message `kind` sent by `popup.js` is handled by `background.js` and vice versa, no orphans on either side
-- **Build pipeline** (`tests/build.test.js`, `tests/gen-pipeline.test.js`) — UTIL_INLINE/FZF_INLINE markers present + balanced, build-modal.mjs strips `export ` correctly, generated banner pinned, gen.sh counts tests dynamically
+Stock Node ≥ 20, no external dependencies. 3084 tests across 192 files.
 
 ---
 
