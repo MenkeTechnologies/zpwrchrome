@@ -11,15 +11,15 @@ Single static binary. Pure-Rust dependency tree (`serde`, `serde_json`, `ureq` w
 
 `zpwrchrome-host` implements every action documented in [browserpass-native's PROTOCOL.md](https://github.com/browserpass/browserpass-native/blob/master/PROTOCOL.md) v3.1.2:
 
-| Action      | Implementation               | Test pin                                          |
-| ----------- | ---------------------------- | ------------------------------------------------- |
-| `configure` | `ported/request/configure.rs` | `tests/ported_configure_helpers.rs` + integration |
-| `list`      | `ported/request/list.rs`     | `tests/ported_integration.rs` (4 cases)           |
-| `tree`      | `ported/request/tree.rs`     | `tests/ported_integration.rs`                     |
-| `fetch`     | `ported/request/fetch.rs`    | `tests/ported_integration.rs`                     |
-| `save`      | `ported/request/save.rs`     | `tests/ported_integration.rs`                     |
-| `delete`    | `ported/request/delete.rs`   | `tests/ported_integration.rs` (incl. parent cleanup) |
-| `echo`      | `bin/zpwrchrome_host.rs` | `tests/ported_integration.rs`                     |
+| Action      | Implementation |
+| ----------- | -------------- |
+| `configure` | `ported/request/configure.rs` |
+| `list`      | `ported/request/list.rs`     |
+| `tree`      | `ported/request/tree.rs`     |
+| `fetch`     | `ported/request/fetch.rs`    |
+| `save`      | `ported/request/save.rs`     |
+| `delete`    | `ported/request/delete.rs`   |
+| `echo`      | `bin/zpwrchrome_host.rs` |
 
 Error codes 10–32 from `errors/errors.go` pin to the same integers; exit code equals the error code (matches upstream `errors.ExitWithCode`); version is reported as `3.1.2` (packed int `3_001_002`).
 
@@ -33,7 +33,7 @@ The `src/ported/` tree is a **1:1 Rust mirror** of the upstream Go source:
 - Every Go inline comment carries over to the Rust port with a `// go:NN` line-number citation on the corresponding Rust statement.
 - Local variable names match Go's (`gpgPath`, `normalizedStorePath`, `parentDir`, `responseData`).
 - No invented helpers — the two recursive store walkers inside `list.rs` and `tree.rs` are inlined private fns at the call site because they replace external Go deps (`mattn/go-zglob`, `mattn/go-zglob/fastwalk`), not Go-source fns.
-- Drift is caught by `tests/ported_errors.rs` (every error code pinned to its PROTOCOL.md value) + `tests/ported_version.rs` (version triple + packed int) + `tests/ported_integration.rs` (every action exercised end-to-end against the compiled binary).
+- Error codes and the version triple are pinned to the upstream values by the host test suite.
 
 This discipline is borrowed from the [`zshrs` PORT.md](https://github.com/MenkeTechnologies/zshrs/blob/main/docs/PORT.md) rules and adapted to a Go→Rust port.
 
@@ -203,16 +203,9 @@ zpwrchrome-host/src/
 cargo test
 ```
 
-Coverage:
+The suite covers the protocol pins (error codes, version), ported helpers, end-to-end runs of the compiled binary against disposable stores, frame round-tripping, and each extension action (OTP, search, GPG unlock, command execution, segmented downloads against a local HTTP server with Range support). Live-store checks are gated on `~/.password-store/.gpg-id` being present.
 
-- Pure protocol pins (`tests/ported_version.rs`, `tests/ported_errors.rs`)
-- Pure helpers (`tests/ported_helpers.rs`, `tests/ported_common.rs`, `tests/ported_configure_helpers.rs`)
-- End-to-end with spawned binary (`tests/ported_integration.rs`) — echo round-trip, every error code path, configure/list/tree/delete against tempdir stores
-- Frame round-trip (`tests/frame_roundtrip.rs`)
-- Live pass store (`tests/live_password_store.rs`) — gated on `~/.password-store/.gpg-id` presence; verifies byte-equal `pass show` round-trip
-- Extensions: `extensions_otp.rs`, `extensions_search.rs`, `extensions_gpg_unlock.rs` (cold-cache fetch fails → `pass.unlock` → the same fetch succeeds → `pass.lock` → it fails again; plus bad-passphrase classification — the whole test builds its own disposable GNUPGHOME and key, and skips when gpg is absent), `extensions_run_command.rs`, `extensions_dl_state.rs`, `extensions_dl_integration.rs` (2 MiB segmented download against a local HTTP server with Range support, dl.clear scopes, dl.remove cancel-and-delete, dl.writeFile + writeFileChunk streaming protocol, naming-mask token substitution, probe_headers HEAD-then-Range-GET fallback, spawn_worker setsid + close-fd, dl.resume worker-pid liveness check, expand_home tilde resolution).
-
-All green on push/PR via GitHub Actions on `ubuntu-latest` — the repo `.github/workflows/ci.yml` runs `cargo test --locked` for this crate on the Node 22 matrix leg, alongside the extension's `npm test`.
+CI runs `cargo test --locked` for this crate alongside the extension tests.
 
 ## License
 
@@ -222,4 +215,3 @@ MIT. See [LICENSE](LICENSE).
 
 - Upstream Go reference: [browserpass/browserpass-native](https://github.com/browserpass/browserpass-native) by Maxim Baz + contributors
 - Protocol spec: [browserpass-native/PROTOCOL.md](https://github.com/browserpass/browserpass-native/blob/master/PROTOCOL.md)
-- This Rust port + extensions: [MenkeTechnologies](https://github.com/MenkeTechnologies)
