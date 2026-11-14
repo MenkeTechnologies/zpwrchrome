@@ -214,3 +214,96 @@ test("formatXPath: defaults missing index to 1 instead of [NaN]", () => {
     formatXPath([{ name: "root" }, { name: "child", index: 0 }]),
     "/root[1]/child[1]");
 });
+
+// ─── prettyPrint: mixed content, malformed input, entities ─────────
+test("prettyPrint: mixed content puts each text run on its own line at the element's depth", () => {
+  assert.equal(prettyPrint("<p>Hello <b>bold</b>   world\n</p>"),
+    ["<p>", "  Hello", "  <b>bold</b>", "  world", "</p>"].join("\n"));
+});
+
+test("prettyPrint: an explicit <a></a> pair stays on one line and doesn't change depth", () => {
+  assert.equal(prettyPrint("<root><a x=\"1\"></a><b>x</b></root>"),
+    ["<root>", '  <a x="1"></a>', "  <b>x</b>", "</root>"].join("\n"));
+});
+
+test("prettyPrint: leaf compaction needs the SAME closing name, not a prefix of it", () => {
+  // `</ab>` must not be taken as the closer for `<a>`; with no `</a>` the
+  // element stays open and the stray close dedents.
+  assert.equal(prettyPrint("<r><a>x</ab></r>"),
+    ["<r>", "  <a>", "    x", "  </ab>", "</r>"].join("\n"));
+});
+
+test("prettyPrint: a DOCTYPE inside the document is emitted verbatim at the current depth", () => {
+  assert.equal(prettyPrint("<r><!DOCTYPE x><c/></r>"), "<r>\n  <!DOCTYPE x>\n  <c/>\n</r>");
+});
+
+test("prettyPrint: unterminated tag / comment / CDATA / PI are emitted verbatim and end the walk", () => {
+  assert.equal(prettyPrint("<root><a>text <b"), "<root>\n  <a>\n    text\n    <b");
+  assert.equal(prettyPrint("<r/><!-- open"), "<r/>\n<!-- open");
+  assert.equal(prettyPrint("<r/><![CDATA[ open"), "<r/>\n<![CDATA[ open");
+  assert.equal(prettyPrint("<r/><?pi open"), "<r/>\n<?pi open");
+  assert.equal(prettyPrint("<r/><!DOCTYPE open"), "<r/>\n<!DOCTYPE open");
+});
+
+test("prettyPrint: stray closing tags never drive the indent negative", () => {
+  assert.equal(prettyPrint("</x></y><r><a/></r>"), "</x>\n</y>\n<r>\n  <a/>\n</r>");
+});
+
+test("prettyPrint: entities decode once then re-escape — no double-decoding", () => {
+  // `&amp;lt;` is the literal text "&lt;"; it must not collapse to "<".
+  assert.equal(prettyPrint("<r>a &amp;lt; b</r>"), "<r>a &amp;lt; b</r>");
+  // Numeric references resolve to their characters; markup-significant
+  // results are re-escaped so the output stays well-formed.
+  assert.equal(prettyPrint("<r>&#65;&#x42;&#60;&#x3E;</r>"), "<r>AB&lt;&gt;</r>");
+  assert.equal(prettyPrint("<r>&quot;q&quot; &apos;s&apos;</r>"), "<r>\"q\" 's'</r>");
+  assert.equal(prettyPrint("<r>&#x1F600;</r>"), "<r>\u{1F600}</r>", "astral code point");
+});
+
+// Round-trip invariant: for element-only documents whose leaf text has no
+// edge whitespace and only &amp;/&lt;/&gt; entities, pretty-printing is pure
+// whitespace insertion — minify() must recover the compact source exactly
+// and the tag count must not move.
+test("prettyPrint ∘ minify: recovers the compact source for generated trees", () => {
+  let seed = 0x2f6e2b1;
+  const rnd = (n) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % n;
+  };
+  const NAMES = ["a", "b", "ns:item", "x-y", "_z"];
+  const TEXTS = ["1", "hello world", "x &amp; y", "a &lt; b", "café"];
+  const gen = (depth) => {
+    const name = NAMES[rnd(NAMES.length)];
+    const attrs = rnd(3) === 0 ? ` id="n${rnd(100)}" k='v'` : "";
+    const kind = depth > 4 ? rnd(2) : rnd(5);
+    if (kind === 0) return `<${name}${attrs}/>`;
+    if (kind === 1) return `<${name}${attrs}>${TEXTS[rnd(TEXTS.length)]}</${name}>`;
+    if (kind === 2) return `<!-- c${rnd(9)} -->`;
+    let kids = "";
+    for (let i = 0, n = 1 + rnd(4); i < n; i++) kids += gen(depth + 1);
+    return `<${name}${attrs}>${kids}</${name}>`;
+  };
+  for (let i = 0; i < 300; i++) {
+    const compact = `<root>${gen(0)}${gen(0)}</root>`;
+    const pretty = prettyPrint(compact);
+    assert.equal(minify(pretty), compact, `round-trip failed for ${compact}`);
+    assert.equal(countTags(pretty), countTags(compact));
+    // Indent is always a whole number of 2-space levels.
+    for (const line of pretty.split("\n")) {
+      assert.equal((line.length - line.trimStart().length) % 2, 0, `odd indent in ${JSON.stringify(line)}`);
+    }
+  }
+});
+
+// ─── minify / countTags edges ──────────────────────────────────────
+test("minify: unterminated comment / tag consume the rest of the input verbatim", () => {
+  assert.equal(minify("<r>\n  <a>x</a>\n  <!-- open   end"), "<r><a>x</a><!-- open   end");
+  assert.equal(minify("<r>\n  <a b=\"1\""), "<r><a b=\"1\"");
+  assert.equal(minify("<r><![CDATA[  open"), "<r><![CDATA[  open");
+});
+
+test("countTags: `<` inside comments, CDATA and PIs is never counted", () => {
+  assert.equal(countTags("<r><!-- <x> <y/> --><![CDATA[<y></y>]]><?pi <z>?><a/></r>"), 3);
+  assert.equal(countTags("<r><!-- unterminated <x> <y>"), 1);
+  assert.equal(countTags("<r><![CDATA[ unterminated <x>"), 1);
+  assert.equal(countTags("<!DOCTYPE r><r/>"), 1);
+});
